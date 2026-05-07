@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+
+Host: kartivio-ai.ru
+Sitemap: https://kartivio-ai.ru/sitemap.xml
