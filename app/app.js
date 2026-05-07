@@ -187,6 +187,22 @@ async function authorizedFetch(path, options = {}) {
   }
 }
 
+async function authorizedGetWithRetry(path, retries = 1) {
+  let lastError = null;
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      return await authorizedFetch(path);
+    } catch (error) {
+      lastError = error;
+      if (attempt >= retries) {
+        throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+  }
+  throw lastError || new Error("request_failed");
+}
+
 function renderUser(me, wallet) {
   const display = me.display_name || me.telegram_user_id || "—";
   userName.textContent = String(display);
@@ -300,8 +316,8 @@ async function loadPrivateData() {
     return;
   }
   const [me, wallet] = await Promise.all([
-    authorizedFetch("/v1/me"),
-    authorizedFetch("/v1/wallet?limit=1"),
+    authorizedGetWithRetry("/v1/me", 1),
+    authorizedGetWithRetry("/v1/wallet?limit=1", 1),
   ]);
   renderUser(me, wallet);
 }
