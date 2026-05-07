@@ -3,21 +3,24 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Kartivio AI | Генерация изображений в Telegram</title>
+    <title>Kartivio AI | Генерация и редактирование изображений</title>
     <meta
       name="description"
-      content="Kartivio AI — генерация изображений по тексту в Telegram. 3 режима качества, разовые пакеты кредитов, без подписки."
+      content="Kartivio AI — генерация и редактирование изображений через ИИ. Telegram-бот уже доступен, веб-версия в разработке."
     />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <header class="topbar">
       <div class="container topbar-inner">
-        <a class="brand" href="#hero">Kartivio AI</a>
-        <nav class="nav" aria-label="Разделы лендинга">
-          <a href="#how">Как работает</a>
-          <a href="#examples">Примеры</a>
-          <a href="#pricing">Цены</a>
+        <a class="brand" href="#hero">
+          <span class="brand-mark">K</span>
+          <span class="brand-text">Kartivio AI</span>
+        </a>
+        <nav class="nav" aria-label="Навигация по лендингу">
+          <a href="#how">Как это работает</a>
+          <a href="#cases">Сценарии</a>
+          <a href="#pricing">Тарифы</a>
           <a href="#faq">FAQ</a>
         </nav>
         <a class="btn btn-primary btn-sm" href="https://t.me/kartivio_ai_bot" target="_blank" rel="noreferrer"
@@ -27,25 +30,34 @@
     </header>
 
     <main>
-      <section id="hero" class="section hero">
-        <div class="container">
-          <p class="eyebrow">AI image generation в Telegram</p>
-          <h1>Kartivio AI</h1>
+      <section id="hero" class="hero">
+        <div class="hero-glow"></div>
+        <div class="container hero-inner">
+          <p class="eyebrow">для тех, кому нужен контент за минуты, а не за дни</p>
+          <h1>Генерация и редактирование изображений с ИИ</h1>
           <p class="lead">
-            Генерация изображений по тексту прямо в чате. Пиши промпт, выбирай режим качества и получай готовый
-            результат.
+            Запускай готовые генерации по промпту или загружай фото и меняй сцену, свет, стиль и детали.
+            Telegram-бот доступен уже сейчас, веб-версия в разработке.
           </p>
-          <div class="actions">
+          <div class="hero-actions">
             <a class="btn btn-primary" href="https://t.me/kartivio_ai_bot" target="_blank" rel="noreferrer"
               >Запустить в Telegram</a
             >
-            <a class="btn btn-ghost" href="#pricing">Смотреть цены</a>
+            <a class="btn btn-ghost" href="#how">Как это работает</a>
           </div>
-          <ul class="hero-points">
-            <li>Telegram-only продукт</li>
-            <li>Кредиты не сгорают</li>
-            <li>Без подписки, только пакеты</li>
-          </ul>
+          <p class="hero-note">Первые генерации на тест доступны после старта в боте</p>
+        </div>
+        <div class="hero-rail-wrap" aria-label="Примеры изображений">
+          <div class="hero-rail">
+            <img src="https://picsum.photos/seed/kartivio-1/420/560" alt="Пример генерации 1" />
+            <img src="https://picsum.photos/seed/kartivio-2/420/560" alt="Пример генерации 2" />
+            <img src="https://picsum.photos/seed/kartivio-3/420/560" alt="Пример генерации 3" />
+            <img src="https://picsum.photos/seed/kartivio-4/420/560" alt="Пример генерации 4" />
+            <img src="https://picsum.photos/seed/kartivio-5/420/560" alt="Пример генерации 5" />
+            <img src="https://picsum.photos/seed/kartivio-6/420/560" alt="Пример генерации 6" />
+            <img src="https://picsum.photos/seed/kartivio-7/420/560" alt="Пример генерации 7" />
+            <img src="https://picsum.photos/seed/kartivio-8/420/560" alt="Пример генерации 8" />
+          </div>
         </div>
       </section>
 
@@ -53,49 +65,46 @@
         <div class="container">
           <div class="section-head">
             <h2>Как это работает</h2>
-            <p>Флоу короткий: от запроса до готовой картинки в несколько шагов.</p>
+            <p>Простой флоу для генерации и редактирования.</p>
           </div>
-          <ol class="steps">
-            <li>
-              <span class="step-index">01</span>
-              <h3>Отправляешь промпт</h3>
-              <p>Пишешь идею обычным сообщением в бота.</p>
-            </li>
-            <li>
-              <span class="step-index">02</span>
-              <h3>Выбираешь режим и формат</h3>
-              <p>Настраиваешь качество и соотношение сторон под задачу.</p>
-            </li>
-            <li>
-              <span class="step-index">03</span>
-              <h3>Получаешь изображение</h3>
-              <p>Готовая картинка приходит в тот же Telegram-чат.</p>
-            </li>
-          </ol>
+          <div class="grid grid-3">
+            <article class="card step-card">
+              <span class="step">01</span>
+              <h3>Выбираешь режим</h3>
+              <p>Генерация по тексту или редактирование загруженного фото.</p>
+            </article>
+            <article class="card step-card">
+              <span class="step">02</span>
+              <h3>Даешь задачу</h3>
+              <p>Пишешь промпт, задаешь стиль и формат результата.</p>
+            </article>
+            <article class="card step-card">
+              <span class="step">03</span>
+              <h3>Получаешь результат</h3>
+              <p>Готовое изображение приходит в чат, без долгого ожидания.</p>
+            </article>
+          </div>
         </div>
       </section>
 
-      <section id="modes" class="section section-muted">
+      <section id="cases" class="section section-surface">
         <div class="container">
           <div class="section-head">
-            <h2>Режимы генерации</h2>
-            <p>Разная стоимость в кредитах на одно изображение.</p>
+            <h2>Сценарии использования</h2>
+            <p>Не только фотосессии: сервис шире и под разные задачи.</p>
           </div>
-          <div class="cards cards-3">
+          <div class="grid grid-3">
             <article class="card">
-              <h3>Cheap</h3>
-              <p class="metric">4 кредита / изображение</p>
-              <p>Для быстрых идей, черновиков и первичных вариаций.</p>
+              <h3>Маркетинг и SMM</h3>
+              <p>Креативы для постов, stories, промо-баннеров и обложек.</p>
             </article>
             <article class="card">
-              <h3>Standard</h3>
-              <p class="metric">10 кредитов / изображение</p>
-              <p>Сбалансированный режим для повседневных задач.</p>
+              <h3>Товарный контент</h3>
+              <p>Визуалы для карточек товара, кампаний и лендингов.</p>
             </article>
             <article class="card">
-              <h3>Premium</h3>
-              <p class="metric">35 кредитов / изображение</p>
-              <p>Когда важны детализация и более выразительный результат.</p>
+              <h3>Персональные проекты</h3>
+              <p>Аватарки, референсы, иллюстрации и быстрые концепты.</p>
             </article>
           </div>
         </div>
@@ -104,10 +113,10 @@
       <section id="pricing" class="section">
         <div class="container">
           <div class="section-head">
-            <h2>Пакеты кредитов</h2>
-            <p>Разовая покупка. Кредиты остаются на балансе без срока сгорания.</p>
+            <h2>Пополнение кредитов</h2>
+            <p>Разовая покупка. Кредиты не сгорают.</p>
           </div>
-          <div class="cards cards-4">
+          <div class="grid grid-4">
             <article class="card price-card">
               <h3>Mini</h3>
               <p class="price">200 ₽</p>
@@ -117,9 +126,6 @@
                 <li>~8 standard</li>
                 <li>~2 premium</li>
               </ul>
-              <a class="btn btn-primary" href="https://t.me/kartivio_ai_bot" target="_blank" rel="noreferrer"
-                >Купить в боте</a
-              >
             </article>
             <article class="card price-card">
               <h3>Small</h3>
@@ -130,11 +136,8 @@
                 <li>~15 standard</li>
                 <li>~4 premium</li>
               </ul>
-              <a class="btn btn-primary" href="https://t.me/kartivio_ai_bot" target="_blank" rel="noreferrer"
-                >Купить в боте</a
-              >
             </article>
-            <article class="card price-card price-card-featured">
+            <article class="card price-card featured">
               <span class="badge">Оптимально</span>
               <h3>Medium</h3>
               <p class="price">899 ₽</p>
@@ -144,9 +147,6 @@
                 <li>~35 standard</li>
                 <li>~10 premium</li>
               </ul>
-              <a class="btn btn-primary" href="https://t.me/kartivio_ai_bot" target="_blank" rel="noreferrer"
-                >Купить в боте</a
-              >
             </article>
             <article class="card price-card">
               <h3>Large</h3>
@@ -157,78 +157,52 @@
                 <li>~80 standard</li>
                 <li>~22 premium</li>
               </ul>
-              <a class="btn btn-primary" href="https://t.me/kartivio_ai_bot" target="_blank" rel="noreferrer"
-                >Купить в боте</a
-              >
             </article>
+          </div>
+          <div class="center-actions">
+            <a class="btn btn-primary" href="https://t.me/kartivio_ai_bot" target="_blank" rel="noreferrer"
+              >Купить в боте</a
+            >
           </div>
         </div>
       </section>
 
-      <section id="examples" class="section section-muted">
-        <div class="container">
-          <div class="section-head">
-            <h2>Примеры генераций</h2>
-            <p>Пока заглушки. Подменим на реальные результаты, когда ты накидаешь подборку.</p>
-          </div>
-          <div class="cards cards-3">
-            <article class="card example-card">
-              <div class="example-media">Скоро: пример 1</div>
-              <p class="example-prompt">Prompt: cinematic portrait, warm neon light, shallow depth of field.</p>
-            </article>
-            <article class="card example-card">
-              <div class="example-media">Скоро: пример 2</div>
-              <p class="example-prompt">Prompt: minimal product render, white studio background, soft shadow.</p>
-            </article>
-            <article class="card example-card">
-              <div class="example-media">Скоро: пример 3</div>
-              <p class="example-prompt">Prompt: fantasy landscape, floating islands, volumetric sunset clouds.</p>
-            </article>
-          </div>
-        </div>
-      </section>
-
-      <section id="faq" class="section">
+      <section id="faq" class="section section-surface">
         <div class="container faq">
           <div class="section-head">
             <h2>FAQ</h2>
-            <p>Базовые ответы по оплате и использованию.</p>
           </div>
           <details open>
             <summary>Кредиты сгорают?</summary>
-            <p>Нет. Купленные кредиты сохраняются на балансе без срока сгорания.</p>
+            <p>Нет, кредиты остаются на балансе без срока сгорания.</p>
           </details>
           <details>
-            <summary>Нужно оформлять подписку?</summary>
-            <p>Нет. Сейчас модель оплаты только через разовые пакеты кредитов.</p>
+            <summary>Есть подписка?</summary>
+            <p>Сейчас только модель разовых пополнений пакетами кредитов.</p>
           </details>
           <details>
-            <summary>Где происходит генерация?</summary>
-            <p>В Telegram-боте Kartivio AI: отправляешь промпт и получаешь результат в чате.</p>
+            <summary>Можно и генерировать, и редактировать фото?</summary>
+            <p>Да, доступны оба режима: генерация по тексту и редактирование загруженного изображения.</p>
           </details>
           <details>
-            <summary>Можно менять формат изображения?</summary>
-            <p>Да, в боте доступны базовые соотношения сторон: 1:1, 3:2 и 2:3.</p>
-          </details>
-          <details>
-            <summary>Куда писать по вопросам?</summary>
-            <p>На почту <a href="mailto:hello@kartivio-ai.ru">hello@kartivio-ai.ru</a>.</p>
+            <summary>Будет веб-версия?</summary>
+            <p>Да, веб-интерфейс запланирован. Сейчас основной рабочий контур — Telegram-бот.</p>
           </details>
         </div>
       </section>
 
       <section id="final-cta" class="section final-cta">
         <div class="container">
-          <h2>Готов протестировать?</h2>
-          <p>Запусти бота и сделай первую генерацию за пару минут.</p>
+          <h2>Запусти Kartivio AI сейчас</h2>
+          <p>Начни в Telegram уже сегодня, веб-версия появится следующим этапом.</p>
           <a class="btn btn-primary" href="https://t.me/kartivio_ai_bot" target="_blank" rel="noreferrer"
-            >Открыть Kartivio AI</a
+            >Открыть бота</a
           >
         </div>
       </section>
     </main>
 
-    <footer id="legal" class="footer">
+    <footer class="footer">
       <div class="container footer-inner">
         <p>© 2026 Kartivio AI</p>
         <div class="footer-links">
