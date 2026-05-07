@@ -6,6 +6,7 @@ const STORAGE_KEYS = {
 
 const DEFAULT_PROD_API_BASE = "https://api.kartivio-ai.ru";
 const DEFAULT_LOCAL_API_BASE = "http://127.0.0.1:8093";
+const DEFAULT_NGROK_API_BASE = "https://sweptback-semivolcanic-reagan.ngrok-free.dev";
 
 const state = {
   apiBase: "",
@@ -37,6 +38,20 @@ function trimApiBase(raw) {
   return String(raw || "").trim().replace(/\/+$/, "");
 }
 
+function uniqueApiBases(items) {
+  const out = [];
+  const seen = new Set();
+  for (const item of items) {
+    const normalized = trimApiBase(item);
+    if (!normalized || seen.has(normalized)) {
+      continue;
+    }
+    seen.add(normalized);
+    out.push(normalized);
+  }
+  return out;
+}
+
 function saveState() {
   localStorage.setItem(STORAGE_KEYS.apiBase, state.apiBase);
   localStorage.setItem(STORAGE_KEYS.accessToken, state.accessToken);
@@ -44,7 +59,9 @@ function saveState() {
 }
 
 function loadState() {
-  state.apiBase = trimApiBase(localStorage.getItem(STORAGE_KEYS.apiBase) || pickDefaultApiBase());
+  const queryApiBase = trimApiBase(new URLSearchParams(window.location.search).get("api"));
+  const storedApiBase = trimApiBase(localStorage.getItem(STORAGE_KEYS.apiBase));
+  state.apiBase = queryApiBase || storedApiBase || pickDefaultApiBase();
   state.accessToken = localStorage.getItem(STORAGE_KEYS.accessToken) || "";
   state.refreshToken = localStorage.getItem(STORAGE_KEYS.refreshToken) || "";
 }
@@ -102,6 +119,33 @@ async function apiFetch(path, { method = "GET", body, auth = false, idempotencyK
     throw new Error(message);
   }
   return payload;
+}
+
+async function resolveApiBase() {
+  const candidates = uniqueApiBases([
+    state.apiBase,
+    DEFAULT_PROD_API_BASE,
+    DEFAULT_NGROK_API_BASE,
+    window.location.origin,
+  ]);
+
+  for (const candidate of candidates) {
+    try {
+      const response = await fetch(`${candidate}/healthz`, { method: "GET" });
+      if (!response.ok) {
+        continue;
+      }
+      if (candidate !== state.apiBase) {
+        state.apiBase = candidate;
+        apiBaseInput.value = state.apiBase;
+        saveState();
+      }
+      return;
+    } catch (_error) {
+      continue;
+    }
+  }
+  throw new Error("API endpoint недоступен");
 }
 
 async function refreshSession() {
@@ -299,6 +343,7 @@ async function bootstrap() {
   bindEvents();
 
   try {
+    await resolveApiBase();
     await loadPublicData();
   } catch (error) {
     setNote(`Не удалось загрузить публичные данные: ${error.message}`, true);
