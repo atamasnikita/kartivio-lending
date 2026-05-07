@@ -245,8 +245,8 @@ a {
 .studio-grid {
   margin-top: 14px;
   display: grid;
-  grid-template-columns: minmax(0, 1.5fr) minmax(260px, 0.8fr);
-  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 380px);
+  gap: 16px;
   align-items: start;
 }
 
@@ -257,6 +257,11 @@ a {
 
 .prompt-field {
   height: 100%;
+}
+
+.prompt-field textarea {
+  min-height: 260px;
+  max-height: 460px;
 }
 
 .result-panel {
@@ -275,12 +280,27 @@ a {
   color: var(--muted);
 }
 
+.active-result-has-image {
+  grid-template-rows: minmax(0, 1fr) auto;
+  place-items: stretch;
+}
+
 .active-result img {
   width: 100%;
   max-height: 560px;
   object-fit: contain;
   display: block;
   background: #070b12;
+}
+
+.image-actions {
+  width: 100%;
+  padding: 10px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  border-top: 1px solid #232a3d;
+  background: rgba(6, 11, 21, 0.88);
 }
 
 .empty-result {
@@ -423,6 +443,19 @@ a {
   gap: 7px;
 }
 
+.history-actions {
+  margin-top: 2px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.btn-compact {
+  height: 36px;
+  padding: 0 10px;
+  font-size: 14px;
+}
+
 .history-topline {
   display: flex;
   align-items: center;
@@ -501,5 +534,9 @@ a {
 
   .history-thumb {
     width: 76px;
+  }
+
+  .history-actions {
+    grid-template-columns: 1fr;
   }
 }

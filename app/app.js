@@ -29,6 +29,8 @@ const state = {
   activeJobId: "",
   activePollTimer: null,
   selectedTemplateId: "",
+  activeImageRenderToken: 0,
+  imageBlobUrlCache: new Map(),
 };
 
 const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
@@ -119,6 +121,130 @@ function headersForApiBase(apiBase) {
     headers["ngrok-skip-browser-warning"] = "1";
   }
   return headers;
+}
+
+function isNgrokUrl(rawUrl) {
+  try {
+    const url = new URL(String(rawUrl || ""));
+    return url.hostname.endsWith(".ngrok-free.dev");
+  } catch (_e) {
+    return false;
+  }
+}
+
+function extensionFromUrl(rawUrl) {
+  try {
+    const parsed = new URL(String(rawUrl || ""));
+    const part = parsed.pathname.split("/").pop() || "";
+    const match = part.match(/\.([a-zA-Z0-9]+)$/);
+    return match ? match[1].toLowerCase() : "";
+  } catch (_e) {
+    return "";
+  }
+}
+
+function normalizeImageUrl(rawUrl) {
+  const value = String(rawUrl || "").trim();
+  if (!value) {
+    return "";
+  }
+  try {
+    const parsed = new URL(value);
+    if (parsed.hostname === "127.0.0.1" || parsed.hostname === "localhost") {
+      const filename = parsed.pathname.split("/").pop() || "";
+      if (!filename) {
+        return value;
+      }
+      return `${trimApiBase(state.apiBase)}/generated/${filename}`;
+    }
+    return parsed.toString();
+  } catch (_e) {
+    if (value.startsWith("/generated/")) {
+      return `${trimApiBase(state.apiBase)}${value}`;
+    }
+    return value;
+  }
+}
+
+function extensionFromContentType(contentType) {
+  if (!contentType) {
+    return "";
+  }
+  const clean = String(contentType).split(";")[0].trim().toLowerCase();
+  if (clean === "image/jpeg") {
+    return "jpg";
+  }
+  if (clean === "image/png") {
+    return "png";
+  }
+  if (clean === "image/webp") {
+    return "webp";
+  }
+  if (clean === "image/gif") {
+    return "gif";
+  }
+  return "";
+}
+
+function buildImageFileName(rawUrl, fallbackBase = "kartivio-image") {
+  const ext = extensionFromUrl(rawUrl) || "png";
+  return `${fallbackBase}-${Date.now()}.${ext}`;
+}
+
+async function resolveDisplayImage(rawUrl) {
+  const url = normalizeImageUrl(rawUrl);
+  if (!url) {
+    throw new Error("Пустой URL изображения.");
+  }
+  if (!isNgrokUrl(url)) {
+    return { src: url, contentType: "", isBlob: false };
+  }
+
+  const cached = state.imageBlobUrlCache.get(url);
+  if (cached) {
+    return { src: cached.src, contentType: cached.contentType, isBlob: true };
+  }
+
+  const response = await fetch(url, {
+    method: "GET",
+    headers: headersForApiBase(url),
+  });
+  if (!response.ok) {
+    throw new Error(`Изображение недоступно (HTTP ${response.status}).`);
+  }
+  const blob = await response.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  const contentType = blob.type || "";
+  state.imageBlobUrlCache.set(url, { src: objectUrl, contentType });
+  return { src: objectUrl, contentType, isBlob: true };
+}
+
+async function openImage(rawUrl) {
+  const targetUrl = normalizeImageUrl(rawUrl);
+  if (!targetUrl) {
+    throw new Error("Пустой URL изображения.");
+  }
+  if (tg && typeof tg.openLink === "function") {
+    tg.openLink(targetUrl);
+    return;
+  }
+  window.open(targetUrl, "_blank", "noopener,noreferrer");
+}
+
+async function downloadImage(rawUrl, fallbackBase = "kartivio-image") {
+  const rendered = await resolveDisplayImage(rawUrl);
+  const filename =
+    extensionFromUrl(rawUrl) || !rendered.contentType
+      ? buildImageFileName(rawUrl, fallbackBase)
+      : `${fallbackBase}-${Date.now()}.${extensionFromContentType(rendered.contentType) || "png"}`;
+
+  const link = document.createElement("a");
+  link.href = rendered.src;
+  link.download = filename;
+  link.rel = "noopener";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
 }
 
 function setEnvHint() {
@@ -393,6 +519,41 @@ function jobStatusLabel(status) {
   return STATUS_LABELS[status] || status;
 }
 
+async function renderActiveImage(job, renderToken) {
+  try {
+    const rendered = await resolveDisplayImage(job.result_image_url);
+    if (renderToken !== state.activeImageRenderToken) {
+      return;
+    }
+    activeResult.className = "active-result active-result-has-image";
+    activeResult.innerHTML = `
+      <img src="${escapeHtml(rendered.src)}" alt="Результат генерации" />
+      <div class="image-actions">
+        <button class="btn btn-secondary btn-compact" data-action="open" type="button">Открыть</button>
+        <button class="btn btn-secondary btn-compact" data-action="download" type="button">Скачать</button>
+      </div>
+    `;
+    const openBtn = activeResult.querySelector('[data-action="open"]');
+    const downloadBtn = activeResult.querySelector('[data-action="download"]');
+    openBtn.addEventListener("click", () => {
+      openImage(job.result_image_url).catch((error) => {
+        setCreateNote(`Не удалось открыть изображение: ${error.message}`, true);
+      });
+    });
+    downloadBtn.addEventListener("click", () => {
+      downloadImage(job.result_image_url, `kartivio-${job.id}`).catch((error) => {
+        setCreateNote(`Не удалось скачать изображение: ${error.message}`, true);
+      });
+    });
+  } catch (error) {
+    if (renderToken !== state.activeImageRenderToken) {
+      return;
+    }
+    activeResult.className = "active-result empty-result";
+    activeResult.textContent = `Изображение недоступно: ${error.message}`;
+  }
+}
+
 function renderActiveJob(job) {
   const status = jobStatusLabel(job.status);
   const mode = job.is_edit ? "редактирование" : "генерация";
@@ -400,16 +561,20 @@ function renderActiveJob(job) {
 
   activeResult.className = "active-result";
   if (job.result_image_url) {
-    activeResult.innerHTML = `<img src="${escapeHtml(job.result_image_url)}" alt="Результат генерации" />`;
+    const renderToken = ++state.activeImageRenderToken;
+    activeResult.classList.add("empty-result");
+    activeResult.textContent = "Загружаю изображение…";
+    renderActiveImage(job, renderToken);
     return;
   }
+  state.activeImageRenderToken += 1;
   activeResult.classList.add("empty-result");
   activeResult.textContent = job.status === "failed" ? `Ошибка: ${job.error_code || "unknown"}` : "Задача выполняется.";
 }
 
 function historyThumb(job) {
   if (job.result_image_url) {
-    return `<img src="${escapeHtml(job.result_image_url)}" alt="Результат" loading="lazy" />`;
+    return "Загрузка…";
   }
   return escapeHtml(jobStatusLabel(job.status));
 }
@@ -434,16 +599,57 @@ function renderHistory(payload) {
         </div>
         <p class="history-prompt">${escapeHtml(job.prompt)}</p>
         <div class="plan-meta">${escapeHtml(job.model_tier)} · ${escapeHtml(job.output_size)} · ${escapeHtml(job.requested_credits)} credits</div>
+        <div class="history-actions">
+          <button class="btn btn-secondary btn-compact" data-action="use-prompt" type="button">Вставить промпт</button>
+          <button class="btn btn-secondary btn-compact" data-action="open-image" type="button" ${job.result_image_url ? "" : "disabled"}>Открыть</button>
+          <button class="btn btn-secondary btn-compact" data-action="download-image" type="button" ${job.result_image_url ? "" : "disabled"}>Скачать</button>
+        </div>
       </div>
     `;
-    item.addEventListener("click", () => {
-      state.activeJobId = job.id;
-      renderActiveJob(job);
+    item.querySelector('[data-action="use-prompt"]').addEventListener("click", () => {
       if (job.prompt) {
         promptInput.value = job.prompt;
+        promptInput.focus();
       }
+      setCreateNote("Промпт вставлен в студию.");
+    });
+    item.querySelector('[data-action="open-image"]').addEventListener("click", () => {
+      if (!job.result_image_url) {
+        return;
+      }
+      openImage(job.result_image_url).catch((error) => {
+        setCreateNote(`Не удалось открыть изображение: ${error.message}`, true);
+      });
+    });
+    item.querySelector('[data-action="download-image"]').addEventListener("click", () => {
+      if (!job.result_image_url) {
+        return;
+      }
+      downloadImage(job.result_image_url, `kartivio-${job.id}`).catch((error) => {
+        setCreateNote(`Не удалось скачать изображение: ${error.message}`, true);
+      });
     });
     historyList.appendChild(item);
+
+    if (job.result_image_url) {
+      resolveDisplayImage(job.result_image_url)
+        .then((rendered) => {
+          const thumb = item.querySelector(".history-thumb");
+          if (!thumb) {
+            return;
+          }
+          let img = thumb.querySelector("img");
+          if (!img) {
+            img = document.createElement("img");
+            img.alt = "Результат";
+            img.loading = "lazy";
+            thumb.textContent = "";
+            thumb.appendChild(img);
+          }
+          img.src = rendered.src;
+        })
+        .catch(() => {});
+    }
   }
 }
 
