@@ -232,19 +232,40 @@ async function openImage(rawUrl) {
 }
 
 async function downloadImage(rawUrl, fallbackBase = "kartivio-image") {
-  const rendered = await resolveDisplayImage(rawUrl);
-  const filename =
-    extensionFromUrl(rawUrl) || !rendered.contentType
-      ? buildImageFileName(rawUrl, fallbackBase)
-      : `${fallbackBase}-${Date.now()}.${extensionFromContentType(rendered.contentType) || "png"}`;
+  const targetUrl = normalizeImageUrl(rawUrl);
+  if (!targetUrl) {
+    throw new Error("Пустой URL изображения.");
+  }
+
+  // Telegram desktop/mobile webview handles `download` inconsistently.
+  // Open file in external browser where user can save reliably.
+  if (tg && typeof tg.openLink === "function") {
+    tg.openLink(targetUrl);
+    setCreateNote("Открыл изображение во внешнем браузере. Сохрани файл через браузер.");
+    return;
+  }
+
+  const response = await fetch(targetUrl, {
+    method: "GET",
+    headers: headersForApiBase(targetUrl),
+  });
+  if (!response.ok) {
+    throw new Error(`Изображение недоступно (HTTP ${response.status}).`);
+  }
+
+  const blob = await response.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  const ext = extensionFromUrl(targetUrl) || extensionFromContentType(blob.type) || "png";
+  const filename = `${fallbackBase}-${Date.now()}.${ext}`;
 
   const link = document.createElement("a");
-  link.href = rendered.src;
+  link.href = objectUrl;
   link.download = filename;
   link.rel = "noopener";
   document.body.appendChild(link);
   link.click();
   link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 2500);
 }
 
 function setEnvHint() {
