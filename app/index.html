@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Kartivio AI App</title>
+    <meta name="theme-color" content="#050507" />
+    <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
+    <link rel="stylesheet" href="./styles.css" />
+    <script src="https://telegram.org/js/telegram-web-app.js?62"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="container topbar-inner">
+        <a class="brand" href="../index.html">
+          <span class="brand-mark">K</span>
+          <span class="brand-text">Kartivio App</span>
+        </a>
+        <a class="link-btn" href="https://t.me/kartivio_ai_bot" target="_blank" rel="noreferrer">Открыть бота</a>
+      </div>
+    </header>
+
+    <main class="container main">
+      <section class="panel">
+        <div class="panel-head">
+          <h1>Web / Mini App</h1>
+          <p id="envHint">Инициализация…</p>
+        </div>
+        <div class="auth-grid">
+          <label class="field">
+            <span>API Base URL</span>
+            <input id="apiBaseInput" type="text" placeholder="https://api.kartivio-ai.ru" />
+          </label>
+          <button id="authButton" class="btn btn-primary" type="button">Войти через Telegram</button>
+        </div>
+        <p class="note" id="authNote"></p>
+      </section>
+
+      <section class="panel panel-summary">
+        <article class="stat">
+          <span class="stat-label">Пользователь</span>
+          <strong id="userName">—</strong>
+        </article>
+        <article class="stat">
+          <span class="stat-label">Telegram ID</span>
+          <strong id="userTgId">—</strong>
+        </article>
+        <article class="stat">
+          <span class="stat-label">Баланс</span>
+          <strong id="creditsValue">—</strong>
+        </article>
+      </section>
+
+      <section class="panel">
+        <div class="section-head">
+          <h2>Пакеты кредитов</h2>
+          <p>Разовая покупка, кредиты не сгорают.</p>
+        </div>
+        <div id="plansGrid" class="plans-grid"></div>
+      </section>
+
+      <section class="panel">
+        <div class="section-head">
+          <h2>Шаблоны промптов</h2>
+          <p>Скопируй и запусти в генерации или редактировании.</p>
+        </div>
+        <div id="templatesGrid" class="templates-grid"></div>
+      </section>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
