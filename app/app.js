@@ -237,14 +237,6 @@ async function downloadImage(rawUrl, fallbackBase = "kartivio-image") {
     throw new Error("Пустой URL изображения.");
   }
 
-  // Telegram desktop/mobile webview handles `download` inconsistently.
-  // Open file in external browser where user can save reliably.
-  if (tg && typeof tg.openLink === "function") {
-    tg.openLink(targetUrl);
-    setCreateNote("Открыл изображение во внешнем браузере. Сохрани файл через браузер.");
-    return;
-  }
-
   const response = await fetch(targetUrl, {
     method: "GET",
     headers: headersForApiBase(targetUrl),
@@ -266,6 +258,10 @@ async function downloadImage(rawUrl, fallbackBase = "kartivio-image") {
   link.click();
   link.remove();
   window.setTimeout(() => URL.revokeObjectURL(objectUrl), 2500);
+
+  if (tg) {
+    setCreateNote("Файл подготовлен. Если Telegram открыл просмотрщик, выбери сохранение в нем.");
+  }
 }
 
 function setEnvHint() {
