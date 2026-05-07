@@ -8,10 +8,27 @@ const DEFAULT_PROD_API_BASE = "https://api.kartivio-ai.ru";
 const DEFAULT_LOCAL_API_BASE = "http://127.0.0.1:8093";
 const DEFAULT_NGROK_API_BASE = "https://sweptback-semivolcanic-reagan.ngrok-free.dev";
 
+const MODEL_COSTS = {
+  cheap: 4,
+  standard: 10,
+  premium: 35,
+};
+
+const STATUS_LABELS = {
+  queued: "В очереди",
+  processing: "В работе",
+  done: "Готово",
+  failed: "Ошибка",
+  cancelled: "Отменено",
+};
+
 const state = {
   apiBase: "",
   accessToken: "",
   refreshToken: "",
+  activeJobId: "",
+  activePollTimer: null,
+  selectedTemplateId: "",
 };
 
 const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
@@ -25,6 +42,17 @@ const userTgId = document.getElementById("userTgId");
 const creditsValue = document.getElementById("creditsValue");
 const plansGrid = document.getElementById("plansGrid");
 const templatesGrid = document.getElementById("templatesGrid");
+const promptInput = document.getElementById("promptInput");
+const modelTierSelect = document.getElementById("modelTierSelect");
+const aspectRatioSelect = document.getElementById("aspectRatioSelect");
+const sourceImageInput = document.getElementById("sourceImageInput");
+const createButton = document.getElementById("createButton");
+const createNote = document.getElementById("createNote");
+const selectedTemplateLabel = document.getElementById("selectedTemplateLabel");
+const activeJobMeta = document.getElementById("activeJobMeta");
+const activeResult = document.getElementById("activeResult");
+const historyList = document.getElementById("historyList");
+const refreshHistoryButton = document.getElementById("refreshHistoryButton");
 
 function pickDefaultApiBase() {
   const host = window.location.hostname || "";
@@ -80,6 +108,11 @@ function setNote(message, isError = false) {
   authNote.style.color = isError ? "#ff8f8f" : "#a5aec7";
 }
 
+function setCreateNote(message, isError = false) {
+  createNote.textContent = message;
+  createNote.style.color = isError ? "#ff8f8f" : "#a5aec7";
+}
+
 function headersForApiBase(apiBase) {
   const headers = {};
   if (String(apiBase || "").includes(".ngrok-free.dev")) {
@@ -90,12 +123,20 @@ function headersForApiBase(apiBase) {
 
 function setEnvHint() {
   if (!tg) {
-    envHint.textContent = "Открыто в обычном браузере. Для быстрого логина открой через кнопку Web App в боте.";
+    envHint.textContent = "Открыто в обычном браузере.";
     return;
   }
   tg.ready();
   tg.expand();
   envHint.textContent = "Открыто в Telegram Mini App.";
+}
+
+async function parseJsonResponse(response) {
+  try {
+    return await response.json();
+  } catch (_e) {
+    return null;
+  }
 }
 
 async function apiFetch(path, { method = "GET", body, auth = false, idempotencyKey } = {}) {
@@ -109,19 +150,35 @@ async function apiFetch(path, { method = "GET", body, auth = false, idempotencyK
   if (idempotencyKey) {
     headers["Idempotency-Key"] = idempotencyKey;
   }
+
   const response = await fetch(`${state.apiBase}${path}`, {
     method,
     headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
+  const payload = await parseJsonResponse(response);
+  if (!response.ok) {
+    const message = payload && payload.message ? payload.message : `HTTP ${response.status}`;
+    throw new Error(message);
+  }
+  return payload;
+}
 
-  let payload = null;
-  try {
-    payload = await response.json();
-  } catch (_e) {
-    payload = null;
+async function apiMultipart(path, formData, { auth = false, idempotencyKey } = {}) {
+  const headers = headersForApiBase(state.apiBase);
+  if (auth && state.accessToken) {
+    headers.Authorization = `Bearer ${state.accessToken}`;
+  }
+  if (idempotencyKey) {
+    headers["Idempotency-Key"] = idempotencyKey;
   }
 
+  const response = await fetch(`${state.apiBase}${path}`, {
+    method: "POST",
+    headers,
+    body: formData,
+  });
+  const payload = await parseJsonResponse(response);
   if (!response.ok) {
     const message = payload && payload.message ? payload.message : `HTTP ${response.status}`;
     throw new Error(message);
@@ -192,6 +249,21 @@ async function authorizedFetch(path, options = {}) {
       throw error;
     }
     return apiFetch(path, { ...options, auth: true });
+  }
+}
+
+async function authorizedMultipart(path, formData, options = {}) {
+  try {
+    return await apiMultipart(path, formData, { ...options, auth: true });
+  } catch (error) {
+    if (!/401|unauthorized|token/i.test(String(error && error.message))) {
+      throw error;
+    }
+    const refreshed = await refreshSession();
+    if (!refreshed) {
+      throw error;
+    }
+    return apiMultipart(path, formData, { ...options, auth: true });
   }
 }
 
@@ -269,6 +341,13 @@ function renderPlans(payload) {
   }
 }
 
+function selectTemplate(item) {
+  state.selectedTemplateId = item.id;
+  promptInput.value = item.prompt;
+  selectedTemplateLabel.textContent = `Выбран шаблон: ${item.title}`;
+  promptInput.focus();
+}
+
 function copyPrompt(prompt) {
   if (!prompt) {
     return;
@@ -298,13 +377,83 @@ function renderTemplates(payload) {
           <span class="chip">${safeCategory}</span>
         </div>
         <p class="template-prompt">${safePrompt}</p>
-        <button class="btn btn-secondary" type="button">Скопировать промпт</button>
+        <div class="template-actions">
+          <button class="btn btn-secondary" data-action="copy" type="button">Скопировать</button>
+          <button class="btn btn-primary" data-action="select" type="button">Выбрать</button>
+        </div>
       </div>
     `;
-    const button = card.querySelector("button");
-    button.addEventListener("click", () => copyPrompt(item.prompt));
+    card.querySelector('[data-action="copy"]').addEventListener("click", () => copyPrompt(item.prompt));
+    card.querySelector('[data-action="select"]').addEventListener("click", () => selectTemplate(item));
     templatesGrid.appendChild(card);
   }
+}
+
+function jobStatusLabel(status) {
+  return STATUS_LABELS[status] || status;
+}
+
+function renderActiveJob(job) {
+  const status = jobStatusLabel(job.status);
+  const mode = job.is_edit ? "редактирование" : "генерация";
+  activeJobMeta.textContent = `${status} · ${mode} · ${job.model_tier} · ${job.output_size}`;
+
+  activeResult.className = "active-result";
+  if (job.result_image_url) {
+    activeResult.innerHTML = `<img src="${escapeHtml(job.result_image_url)}" alt="Результат генерации" />`;
+    return;
+  }
+  activeResult.classList.add("empty-result");
+  activeResult.textContent = job.status === "failed" ? `Ошибка: ${job.error_code || "unknown"}` : "Задача выполняется.";
+}
+
+function historyThumb(job) {
+  if (job.result_image_url) {
+    return `<img src="${escapeHtml(job.result_image_url)}" alt="Результат" loading="lazy" />`;
+  }
+  return escapeHtml(jobStatusLabel(job.status));
+}
+
+function renderHistory(payload) {
+  const items = Array.isArray(payload && payload.items) ? payload.items : [];
+  historyList.innerHTML = "";
+  if (!items.length) {
+    historyList.innerHTML = '<div class="active-result empty-result">История пока пустая.</div>';
+    return;
+  }
+  for (const job of items) {
+    const item = document.createElement("article");
+    const statusClass = `status-${String(job.status || "").toLowerCase()}`;
+    item.className = "history-item";
+    item.innerHTML = `
+      <div class="history-thumb">${historyThumb(job)}</div>
+      <div class="history-body">
+        <div class="history-topline">
+          <span class="chip">${job.is_edit ? "edit" : "text"}</span>
+          <span class="status-pill ${escapeHtml(statusClass)}">${escapeHtml(jobStatusLabel(job.status))}</span>
+        </div>
+        <p class="history-prompt">${escapeHtml(job.prompt)}</p>
+        <div class="plan-meta">${escapeHtml(job.model_tier)} · ${escapeHtml(job.output_size)} · ${escapeHtml(job.requested_credits)} credits</div>
+      </div>
+    `;
+    item.addEventListener("click", () => {
+      state.activeJobId = job.id;
+      renderActiveJob(job);
+      if (job.prompt) {
+        promptInput.value = job.prompt;
+      }
+    });
+    historyList.appendChild(item);
+  }
+}
+
+async function loadHistory() {
+  if (!state.accessToken) {
+    historyList.innerHTML = '<div class="active-result empty-result">Войди, чтобы увидеть историю.</div>';
+    return;
+  }
+  const payload = await authorizedGetWithRetry("/v1/generations?limit=20", 1);
+  renderHistory(payload);
 }
 
 async function loadPublicData() {
@@ -331,13 +480,101 @@ async function loadPrivateData() {
   renderUser(me, wallet);
 }
 
+function ensureAuthorizedForCreate() {
+  if (!state.accessToken) {
+    throw new Error("Сначала войди через Telegram.");
+  }
+}
+
+function buildClientRequestId() {
+  return `webapp_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+}
+
+async function createTextGeneration(prompt, modelTier, outputSize, clientRequestId) {
+  return authorizedFetch("/v1/generations", {
+    method: "POST",
+    body: {
+      prompt,
+      model_tier: modelTier,
+      output_size: outputSize,
+      client_request_id: clientRequestId,
+    },
+    idempotencyKey: clientRequestId,
+  });
+}
+
+async function createEditGeneration(prompt, modelTier, outputSize, sourceImage, clientRequestId) {
+  const form = new FormData();
+  form.append("prompt", prompt);
+  form.append("model_tier", modelTier);
+  form.append("output_size", outputSize);
+  form.append("client_request_id", clientRequestId);
+  form.append("source_image", sourceImage);
+  return authorizedMultipart("/v1/generations/edit", form, {
+    idempotencyKey: clientRequestId,
+  });
+}
+
+async function pollActiveJob(jobId) {
+  if (state.activePollTimer) {
+    window.clearTimeout(state.activePollTimer);
+    state.activePollTimer = null;
+  }
+
+  try {
+    const job = await authorizedGetWithRetry(`/v1/generations/${jobId}`, 1);
+    renderActiveJob(job);
+    if (["queued", "processing"].includes(job.status)) {
+      state.activePollTimer = window.setTimeout(() => pollActiveJob(jobId), 2500);
+      return;
+    }
+    await Promise.allSettled([loadPrivateData(), loadHistory()]);
+  } catch (error) {
+    setCreateNote(`Не удалось обновить задачу: ${error.message}`, true);
+  }
+}
+
+async function handleCreate() {
+  const prompt = promptInput.value.trim();
+  const modelTier = modelTierSelect.value;
+  const outputSize = aspectRatioSelect.value;
+  const sourceImage = sourceImageInput.files && sourceImageInput.files[0] ? sourceImageInput.files[0] : null;
+  const cost = MODEL_COSTS[modelTier] || MODEL_COSTS.standard;
+
+  try {
+    ensureAuthorizedForCreate();
+    if (!prompt) {
+      throw new Error("Добавь промпт.");
+    }
+    createButton.disabled = true;
+    createButton.textContent = "Создаю...";
+    setCreateNote(`Списываю ${cost} credits и ставлю задачу в очередь.`);
+
+    const clientRequestId = buildClientRequestId();
+    const job = sourceImage
+      ? await createEditGeneration(prompt, modelTier, outputSize, sourceImage, clientRequestId)
+      : await createTextGeneration(prompt, modelTier, outputSize, clientRequestId);
+
+    state.activeJobId = job.id;
+    renderActiveJob(job);
+    setCreateNote(`Задача создана: ${job.status}.`);
+    await Promise.allSettled([loadPrivateData(), loadHistory()]);
+    await pollActiveJob(job.id);
+  } catch (error) {
+    setCreateNote(error.message, true);
+  } finally {
+    createButton.disabled = false;
+    createButton.textContent = "Создать";
+  }
+}
+
 async function loginViaTelegram() {
   if (!tg || !tg.initData) {
     setNote("Нет Telegram initData. Открой страницу через кнопку Web App в боте.", true);
     return;
   }
   authButton.disabled = true;
-  authButton.textContent = "Проверяю…";
+  authButton.textContent = "Проверяю...";
   try {
     const payload = await apiFetch("/v1/auth/telegram/miniapp", {
       method: "POST",
@@ -346,13 +583,8 @@ async function loginViaTelegram() {
     state.accessToken = payload.access_token;
     state.refreshToken = payload.refresh_token;
     saveState();
-    setNote("Авторизация успешна. Загружаю профиль...");
-    try {
-      await loadPrivateData();
-      setNote("Профиль загружен.");
-    } catch (profileError) {
-      setNote(`Авторизация ок, но профиль не загрузился: ${profileError.message}`, true);
-    }
+    setNote("Авторизация успешна.");
+    await Promise.allSettled([loadPrivateData(), loadHistory()]);
   } catch (error) {
     setNote(`Ошибка авторизации: ${error.message}`, true);
   } finally {
@@ -367,6 +599,14 @@ function bindEvents() {
     saveState();
   });
   authButton.addEventListener("click", loginViaTelegram);
+  createButton.addEventListener("click", handleCreate);
+  refreshHistoryButton.addEventListener("click", () => loadHistory().catch((error) => {
+    setCreateNote(`История не загрузилась: ${error.message}`, true);
+  }));
+  modelTierSelect.addEventListener("change", () => {
+    const cost = MODEL_COSTS[modelTierSelect.value] || MODEL_COSTS.standard;
+    setCreateNote(`Стоимость текущего режима: ${cost} credits.`);
+  });
 }
 
 async function bootstrap() {
@@ -382,10 +622,10 @@ async function bootstrap() {
     setNote(`Не удалось загрузить публичные данные: ${error.message}`, true);
   }
 
-  try {
-    await loadPrivateData();
-  } catch (error) {
-    setNote(`Не удалось загрузить профиль: ${error.message}`, true);
+  if (state.accessToken) {
+    await Promise.allSettled([loadPrivateData(), loadHistory()]);
+  } else {
+    await loadHistory();
   }
 }
 
