@@ -80,6 +80,14 @@ function setNote(message, isError = false) {
   authNote.style.color = isError ? "#ff8f8f" : "#a5aec7";
 }
 
+function headersForApiBase(apiBase) {
+  const headers = {};
+  if (String(apiBase || "").includes(".ngrok-free.dev")) {
+    headers["ngrok-skip-browser-warning"] = "1";
+  }
+  return headers;
+}
+
 function setEnvHint() {
   if (!tg) {
     envHint.textContent = "Открыто в обычном браузере. Для быстрого логина открой через кнопку Web App в боте.";
@@ -91,12 +99,9 @@ function setEnvHint() {
 }
 
 async function apiFetch(path, { method = "GET", body, auth = false, idempotencyKey } = {}) {
-  const headers = {};
+  const headers = headersForApiBase(state.apiBase);
   if (body !== undefined) {
     headers["Content-Type"] = "application/json";
-  }
-  if (state.apiBase.includes(".ngrok-free.dev")) {
-    headers["ngrok-skip-browser-warning"] = "1";
   }
   if (auth && state.accessToken) {
     headers.Authorization = `Bearer ${state.accessToken}`;
@@ -134,7 +139,10 @@ async function resolveApiBase() {
 
   for (const candidate of candidates) {
     try {
-      const response = await fetch(`${candidate}/healthz`, { method: "GET" });
+      const response = await fetch(`${candidate}/healthz`, {
+        method: "GET",
+        headers: headersForApiBase(candidate),
+      });
       if (!response.ok) {
         continue;
       }
@@ -306,6 +314,7 @@ async function loadPublicData() {
   ]);
   renderPlans(plansPayload);
   renderTemplates(templatesPayload);
+  setNote("");
 }
 
 async function loadPrivateData() {
