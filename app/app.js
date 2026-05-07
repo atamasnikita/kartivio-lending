@@ -95,6 +95,9 @@ async function apiFetch(path, { method = "GET", body, auth = false, idempotencyK
   if (body !== undefined) {
     headers["Content-Type"] = "application/json";
   }
+  if (state.apiBase.includes(".ngrok-free.dev")) {
+    headers["ngrok-skip-browser-warning"] = "1";
+  }
   if (auth && state.accessToken) {
     headers.Authorization = `Bearer ${state.accessToken}`;
   }
@@ -318,8 +321,13 @@ async function loginViaTelegram() {
     state.accessToken = payload.access_token;
     state.refreshToken = payload.refresh_token;
     saveState();
-    await loadPrivateData();
-    setNote("Авторизация успешна.");
+    setNote("Авторизация успешна. Загружаю профиль...");
+    try {
+      await loadPrivateData();
+      setNote("Профиль загружен.");
+    } catch (profileError) {
+      setNote(`Авторизация ок, но профиль не загрузился: ${profileError.message}`, true);
+    }
   } catch (error) {
     setNote(`Ошибка авторизации: ${error.message}`, true);
   } finally {
