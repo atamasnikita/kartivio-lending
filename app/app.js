@@ -20,7 +20,37 @@ const MODEL_TIER_LABELS = {
   premium: "Премиум",
 };
 
+const IMAGE_MODEL_LABELS = {
+  "gemini-2.5-flash-image": "Nano Banana",
+  "gemini-3.1-flash-image-preview": "Nano Banana 2",
+  "gemini-3-pro-image-preview": "Nano Banana Pro",
+  "gpt-image-1": "GPT Image 1",
+  "gpt-image-2": "GPT Image 2",
+};
+
 const IMAGE_MODEL_SIZES = {
+  "gemini-2.5-flash-image": [
+    { value: "1024x1024", label: "1024x1024 · 1:1 квадрат" },
+    { value: "1536x1024", label: "1536x1024 · 3:2 горизонтально" },
+    { value: "1024x1536", label: "1024x1536 · 2:3 вертикально" },
+    { value: "auto", label: "Auto · выбрать автоматически" },
+  ],
+  "gemini-3.1-flash-image-preview": [
+    { value: "1024x1024", label: "1K · 1:1 квадрат" },
+    { value: "1536x1024", label: "1K · 3:2 горизонтально" },
+    { value: "1024x1536", label: "1K · 2:3 вертикально" },
+    { value: "2560x1440", label: "2K · 16:9" },
+    { value: "3840x2160", label: "4K · 16:9" },
+    { value: "auto", label: "Auto · выбрать автоматически" },
+  ],
+  "gemini-3-pro-image-preview": [
+    { value: "1024x1024", label: "1K · 1:1 квадрат" },
+    { value: "1536x1024", label: "1K · 3:2 горизонтально" },
+    { value: "1024x1536", label: "1K · 2:3 вертикально" },
+    { value: "2560x1440", label: "2K · 16:9" },
+    { value: "3840x2160", label: "4K · 16:9" },
+    { value: "auto", label: "Auto · выбрать автоматически" },
+  ],
   "gpt-image-1": [
     { value: "1024x1024", label: "1024x1024 · 1:1 квадрат" },
     { value: "1536x1024", label: "1536x1024 · 3:2 горизонтально" },
@@ -37,7 +67,7 @@ const IMAGE_MODEL_SIZES = {
   ],
 };
 
-const DEFAULT_IMAGE_MODEL = "gpt-image-1";
+const DEFAULT_IMAGE_MODEL = "gemini-2.5-flash-image";
 
 const STATUS_LABELS = {
   queued: "В очереди",
@@ -139,6 +169,11 @@ function sizeOptionsForModel(model) {
 function modelTierLabel(tier) {
   const key = String(tier || "").trim().toLowerCase();
   return MODEL_TIER_LABELS[key] || key || "—";
+}
+
+function imageModelLabel(model) {
+  const key = String(model || "").trim().toLowerCase();
+  return IMAGE_MODEL_LABELS[key] || key || "—";
 }
 
 function renderOutputSizeOptions({ model, preserveValue = "" } = {}) {
@@ -717,7 +752,7 @@ async function renderActiveImage(job, renderToken) {
 function renderActiveJob(job) {
   const status = jobStatusLabel(job.status);
   const mode = job.is_edit ? "редактирование" : "генерация";
-  const imageModel = job.provider_model || "—";
+  const imageModel = imageModelLabel(job.provider_model);
   activeJobMeta.textContent = `${status} · ${mode} · ${imageModel} · ${modelTierLabel(job.model_tier)} · ${job.output_size}`;
 
   activeResult.className = "active-result";
@@ -759,7 +794,7 @@ function renderHistory(payload) {
           <span class="status-pill ${escapeHtml(statusClass)}">${escapeHtml(jobStatusLabel(job.status))}</span>
         </div>
         <p class="history-prompt">${escapeHtml(job.prompt)}</p>
-        <div class="plan-meta">${escapeHtml(job.provider_model || "—")} · ${escapeHtml(modelTierLabel(job.model_tier))} · ${escapeHtml(job.output_size)}</div>
+        <div class="plan-meta">${escapeHtml(imageModelLabel(job.provider_model))} · ${escapeHtml(modelTierLabel(job.model_tier))} · ${escapeHtml(job.output_size)}</div>
         <div class="history-actions">
           <button class="soft-btn btn-compact" data-action="use-prompt" type="button">Вставить промпт</button>
           <button class="soft-btn btn-compact" data-action="open-image" type="button" ${job.result_image_url ? "" : "disabled"}>Открыть</button>
@@ -984,7 +1019,7 @@ function bindEvents() {
     renderOutputSizeOptions({ model: imageModelSelect.value, preserveValue: previous });
     const cost = MODEL_COSTS[modelTierSelect.value] || MODEL_COSTS.standard;
     setCreateNote(
-      `Выбрано: ${imageModelSelect.value}, ${aspectRatioSelect.value}. Стоимость текущего режима: ${cost} credits.`,
+      `Выбрано: ${imageModelLabel(imageModelSelect.value)}, ${aspectRatioSelect.value}. Стоимость текущего режима: ${cost} credits.`,
     );
   });
 
@@ -992,7 +1027,7 @@ function bindEvents() {
     syncTierChips();
     const cost = MODEL_COSTS[modelTierSelect.value] || MODEL_COSTS.standard;
     setCreateNote(
-      `Выбрано: ${imageModelSelect.value}, ${aspectRatioSelect.value}. Стоимость текущего режима: ${cost} credits.`,
+      `Выбрано: ${imageModelLabel(imageModelSelect.value)}, ${aspectRatioSelect.value}. Стоимость текущего режима: ${cost} credits.`,
     );
   });
 
@@ -1006,7 +1041,7 @@ function bindEvents() {
       syncTierChips();
       const cost = MODEL_COSTS[tier] || MODEL_COSTS.standard;
       setCreateNote(
-        `Выбрано: ${imageModelSelect.value}, ${aspectRatioSelect.value}. Стоимость текущего режима: ${cost} credits.`,
+        `Выбрано: ${imageModelLabel(imageModelSelect.value)}, ${aspectRatioSelect.value}. Стоимость текущего режима: ${cost} credits.`,
       );
     });
   }
