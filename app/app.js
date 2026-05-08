@@ -56,6 +56,9 @@ const state = {
   selectedTemplateId: "",
   activeImageRenderToken: 0,
   imageBlobUrlCache: new Map(),
+  currentScreen: "feed",
+  topups: [],
+  selectedTopupCode: "",
 };
 
 const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
@@ -67,13 +70,21 @@ const authNote = document.getElementById("authNote");
 const userName = document.getElementById("userName");
 const userTgId = document.getElementById("userTgId");
 const creditsValue = document.getElementById("creditsValue");
+const creditsBadge = document.getElementById("creditsBadge");
+const profileAvatar = document.getElementById("profileAvatar");
 const plansGrid = document.getElementById("plansGrid");
+const plansActionButton = document.getElementById("plansActionButton");
+const plansNote = document.getElementById("plansNote");
 const templatesGrid = document.getElementById("templatesGrid");
 const promptInput = document.getElementById("promptInput");
 const imageModelSelect = document.getElementById("imageModelSelect");
 const modelTierSelect = document.getElementById("modelTierSelect");
 const aspectRatioSelect = document.getElementById("aspectRatioSelect");
 const sourceImageInput = document.getElementById("sourceImageInput");
+const uploadPhotoButton = document.getElementById("uploadPhotoButton");
+const uploadDropzone = document.getElementById("uploadDropzone");
+const dropzoneTitle = document.getElementById("dropzoneTitle");
+const sourceImageMeta = document.getElementById("sourceImageMeta");
 const createButton = document.getElementById("createButton");
 const createNote = document.getElementById("createNote");
 const selectedTemplateLabel = document.getElementById("selectedTemplateLabel");
@@ -81,6 +92,16 @@ const activeJobMeta = document.getElementById("activeJobMeta");
 const activeResult = document.getElementById("activeResult");
 const historyList = document.getElementById("historyList");
 const refreshHistoryButton = document.getElementById("refreshHistoryButton");
+const tierChips = Array.from(document.querySelectorAll("[data-tier]"));
+const navButtons = Array.from(document.querySelectorAll("[data-nav]"));
+const jumpButtons = Array.from(document.querySelectorAll("[data-nav-target]"));
+const screens = Array.from(document.querySelectorAll("[data-screen]"));
+
+function refreshIcons() {
+  if (window.lucide && typeof window.lucide.createIcons === "function") {
+    window.lucide.createIcons();
+  }
+}
 
 function pickDefaultApiBase() {
   const host = window.location.hostname || "";
@@ -134,12 +155,14 @@ function renderOutputSizeOptions({ model, preserveValue = "" } = {}) {
   }
 
   const hasPrevious = options.some((option) => option.value === previousValue);
-  if (hasPrevious) {
-    aspectRatioSelect.value = previousValue;
-    return;
-  }
+  aspectRatioSelect.value = hasPrevious ? previousValue : options[0].value;
+}
 
-  aspectRatioSelect.value = options[0].value;
+function syncTierChips() {
+  const value = String(modelTierSelect.value || "").trim();
+  for (const chip of tierChips) {
+    chip.classList.toggle("is-active", chip.dataset.tier === value);
+  }
 }
 
 function saveState() {
@@ -167,12 +190,17 @@ function escapeHtml(raw) {
 
 function setNote(message, isError = false) {
   authNote.textContent = message;
-  authNote.style.color = isError ? "#ff8f8f" : "#a5aec7";
+  authNote.style.color = isError ? "#ff8f8f" : "#8f98b0";
 }
 
 function setCreateNote(message, isError = false) {
   createNote.textContent = message;
-  createNote.style.color = isError ? "#ff8f8f" : "#a5aec7";
+  createNote.style.color = isError ? "#ff8f8f" : "#8f98b0";
+}
+
+function setPlansNote(message, isError = false) {
+  plansNote.textContent = message;
+  plansNote.style.color = isError ? "#ff8f8f" : "#8f98b0";
 }
 
 function headersForApiBase(apiBase) {
@@ -246,11 +274,6 @@ function extensionFromContentType(contentType) {
   return "";
 }
 
-function buildImageFileName(rawUrl, fallbackBase = "kartivio-image") {
-  const ext = extensionFromUrl(rawUrl) || "png";
-  return `${fallbackBase}-${Date.now()}.${ext}`;
-}
-
 async function resolveDisplayImage(rawUrl) {
   const url = normalizeImageUrl(rawUrl);
   if (!url) {
@@ -318,10 +341,36 @@ async function downloadImage(rawUrl, fallbackBase = "kartivio-image") {
   link.click();
   link.remove();
   window.setTimeout(() => URL.revokeObjectURL(objectUrl), 2500);
+}
 
-  if (tg) {
-    setCreateNote("Файл подготовлен. Если Telegram открыл просмотрщик, выбери сохранение в нем.");
+function switchScreen(nextScreen) {
+  const target = String(nextScreen || "").trim();
+  if (!target) {
+    return;
   }
+  state.currentScreen = target;
+  for (const screen of screens) {
+    screen.classList.toggle("screen-active", screen.dataset.screen === target);
+  }
+  for (const button of navButtons) {
+    button.classList.toggle("is-active", button.dataset.nav === target);
+  }
+  if (target === "history") {
+    loadHistory().catch((error) => {
+      setCreateNote(`История не загрузилась: ${error.message}`, true);
+    });
+  }
+}
+
+function renderSelectedSourceImage() {
+  const file = sourceImageInput.files && sourceImageInput.files[0] ? sourceImageInput.files[0] : null;
+  if (!file) {
+    dropzoneTitle.textContent = "Добавить фото";
+    sourceImageMeta.textContent = "Файл не выбран";
+    return;
+  }
+  dropzoneTitle.textContent = file.name;
+  sourceImageMeta.textContent = `${Math.max(1, Math.round(file.size / 1024 / 1024))} MB`;
 }
 
 function setEnvHint() {
@@ -503,10 +552,15 @@ async function authorizedGetWithRetry(path, retries = 1) {
 }
 
 function renderUser(me, wallet) {
-  const display = me.display_name || me.telegram_user_id || "—";
-  userName.textContent = String(display);
-  userTgId.textContent = String(me.telegram_user_id || "—");
-  creditsValue.textContent = `${wallet.balance_credits} credits`;
+  const display = String(me.display_name || me.telegram_user_id || "—");
+  const tgId = String(me.telegram_user_id || "—");
+  const balance = Number(wallet.balance_credits || 0);
+
+  userName.textContent = display;
+  userTgId.textContent = tgId;
+  creditsValue.textContent = `${balance} credits`;
+  creditsBadge.textContent = String(balance);
+  profileAvatar.textContent = display === "—" ? "K" : display[0].toUpperCase();
 }
 
 function openCheckout(url) {
@@ -522,7 +576,8 @@ function openCheckout(url) {
 
 async function buyPackage(code) {
   if (!state.accessToken) {
-    setNote("Сначала авторизуйся через Telegram.", true);
+    setPlansNote("Сначала авторизуйся через Telegram.", true);
+    switchScreen("profile");
     return;
   }
   const idem = `webapp_buy_${code}_${Date.now()}`;
@@ -534,76 +589,88 @@ async function buyPackage(code) {
     });
     if (result.checkout_url) {
       openCheckout(result.checkout_url);
+      setPlansNote(`Пакет ${code} готов к оплате.`);
     } else {
-      setNote("Платеж создан, но ссылка оплаты не пришла.", true);
+      setPlansNote("Платеж создан, но ссылка оплаты не пришла.", true);
     }
   } catch (error) {
-    setNote(`Ошибка создания платежа: ${error.message}`, true);
+    setPlansNote(`Ошибка создания платежа: ${error.message}`, true);
   }
+}
+
+function selectTopup(code) {
+  state.selectedTopupCode = String(code || "").trim();
+  const cards = plansGrid.querySelectorAll(".plan-card");
+  for (const card of cards) {
+    const isSelected = card.dataset.code === state.selectedTopupCode;
+    card.classList.toggle("is-selected", isSelected);
+  }
+  const selected = state.topups.find((item) => item.code === state.selectedTopupCode);
+  if (!selected) {
+    plansActionButton.textContent = "Выбери пакет";
+    plansActionButton.disabled = true;
+    return;
+  }
+  plansActionButton.textContent = `Оплатить ${selected.price_rub} ₽`;
+  plansActionButton.disabled = false;
 }
 
 function renderPlans(payload) {
   const topups = Array.isArray(payload && payload.topups) ? payload.topups : [];
+  state.topups = topups;
   plansGrid.innerHTML = "";
+  if (!topups.length) {
+    plansGrid.innerHTML = '<article class="plan-card">Пакеты временно недоступны.</article>';
+    selectTopup("");
+    return;
+  }
+
   for (const item of topups) {
     const card = document.createElement("article");
     card.className = "plan-card";
+    card.dataset.code = item.code;
     card.innerHTML = `
-      <h3>${escapeHtml(item.title)}</h3>
-      <div class="plan-meta">${escapeHtml(item.price_rub)} ₽</div>
-      <div class="plan-meta">${escapeHtml(item.credits)} credits</div>
-      <button class="btn btn-secondary" type="button">Купить</button>
+      <div class="plan-title-row">
+        <h3>${escapeHtml(item.title)}</h3>
+        <span class="chip">${escapeHtml(item.credits)} credits</span>
+      </div>
+      <div class="plan-price">${escapeHtml(item.price_rub)} ₽</div>
+      <div class="plan-meta">Разовая покупка, без автосписаний</div>
     `;
-    const button = card.querySelector("button");
-    button.addEventListener("click", () => buyPackage(item.code));
+    card.addEventListener("click", () => selectTopup(item.code));
     plansGrid.appendChild(card);
   }
+  selectTopup(topups[0].code);
 }
 
 function selectTemplate(item) {
   state.selectedTemplateId = item.id;
   promptInput.value = item.prompt;
-  selectedTemplateLabel.textContent = `Выбран шаблон: ${item.title}`;
+  selectedTemplateLabel.textContent = `Шаблон: ${item.title}`;
+  switchScreen("studio");
   promptInput.focus();
-}
-
-function copyPrompt(prompt) {
-  if (!prompt) {
-    return;
-  }
-  navigator.clipboard.writeText(prompt).then(
-    () => setNote("Промпт скопирован."),
-    () => setNote("Не удалось скопировать промпт.", true),
-  );
 }
 
 function renderTemplates(payload) {
   const items = Array.isArray(payload && payload.items) ? payload.items : [];
   templatesGrid.innerHTML = "";
-  for (const item of items) {
+  if (!items.length) {
+    templatesGrid.innerHTML = '<article class="tool-card"><div class="tool-overlay"><strong>Скоро</strong></div></article>';
+    return;
+  }
+  for (const item of items.slice(0, 8)) {
     const card = document.createElement("article");
-    card.className = "template-card";
+    card.className = "tool-card";
     const imageUrl = item.preview_image_url || "https://picsum.photos/seed/kartivio-fallback/720/960";
-    const safeTitle = escapeHtml(item.title);
-    const safeCategory = escapeHtml(item.category);
-    const safePrompt = escapeHtml(item.prompt);
-    const safeImageUrl = escapeHtml(imageUrl);
     card.innerHTML = `
-      <img src="${safeImageUrl}" alt="${safeTitle}" loading="lazy" />
-      <div class="template-body">
-        <div class="template-head">
-          <h3>${safeTitle}</h3>
-          <span class="chip">${safeCategory}</span>
-        </div>
-        <p class="template-prompt">${safePrompt}</p>
-        <div class="template-actions">
-          <button class="btn btn-secondary" data-action="copy" type="button">Скопировать</button>
-          <button class="btn btn-primary" data-action="select" type="button">Выбрать</button>
-        </div>
+      <img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(item.title)}" loading="lazy" />
+      <div class="tool-overlay">
+        <strong>${escapeHtml(item.title)}</strong>
+        <p>${escapeHtml(item.category)}</p>
+        <button class="soft-btn" type="button">Использовать</button>
       </div>
     `;
-    card.querySelector('[data-action="copy"]').addEventListener("click", () => copyPrompt(item.prompt));
-    card.querySelector('[data-action="select"]').addEventListener("click", () => selectTemplate(item));
+    card.querySelector("button").addEventListener("click", () => selectTemplate(item));
     templatesGrid.appendChild(card);
   }
 }
@@ -622,8 +689,8 @@ async function renderActiveImage(job, renderToken) {
     activeResult.innerHTML = `
       <img src="${escapeHtml(rendered.src)}" alt="Результат генерации" />
       <div class="image-actions">
-        <button class="btn btn-secondary btn-compact" data-action="open" type="button">Открыть</button>
-        <button class="btn btn-secondary btn-compact" data-action="download" type="button">Скачать</button>
+        <button class="soft-btn btn-compact" data-action="open" type="button">Открыть</button>
+        <button class="soft-btn btn-compact" data-action="download" type="button">Скачать</button>
       </div>
     `;
     const openBtn = activeResult.querySelector('[data-action="open"]');
@@ -677,7 +744,7 @@ function renderHistory(payload) {
   const items = Array.isArray(payload && payload.items) ? payload.items : [];
   historyList.innerHTML = "";
   if (!items.length) {
-    historyList.innerHTML = '<div class="active-result empty-result">История пока пустая.</div>';
+    historyList.innerHTML = '<article class="history-item"><div class="history-body">История пока пустая.</div></article>';
     return;
   }
   for (const job of items) {
@@ -692,17 +759,19 @@ function renderHistory(payload) {
           <span class="status-pill ${escapeHtml(statusClass)}">${escapeHtml(jobStatusLabel(job.status))}</span>
         </div>
         <p class="history-prompt">${escapeHtml(job.prompt)}</p>
-        <div class="plan-meta">${escapeHtml(job.provider_model || "—")} · ${escapeHtml(modelTierLabel(job.model_tier))} · ${escapeHtml(job.output_size)} · ${escapeHtml(job.requested_credits)} credits</div>
+        <div class="plan-meta">${escapeHtml(job.provider_model || "—")} · ${escapeHtml(modelTierLabel(job.model_tier))} · ${escapeHtml(job.output_size)}</div>
         <div class="history-actions">
-          <button class="btn btn-secondary btn-compact" data-action="use-prompt" type="button">Вставить промпт</button>
-          <button class="btn btn-secondary btn-compact" data-action="open-image" type="button" ${job.result_image_url ? "" : "disabled"}>Открыть</button>
-          <button class="btn btn-secondary btn-compact" data-action="download-image" type="button" ${job.result_image_url ? "" : "disabled"}>Скачать</button>
+          <button class="soft-btn btn-compact" data-action="use-prompt" type="button">Вставить промпт</button>
+          <button class="soft-btn btn-compact" data-action="open-image" type="button" ${job.result_image_url ? "" : "disabled"}>Открыть</button>
+          <button class="soft-btn btn-compact" data-action="download-image" type="button" ${job.result_image_url ? "" : "disabled"}>Скачать</button>
         </div>
       </div>
     `;
     item.querySelector('[data-action="use-prompt"]').addEventListener("click", () => {
       if (job.prompt) {
         promptInput.value = job.prompt;
+        selectedTemplateLabel.textContent = "Промпт из истории";
+        switchScreen("studio");
         promptInput.focus();
       }
       setCreateNote("Промпт вставлен в студию.");
@@ -749,7 +818,7 @@ function renderHistory(payload) {
 
 async function loadHistory() {
   if (!state.accessToken) {
-    historyList.innerHTML = '<div class="active-result empty-result">Войди, чтобы увидеть историю.</div>';
+    historyList.innerHTML = '<article class="history-item"><div class="history-body">Войди, чтобы увидеть историю.</div></article>';
     return;
   }
   const payload = await authorizedGetWithRetry("/v1/generations?limit=20", 1);
@@ -771,6 +840,8 @@ async function loadPrivateData() {
     userName.textContent = "—";
     userTgId.textContent = "—";
     creditsValue.textContent = "—";
+    creditsBadge.textContent = "0";
+    profileAvatar.textContent = "K";
     return;
   }
   const [me, wallet] = await Promise.all([
@@ -867,7 +938,7 @@ async function handleCreate() {
     setCreateNote(error.message, true);
   } finally {
     createButton.disabled = false;
-    createButton.textContent = "Создать";
+    createButton.textContent = "Генерировать";
   }
 }
 
@@ -901,8 +972,13 @@ function bindEvents() {
     state.apiBase = trimApiBase(apiBaseInput.value);
     saveState();
   });
+
   authButton.addEventListener("click", loginViaTelegram);
   createButton.addEventListener("click", handleCreate);
+  refreshHistoryButton.addEventListener("click", () => loadHistory().catch((error) => {
+    setCreateNote(`История не загрузилась: ${error.message}`, true);
+  }));
+
   imageModelSelect.addEventListener("change", () => {
     const previous = aspectRatioSelect.value;
     renderOutputSizeOptions({ model: imageModelSelect.value, preserveValue: previous });
@@ -911,14 +987,47 @@ function bindEvents() {
       `Выбрано: ${imageModelSelect.value}, ${aspectRatioSelect.value}. Стоимость текущего режима: ${cost} credits.`,
     );
   });
-  refreshHistoryButton.addEventListener("click", () => loadHistory().catch((error) => {
-    setCreateNote(`История не загрузилась: ${error.message}`, true);
-  }));
+
   modelTierSelect.addEventListener("change", () => {
+    syncTierChips();
     const cost = MODEL_COSTS[modelTierSelect.value] || MODEL_COSTS.standard;
     setCreateNote(
       `Выбрано: ${imageModelSelect.value}, ${aspectRatioSelect.value}. Стоимость текущего режима: ${cost} credits.`,
     );
+  });
+
+  for (const chip of tierChips) {
+    chip.addEventListener("click", () => {
+      const tier = chip.dataset.tier;
+      if (!tier) {
+        return;
+      }
+      modelTierSelect.value = tier;
+      syncTierChips();
+      const cost = MODEL_COSTS[tier] || MODEL_COSTS.standard;
+      setCreateNote(
+        `Выбрано: ${imageModelSelect.value}, ${aspectRatioSelect.value}. Стоимость текущего режима: ${cost} credits.`,
+      );
+    });
+  }
+
+  uploadPhotoButton.addEventListener("click", () => sourceImageInput.click());
+  uploadDropzone.addEventListener("click", () => sourceImageInput.click());
+  sourceImageInput.addEventListener("change", renderSelectedSourceImage);
+
+  for (const button of navButtons) {
+    button.addEventListener("click", () => switchScreen(button.dataset.nav));
+  }
+  for (const button of jumpButtons) {
+    button.addEventListener("click", () => switchScreen(button.dataset.navTarget));
+  }
+
+  plansActionButton.addEventListener("click", () => {
+    if (!state.selectedTopupCode) {
+      setPlansNote("Сначала выбери пакет.", true);
+      return;
+    }
+    buyPackage(state.selectedTopupCode);
   });
 }
 
@@ -931,6 +1040,9 @@ async function bootstrap() {
     preserveValue: aspectRatioSelect.value,
   });
   bindEvents();
+  syncTierChips();
+  renderSelectedSourceImage();
+  refreshIcons();
 
   try {
     await resolveApiBase();
@@ -944,6 +1056,8 @@ async function bootstrap() {
   } else {
     await loadHistory();
   }
+
+  switchScreen("feed");
 }
 
 bootstrap();

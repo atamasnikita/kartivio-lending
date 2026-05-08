@@ -8,6 +8,7 @@
     <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
     <link rel="stylesheet" href="./styles.css" />
     <script src="https://telegram.org/js/telegram-web-app.js?62"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
   </head>
   <body>
     <!-- Yandex.Metrika counter -->
@@ -45,127 +46,208 @@
     <noscript><div><img src="https://mc.yandex.ru/watch/109102691" style="position:absolute; left:-9999px;" alt="" /></div></noscript>
     <!-- /Yandex.Metrika counter -->
 
-    <header class="topbar">
-      <div class="container topbar-inner">
-        <a class="brand" href="../index.html">
-          <span class="brand-mark">K</span>
-          <span class="brand-text">Kartivio App</span>
-        </a>
-        <a class="link-btn" href="https://t.me/kartivio_ai_bot" target="_blank" rel="noreferrer">Открыть бота</a>
-      </div>
-    </header>
+    <div class="app-shell">
+      <header class="app-header">
+        <button class="avatar-chip" id="profileAvatar" type="button" data-nav-target="profile">K</button>
+        <div class="brand-title" id="brandName">Kartivio</div>
+        <button class="credits-chip" type="button" data-nav-target="tokens">
+          <i data-lucide="coins"></i>
+          <span id="creditsBadge">0</span>
+        </button>
+      </header>
 
-    <main class="container main">
-      <section class="panel app-hero">
-        <div class="panel-head">
-          <h1>Создание изображения</h1>
-          <p id="envHint">Инициализация…</p>
-        </div>
-        <div class="auth-grid">
-          <label class="field compact-field">
-            <span>API Base URL</span>
-            <input id="apiBaseInput" type="text" placeholder="https://api.kartivio-ai.ru" />
-          </label>
-          <button id="authButton" class="btn btn-primary" type="button">Войти через Telegram</button>
-        </div>
-        <p class="note" id="authNote"></p>
-      </section>
-
-      <section class="panel panel-summary">
-        <article class="stat">
-          <span class="stat-label">Пользователь</span>
-          <strong id="userName">—</strong>
-        </article>
-        <article class="stat">
-          <span class="stat-label">Telegram ID</span>
-          <strong id="userTgId">—</strong>
-        </article>
-        <article class="stat">
-          <span class="stat-label">Баланс</span>
-          <strong id="creditsValue">—</strong>
-        </article>
-      </section>
-
-      <section class="panel studio-panel">
-        <div class="section-head">
-          <h2>Студия</h2>
-          <p id="selectedTemplateLabel">Шаблон не выбран.</p>
-        </div>
-        <div class="studio-grid">
-          <label class="field prompt-field">
-            <span>Промпт</span>
-            <textarea id="promptInput" rows="7" placeholder="Опиши, что нужно создать или изменить"></textarea>
-          </label>
-          <div class="settings-stack">
-            <label class="field">
-              <span>Модель генерации</span>
-              <select id="imageModelSelect">
-                <option value="gpt-image-1" selected>GPT Image 1</option>
-                <option value="gpt-image-2">GPT Image 2 (2K/4K)</option>
-              </select>
-            </label>
-            <label class="field">
-              <span>Качество / кредиты</span>
-              <select id="modelTierSelect">
-                <option value="cheap">Эконом · 4 credits</option>
-                <option value="standard" selected>Стандарт · 10 credits</option>
-                <option value="premium">Премиум · 35 credits</option>
-              </select>
-            </label>
-            <label class="field">
-              <span>Размер / соотношение</span>
-              <select id="aspectRatioSelect">
-                <option value="1024x1024" selected>1:1 · квадрат</option>
-                <option value="1536x1024">3:2 · горизонтально</option>
-                <option value="1024x1536">2:3 · вертикально</option>
-              </select>
-            </label>
-            <label class="field">
-              <span>Фото для редактирования</span>
-              <input id="sourceImageInput" type="file" accept="image/png,image/jpeg,image/webp" />
-            </label>
-            <button id="createButton" class="btn btn-primary" type="button">Создать</button>
-            <p id="createNote" class="note"></p>
+      <main class="app-main">
+        <section class="screen screen-active" data-screen="feed">
+          <div class="section-row">
+            <h2>AI инструменты</h2>
+            <button class="icon-btn" type="button" data-nav-target="studio">
+              <i data-lucide="chevron-right"></i>
+            </button>
           </div>
-        </div>
-      </section>
+          <div id="templatesGrid" class="tools-grid"></div>
 
-      <section class="panel result-panel">
-        <div class="section-head">
-          <h2>Текущий результат</h2>
-          <p id="activeJobMeta">Нет активной задачи.</p>
-        </div>
-        <div id="activeResult" class="active-result empty-result">Результат появится здесь.</div>
-      </section>
-
-      <section class="panel">
-        <div class="section-head">
-          <h2>Шаблоны промптов</h2>
-          <p>Можно скопировать текст или сразу выбрать шаблон для студии.</p>
-        </div>
-        <div id="templatesGrid" class="templates-grid"></div>
-      </section>
-
-      <section class="panel">
-        <div class="section-head row-head">
-          <div>
-            <h2>История генераций</h2>
-            <p>Последние задачи и результаты.</p>
+          <div class="section-row">
+            <h2>Лента</h2>
           </div>
-          <button id="refreshHistoryButton" class="btn btn-secondary" type="button">Обновить</button>
-        </div>
-        <div id="historyList" class="history-list"></div>
-      </section>
+          <div class="feed-grid">
+            <article class="feed-card">
+              <h3>Трендовые фото</h3>
+              <p>Подборка обновляется каждый день</p>
+              <button class="soft-btn" type="button" data-nav-target="studio">Попробовать</button>
+            </article>
+            <article class="feed-card">
+              <h3>Стили недели</h3>
+              <p>Готовые промпты под популярные образы</p>
+              <button class="soft-btn" type="button" data-nav-target="studio">Открыть</button>
+            </article>
+          </div>
 
-      <section class="panel">
-        <div class="section-head">
-          <h2>Пакеты кредитов</h2>
-          <p>Разовая покупка, кредиты не сгорают.</p>
-        </div>
-        <div id="plansGrid" class="plans-grid"></div>
-      </section>
-    </main>
+          <div class="section-row">
+            <h2>Сеты</h2>
+          </div>
+          <div class="placeholder-row">
+            <article class="placeholder-tile">
+              <img src="https://picsum.photos/seed/kartivio-feed-1/640/840" alt="Пример сета" loading="lazy" />
+            </article>
+            <article class="placeholder-tile">
+              <img src="https://picsum.photos/seed/kartivio-feed-2/640/840" alt="Пример сета" loading="lazy" />
+            </article>
+            <article class="placeholder-tile">
+              <img src="https://picsum.photos/seed/kartivio-feed-3/640/840" alt="Пример сета" loading="lazy" />
+            </article>
+          </div>
+        </section>
 
-    <script src="./app.js?v=20260508a"></script>
+        <section class="screen" data-screen="history">
+          <div class="section-row">
+            <h2>История</h2>
+            <button id="refreshHistoryButton" class="icon-btn" type="button" aria-label="Обновить историю">
+              <i data-lucide="refresh-cw"></i>
+            </button>
+          </div>
+          <div id="historyList" class="history-grid"></div>
+        </section>
+
+        <section class="screen" data-screen="studio">
+          <div class="segmented" id="tierChips">
+            <button class="segmented-btn" type="button" data-tier="cheap">Эконом</button>
+            <button class="segmented-btn is-active" type="button" data-tier="standard">Стандарт</button>
+            <button class="segmented-btn" type="button" data-tier="premium">Премиум</button>
+          </div>
+
+          <section class="info-banner">
+            <strong id="selectedTemplateLabel">Шаблон не выбран</strong>
+            <span>Генерация и редактирование в одном экране</span>
+          </section>
+
+          <button id="uploadDropzone" class="upload-dropzone" type="button">
+            <span class="dropzone-icon"><i data-lucide="image-plus"></i></span>
+            <span class="dropzone-title" id="dropzoneTitle">Добавить фото</span>
+            <span class="dropzone-subtitle">До 10 MB, PNG/JPG/WEBP</span>
+          </button>
+
+          <section class="panel-card">
+            <textarea id="promptInput" rows="6" placeholder="Напишите, что хотите создать или изменить..."></textarea>
+            <div class="inline-actions">
+              <button id="uploadPhotoButton" class="soft-btn soft-btn-icon" type="button">
+                <i data-lucide="paperclip"></i>
+                <span>Добавить фото</span>
+              </button>
+              <span id="sourceImageMeta" class="muted-inline">Файл не выбран</span>
+            </div>
+            <input id="sourceImageInput" type="file" accept="image/png,image/jpeg,image/webp" hidden />
+          </section>
+
+          <details class="settings-panel" open>
+            <summary>
+              <span>Настройки</span>
+              <i data-lucide="chevron-down"></i>
+            </summary>
+            <div class="settings-body">
+              <label class="field">
+                <span>Модель генерации</span>
+                <select id="imageModelSelect">
+                  <option value="gpt-image-1" selected>GPT Image 1</option>
+                  <option value="gpt-image-2">GPT Image 2 (2K/4K)</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>Качество / кредиты</span>
+                <select id="modelTierSelect">
+                  <option value="cheap">Эконом · 4 credits</option>
+                  <option value="standard" selected>Стандарт · 10 credits</option>
+                  <option value="premium">Премиум · 35 credits</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>Размер / соотношение</span>
+                <select id="aspectRatioSelect">
+                  <option value="1024x1024" selected>1:1 · квадрат</option>
+                  <option value="1536x1024">3:2 · горизонтально</option>
+                  <option value="1024x1536">2:3 · вертикально</option>
+                </select>
+              </label>
+            </div>
+          </details>
+
+          <button id="createButton" class="primary-action" type="button">Генерировать</button>
+          <p id="createNote" class="note"></p>
+
+          <section class="result-panel">
+            <div class="section-row section-row-tight">
+              <h3>Текущий результат</h3>
+              <span id="activeJobMeta">Нет активной задачи</span>
+            </div>
+            <div id="activeResult" class="active-result empty-result">Результат появится здесь.</div>
+          </section>
+        </section>
+
+        <section class="screen" data-screen="tokens">
+          <div class="section-row">
+            <h2>Пополнить токены</h2>
+          </div>
+          <p class="subtitle">Разовые пакеты, кредиты не сгорают.</p>
+          <div id="plansGrid" class="plans-list"></div>
+          <button id="plansActionButton" class="primary-action" type="button">Выбери пакет</button>
+          <p id="plansNote" class="note"></p>
+        </section>
+
+        <section class="screen" data-screen="profile">
+          <section class="panel-card profile-card">
+            <article class="stat">
+              <span>Пользователь</span>
+              <strong id="userName">—</strong>
+            </article>
+            <article class="stat">
+              <span>Telegram ID</span>
+              <strong id="userTgId">—</strong>
+            </article>
+            <article class="stat">
+              <span>Баланс</span>
+              <strong id="creditsValue">—</strong>
+            </article>
+          </section>
+
+          <section class="panel-card">
+            <label class="field">
+              <span>API Base URL</span>
+              <input id="apiBaseInput" type="text" placeholder="https://api.kartivio-ai.ru" />
+            </label>
+            <button id="authButton" class="soft-btn auth-btn" type="button">Войти через Telegram</button>
+            <p id="envHint" class="note"></p>
+            <p id="authNote" class="note"></p>
+          </section>
+
+          <a class="bot-link" href="https://t.me/kartivio_ai_bot" target="_blank" rel="noreferrer">
+            <i data-lucide="message-circle"></i>
+            <span>Открыть бота</span>
+          </a>
+        </section>
+      </main>
+
+      <nav class="bottom-nav">
+        <button class="nav-btn is-active" type="button" data-nav="feed">
+          <i data-lucide="sparkles"></i>
+          <span>Лента</span>
+        </button>
+        <button class="nav-btn" type="button" data-nav="history">
+          <i data-lucide="history"></i>
+          <span>История</span>
+        </button>
+        <button class="nav-btn nav-btn-center" type="button" data-nav="studio" aria-label="Студия">
+          <i data-lucide="plus"></i>
+        </button>
+        <button class="nav-btn" type="button" data-nav="tokens">
+          <i data-lucide="wallet"></i>
+          <span>Токены</span>
+        </button>
+        <button class="nav-btn" type="button" data-nav="profile">
+          <i data-lucide="user"></i>
+          <span>Профиль</span>
+        </button>
+      </nav>
+    </div>
+
+    <script src="./app.js?v=20260508b"></script>
   </body>
 </html>
