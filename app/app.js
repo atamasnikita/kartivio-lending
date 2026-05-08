@@ -61,8 +61,6 @@ const IMAGE_MODEL_SIZES = {
     { value: "1024x1024", label: "1024x1024 · 1:1 квадрат" },
     { value: "1536x1024", label: "1536x1024 · 3:2 горизонтально" },
     { value: "1024x1536", label: "1024x1536 · 2:3 вертикально" },
-    { value: "2560x1440", label: "2K · 2560x1440" },
-    { value: "3840x2160", label: "4K · 3840x2160" },
     { value: "auto", label: "Auto · выбрать автоматически" },
   ],
 };
@@ -174,6 +172,17 @@ function modelTierLabel(tier) {
 function imageModelLabel(model) {
   const key = String(model || "").trim().toLowerCase();
   return IMAGE_MODEL_LABELS[key] || key || "—";
+}
+
+function qualityNoteByModel(model) {
+  const key = String(model || "").trim().toLowerCase();
+  if (key.startsWith("gpt-image-")) {
+    return "Для GPT: Эконом/Стандарт/Премиум = low/medium/high качество.";
+  }
+  if (key.startsWith("gemini-")) {
+    return "Для Nano: режим влияет на стоимость; качество задается самой моделью.";
+  }
+  return "";
 }
 
 function renderOutputSizeOptions({ model, preserveValue = "" } = {}) {
@@ -1018,16 +1027,18 @@ function bindEvents() {
     const previous = aspectRatioSelect.value;
     renderOutputSizeOptions({ model: imageModelSelect.value, preserveValue: previous });
     const cost = MODEL_COSTS[modelTierSelect.value] || MODEL_COSTS.standard;
+    const qualityNote = qualityNoteByModel(imageModelSelect.value);
     setCreateNote(
-      `Выбрано: ${imageModelLabel(imageModelSelect.value)}, ${aspectRatioSelect.value}. Стоимость текущего режима: ${cost} credits.`,
+      `Выбрано: ${imageModelLabel(imageModelSelect.value)}, ${aspectRatioSelect.value}. Стоимость текущего режима: ${cost} credits. ${qualityNote}`,
     );
   });
 
   modelTierSelect.addEventListener("change", () => {
     syncTierChips();
     const cost = MODEL_COSTS[modelTierSelect.value] || MODEL_COSTS.standard;
+    const qualityNote = qualityNoteByModel(imageModelSelect.value);
     setCreateNote(
-      `Выбрано: ${imageModelLabel(imageModelSelect.value)}, ${aspectRatioSelect.value}. Стоимость текущего режима: ${cost} credits.`,
+      `Выбрано: ${imageModelLabel(imageModelSelect.value)}, ${aspectRatioSelect.value}. Стоимость текущего режима: ${cost} credits. ${qualityNote}`,
     );
   });
 
@@ -1040,8 +1051,9 @@ function bindEvents() {
       modelTierSelect.value = tier;
       syncTierChips();
       const cost = MODEL_COSTS[tier] || MODEL_COSTS.standard;
+      const qualityNote = qualityNoteByModel(imageModelSelect.value);
       setCreateNote(
-        `Выбрано: ${imageModelLabel(imageModelSelect.value)}, ${aspectRatioSelect.value}. Стоимость текущего режима: ${cost} credits.`,
+        `Выбрано: ${imageModelLabel(imageModelSelect.value)}, ${aspectRatioSelect.value}. Стоимость текущего режима: ${cost} credits. ${qualityNote}`,
       );
     });
   }
