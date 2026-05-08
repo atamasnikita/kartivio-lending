@@ -109,12 +109,6 @@
         </section>
 
         <section class="screen" data-screen="studio">
-          <div class="segmented" id="tierChips">
-            <button class="segmented-btn" type="button" data-tier="cheap">Эконом</button>
-            <button class="segmented-btn is-active" type="button" data-tier="standard">Стандарт</button>
-            <button class="segmented-btn" type="button" data-tier="premium">Премиум</button>
-          </div>
-
           <section class="info-banner">
             <strong id="selectedTemplateLabel">Шаблон не выбран</strong>
             <span>Генерация и редактирование в одном экране</span>
@@ -144,32 +138,18 @@
               <i data-lucide="chevron-down"></i>
             </summary>
             <div class="settings-body">
-              <label class="field">
-                <span>Модель генерации</span>
-                <select id="imageModelSelect">
-                  <option value="gemini-2.5-flash-image" selected>Nano Banana</option>
-                  <option value="gemini-3.1-flash-image-preview">Nano Banana 2</option>
-                  <option value="gemini-3-pro-image-preview">Nano Banana Pro</option>
-                  <option value="gpt-image-1">GPT Image 1</option>
-                  <option value="gpt-image-2">GPT Image 2</option>
-                </select>
-              </label>
-              <label class="field">
-                <span>Режим / кредиты</span>
-                <select id="modelTierSelect">
-                  <option value="cheap">Эконом · 4 credits</option>
-                  <option value="standard" selected>Стандарт · 10 credits</option>
-                  <option value="premium">Премиум · 35 credits</option>
-                </select>
-              </label>
-              <label class="field">
-                <span>Размер / соотношение</span>
-                <select id="aspectRatioSelect">
-                  <option value="1024x1024" selected>1:1 · квадрат</option>
-                  <option value="1536x1024">3:2 · горизонтально</option>
-                  <option value="1024x1536">2:3 · вертикально</option>
-                </select>
-              </label>
+              <section class="chip-field">
+                <span class="chip-field-title">Модель</span>
+                <div id="modelChips" class="chip-row" role="radiogroup" aria-label="Модель генерации"></div>
+              </section>
+              <section class="chip-field">
+                <span class="chip-field-title">Разрешение</span>
+                <div id="resolutionChips" class="chip-row" role="radiogroup" aria-label="Разрешение"></div>
+              </section>
+              <section class="chip-field">
+                <span class="chip-field-title">Соотношение сторон</span>
+                <div id="ratioChips" class="chip-row" role="radiogroup" aria-label="Соотношение сторон"></div>
+              </section>
             </div>
           </details>
 
@@ -251,6 +231,6 @@
       </nav>
     </div>
 
-    <script src="./app.js?v=20260508e"></script>
+    <script src="./app.js?v=20260508i"></script>
   </body>
 </html>

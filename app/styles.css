@@ -421,7 +421,59 @@ textarea {
 .settings-body {
   padding: 0 12px 12px;
   display: grid;
-  gap: 10px;
+  gap: 14px;
+}
+
+.chip-field {
+  display: grid;
+  gap: 8px;
+}
+
+.chip-field-title {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.choice-chip {
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid #252b38;
+  background: #151a24;
+  color: #a5afc6;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.choice-chip:hover:not(:disabled) {
+  border-color: #3a4254;
+  color: #d6dcef;
+}
+
+.choice-chip[aria-checked="true"] {
+  border-color: #f5dd4a;
+  background: #f5dd4a;
+  color: #111318;
+}
+
+.choice-chip:disabled {
+  cursor: default;
+  opacity: 0.52;
+}
+
+.choice-chip .chip-lock {
+  margin-left: 6px;
+  font-size: 12px;
+  vertical-align: middle;
 }
 
 .field {

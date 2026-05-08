@@ -9,63 +9,100 @@ const DEFAULT_LOCAL_API_BASE = "http://127.0.0.1:8093";
 const DEFAULT_NGROK_API_BASE = "https://sweptback-semivolcanic-reagan.ngrok-free.dev";
 
 const MODEL_COSTS = {
-  cheap: 4,
-  standard: 10,
-  premium: 35,
-};
-
-const MODEL_TIER_LABELS = {
-  cheap: "Эконом",
-  standard: "Стандарт",
-  premium: "Премиум",
+  "gemini-3.1-flash-image-preview": 10,
+  "gemini-3-pro-image-preview": 20,
+  "gpt-image-2": 30,
 };
 
 const IMAGE_MODEL_LABELS = {
-  "gemini-2.5-flash-image": "Nano Banana",
   "gemini-3.1-flash-image-preview": "Nano Banana 2",
   "gemini-3-pro-image-preview": "Nano Banana Pro",
-  "gpt-image-1": "GPT Image 1",
   "gpt-image-2": "GPT Image 2",
 };
 
-const IMAGE_MODEL_SIZES = {
-  "gemini-2.5-flash-image": [
-    { value: "1024x1024", label: "1024x1024 · 1:1 квадрат" },
-    { value: "1536x1024", label: "1536x1024 · 3:2 горизонтально" },
-    { value: "1024x1536", label: "1024x1536 · 2:3 вертикально" },
-    { value: "auto", label: "Auto · выбрать автоматически" },
-  ],
-  "gemini-3.1-flash-image-preview": [
-    { value: "1024x1024", label: "1K · 1:1 квадрат" },
-    { value: "1536x1024", label: "1K · 3:2 горизонтально" },
-    { value: "1024x1536", label: "1K · 2:3 вертикально" },
-    { value: "2560x1440", label: "2K · 16:9" },
-    { value: "3840x2160", label: "4K · 16:9" },
-    { value: "auto", label: "Auto · выбрать автоматически" },
-  ],
-  "gemini-3-pro-image-preview": [
-    { value: "1024x1024", label: "1K · 1:1 квадрат" },
-    { value: "1536x1024", label: "1K · 3:2 горизонтально" },
-    { value: "1024x1536", label: "1K · 2:3 вертикально" },
-    { value: "2560x1440", label: "2K · 16:9" },
-    { value: "3840x2160", label: "4K · 16:9" },
-    { value: "auto", label: "Auto · выбрать автоматически" },
-  ],
-  "gpt-image-1": [
-    { value: "1024x1024", label: "1024x1024 · 1:1 квадрат" },
-    { value: "1536x1024", label: "1536x1024 · 3:2 горизонтально" },
-    { value: "1024x1536", label: "1024x1536 · 2:3 вертикально" },
-    { value: "auto", label: "Auto · выбрать автоматически" },
-  ],
-  "gpt-image-2": [
-    { value: "1024x1024", label: "1024x1024 · 1:1 квадрат" },
-    { value: "1536x1024", label: "1536x1024 · 3:2 горизонтально" },
-    { value: "1024x1536", label: "1024x1536 · 2:3 вертикально" },
-    { value: "auto", label: "Auto · выбрать автоматически" },
-  ],
+const RESOLUTION_ORDER = ["auto", "1K", "2K", "4K"];
+const RATIO_ORDER = ["auto", "1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"];
+
+const RESOLUTION_LABELS = {
+  auto: "Auto",
+  "1K": "1K",
+  "2K": "2K",
+  "4K": "4K",
 };
 
-const DEFAULT_IMAGE_MODEL = "gemini-2.5-flash-image";
+const RATIO_LABELS = {
+  auto: "Auto",
+  "1:1": "1:1",
+  "2:3": "2:3",
+  "3:2": "3:2",
+  "3:4": "3:4",
+  "4:3": "4:3",
+  "4:5": "4:5",
+  "5:4": "5:4",
+  "9:16": "9:16",
+  "16:9": "16:9",
+  "21:9": "21:9",
+};
+
+const GEMINI_OUTPUT_MATRIX = Object.freeze({
+  auto: Object.freeze({ auto: "auto" }),
+  "1K": Object.freeze({
+    "1:1": "1024x1024",
+    "2:3": "848x1264",
+    "3:2": "1264x848",
+    "3:4": "896x1200",
+    "4:3": "1200x896",
+    "4:5": "928x1152",
+    "5:4": "1152x928",
+    "9:16": "768x1376",
+    "16:9": "1376x768",
+    "21:9": "1584x672",
+  }),
+  "2K": Object.freeze({
+    "1:1": "2048x2048",
+    "2:3": "1696x2528",
+    "3:2": "2528x1696",
+    "3:4": "1792x2400",
+    "4:3": "2400x1792",
+    "4:5": "1856x2304",
+    "5:4": "2304x1856",
+    "9:16": "1536x2752",
+    "16:9": "2752x1536",
+    "21:9": "3168x1344",
+  }),
+  "4K": Object.freeze({
+    "1:1": "4096x4096",
+    "2:3": "3392x5056",
+    "3:2": "5056x3392",
+    "3:4": "3584x4800",
+    "4:3": "4800x3584",
+    "4:5": "3712x4608",
+    "5:4": "4608x3712",
+    "9:16": "3072x5504",
+    "16:9": "5504x3072",
+    "21:9": "6336x2688",
+  }),
+});
+
+const GPT_OUTPUT_MATRIX = Object.freeze({
+  auto: Object.freeze({ auto: "auto" }),
+  "1K": Object.freeze({
+    "1:1": "1024x1024",
+    "2:3": "1024x1536",
+    "3:2": "1536x1024",
+  }),
+});
+
+const MODEL_OUTPUT_MATRIX = {
+  "gemini-3.1-flash-image-preview": GEMINI_OUTPUT_MATRIX,
+  "gemini-3-pro-image-preview": GEMINI_OUTPUT_MATRIX,
+  "gpt-image-2": GPT_OUTPUT_MATRIX,
+};
+
+const MODEL_ORDER = ["gemini-3.1-flash-image-preview", "gemini-3-pro-image-preview", "gpt-image-2"];
+const DEFAULT_IMAGE_MODEL = "gemini-3.1-flash-image-preview";
+const DEFAULT_RESOLUTION = "1K";
+const DEFAULT_RATIO = "1:1";
 
 const STATUS_LABELS = {
   queued: "В очереди",
@@ -79,6 +116,9 @@ const state = {
   apiBase: "",
   accessToken: "",
   refreshToken: "",
+  selectedImageModel: DEFAULT_IMAGE_MODEL,
+  selectedResolution: DEFAULT_RESOLUTION,
+  selectedRatio: DEFAULT_RATIO,
   activeJobId: "",
   activePollTimer: null,
   selectedTemplateId: "",
@@ -105,9 +145,9 @@ const plansActionButton = document.getElementById("plansActionButton");
 const plansNote = document.getElementById("plansNote");
 const templatesGrid = document.getElementById("templatesGrid");
 const promptInput = document.getElementById("promptInput");
-const imageModelSelect = document.getElementById("imageModelSelect");
-const modelTierSelect = document.getElementById("modelTierSelect");
-const aspectRatioSelect = document.getElementById("aspectRatioSelect");
+const modelChips = document.getElementById("modelChips");
+const resolutionChips = document.getElementById("resolutionChips");
+const ratioChips = document.getElementById("ratioChips");
 const sourceImageInput = document.getElementById("sourceImageInput");
 const uploadPhotoButton = document.getElementById("uploadPhotoButton");
 const uploadDropzone = document.getElementById("uploadDropzone");
@@ -120,7 +160,6 @@ const activeJobMeta = document.getElementById("activeJobMeta");
 const activeResult = document.getElementById("activeResult");
 const historyList = document.getElementById("historyList");
 const refreshHistoryButton = document.getElementById("refreshHistoryButton");
-const tierChips = Array.from(document.querySelectorAll("[data-tier]"));
 const navButtons = Array.from(document.querySelectorAll("[data-nav]"));
 const jumpButtons = Array.from(document.querySelectorAll("[data-nav-target]"));
 const screens = Array.from(document.querySelectorAll("[data-screen]"));
@@ -157,16 +196,11 @@ function uniqueApiBases(items) {
   return out;
 }
 
-function sizeOptionsForModel(model) {
-  if (IMAGE_MODEL_SIZES[model]) {
-    return IMAGE_MODEL_SIZES[model];
+function outputMatrixForModel(model) {
+  if (MODEL_OUTPUT_MATRIX[model]) {
+    return MODEL_OUTPUT_MATRIX[model];
   }
-  return IMAGE_MODEL_SIZES[DEFAULT_IMAGE_MODEL];
-}
-
-function modelTierLabel(tier) {
-  const key = String(tier || "").trim().toLowerCase();
-  return MODEL_TIER_LABELS[key] || key || "—";
+  return MODEL_OUTPUT_MATRIX[DEFAULT_IMAGE_MODEL];
 }
 
 function imageModelLabel(model) {
@@ -174,39 +208,177 @@ function imageModelLabel(model) {
   return IMAGE_MODEL_LABELS[key] || key || "—";
 }
 
-function qualityNoteByModel(model) {
-  const key = String(model || "").trim().toLowerCase();
-  if (key.startsWith("gpt-image-")) {
-    return "Для GPT: Эконом/Стандарт/Премиум = low/medium/high качество.";
-  }
-  if (key.startsWith("gemini-")) {
-    return "Для Nano: режим влияет на стоимость; качество задается самой моделью.";
-  }
-  return "";
+function selectedGenerationCost() {
+  const key = String(state.selectedImageModel || DEFAULT_IMAGE_MODEL).trim().toLowerCase();
+  return MODEL_COSTS[key] || MODEL_COSTS[DEFAULT_IMAGE_MODEL];
 }
 
-function renderOutputSizeOptions({ model, preserveValue = "" } = {}) {
-  const selectedModel = model || imageModelSelect.value || DEFAULT_IMAGE_MODEL;
-  const options = sizeOptionsForModel(selectedModel);
-  const previousValue = String(preserveValue || aspectRatioSelect.value || "").trim();
-
-  aspectRatioSelect.innerHTML = "";
-  for (const option of options) {
-    const element = document.createElement("option");
-    element.value = option.value;
-    element.textContent = option.label;
-    aspectRatioSelect.appendChild(element);
-  }
-
-  const hasPrevious = options.some((option) => option.value === previousValue);
-  aspectRatioSelect.value = hasPrevious ? previousValue : options[0].value;
+function ratioLabel(ratio) {
+  return RATIO_LABELS[String(ratio || "").trim()] || String(ratio || "").trim();
 }
 
-function syncTierChips() {
-  const value = String(modelTierSelect.value || "").trim();
-  for (const chip of tierChips) {
-    chip.classList.toggle("is-active", chip.dataset.tier === value);
+function resolutionLabel(resolution) {
+  return RESOLUTION_LABELS[String(resolution || "").trim()] || String(resolution || "").trim();
+}
+
+function availableResolutionsForModel(model) {
+  const matrix = outputMatrixForModel(model);
+  return RESOLUTION_ORDER.filter((key) => Object.prototype.hasOwnProperty.call(matrix, key));
+}
+
+function availableRatiosFor(model, resolution) {
+  const matrix = outputMatrixForModel(model);
+  const byResolution = matrix[resolution] || {};
+  return RATIO_ORDER.filter((key) => Object.prototype.hasOwnProperty.call(byResolution, key));
+}
+
+function ensureGenerationSelectionState() {
+  const selectedModel = String(state.selectedImageModel || DEFAULT_IMAGE_MODEL).trim();
+  state.selectedImageModel = MODEL_ORDER.includes(selectedModel) ? selectedModel : DEFAULT_IMAGE_MODEL;
+
+  const availableResolutions = availableResolutionsForModel(state.selectedImageModel);
+  if (!availableResolutions.length) {
+    state.selectedResolution = "auto";
+    state.selectedRatio = "auto";
+    return;
   }
+
+  if (!availableResolutions.includes(state.selectedResolution)) {
+    if (availableResolutions.includes(DEFAULT_RESOLUTION)) {
+      state.selectedResolution = DEFAULT_RESOLUTION;
+    } else {
+      state.selectedResolution = availableResolutions[0];
+    }
+  }
+
+  const availableRatios = availableRatiosFor(state.selectedImageModel, state.selectedResolution);
+  if (!availableRatios.length) {
+    state.selectedRatio = "auto";
+    return;
+  }
+  if (!availableRatios.includes(state.selectedRatio)) {
+    if (availableRatios.includes(DEFAULT_RATIO)) {
+      state.selectedRatio = DEFAULT_RATIO;
+    } else {
+      state.selectedRatio = availableRatios[0];
+    }
+  }
+}
+
+function currentOutputSizeSelection() {
+  ensureGenerationSelectionState();
+  const model = state.selectedImageModel || DEFAULT_IMAGE_MODEL;
+  const resolution = String(state.selectedResolution || DEFAULT_RESOLUTION).trim();
+  const ratio = String(state.selectedRatio || DEFAULT_RATIO).trim();
+  const matrix = outputMatrixForModel(model);
+  const byResolution = matrix[resolution] || {};
+  return byResolution[ratio] || null;
+}
+
+function refreshGenerationCostNote() {
+  ensureGenerationSelectionState();
+  const cost = selectedGenerationCost();
+  const model = imageModelLabel(state.selectedImageModel);
+  const resolution = String(state.selectedResolution || DEFAULT_RESOLUTION).trim();
+  const ratio = String(state.selectedRatio || DEFAULT_RATIO).trim();
+  const outputSize = currentOutputSizeSelection();
+  if (!outputSize) {
+    setCreateNote(`Комбинация недоступна для ${model}.`, true);
+    return;
+  }
+  setCreateNote(
+    `Выбрано: ${model}, ${resolutionLabel(resolution)}, ${ratioLabel(ratio)} (${outputSize}). Списание: ${cost} credits.`
+  );
+}
+
+function createChoiceChip({
+  label,
+  selected,
+  disabled = false,
+  onClick,
+  lock = false,
+}) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "choice-chip";
+  button.setAttribute("role", "radio");
+  button.setAttribute("aria-checked", selected ? "true" : "false");
+  button.disabled = disabled;
+  if (lock) {
+    button.innerHTML = `${escapeHtml(label)}<span class="chip-lock">🔒</span>`;
+  } else {
+    button.textContent = label;
+  }
+  if (!disabled && typeof onClick === "function") {
+    button.addEventListener("click", onClick);
+  }
+  return button;
+}
+
+function renderModelChips() {
+  modelChips.innerHTML = "";
+  for (const model of MODEL_ORDER) {
+    const chip = createChoiceChip({
+      label: imageModelLabel(model),
+      selected: state.selectedImageModel === model,
+      onClick: () => {
+        state.selectedImageModel = model;
+        ensureGenerationSelectionState();
+        renderGenerationChips();
+        refreshGenerationCostNote();
+      },
+    });
+    modelChips.appendChild(chip);
+  }
+}
+
+function renderResolutionChips() {
+  resolutionChips.innerHTML = "";
+  const available = new Set(availableResolutionsForModel(state.selectedImageModel));
+  for (const resolution of RESOLUTION_ORDER) {
+    const enabled = available.has(resolution);
+    const chip = createChoiceChip({
+      label: resolutionLabel(resolution),
+      selected: enabled && state.selectedResolution === resolution,
+      disabled: !enabled,
+      lock: !enabled,
+      onClick: () => {
+        state.selectedResolution = resolution;
+        ensureGenerationSelectionState();
+        renderGenerationChips();
+        refreshGenerationCostNote();
+      },
+    });
+    resolutionChips.appendChild(chip);
+  }
+}
+
+function renderRatioChips() {
+  ratioChips.innerHTML = "";
+  const available = new Set(availableRatiosFor(state.selectedImageModel, state.selectedResolution));
+  for (const ratio of RATIO_ORDER) {
+    const enabled = available.has(ratio);
+    const chip = createChoiceChip({
+      label: ratioLabel(ratio),
+      selected: enabled && state.selectedRatio === ratio,
+      disabled: !enabled,
+      lock: !enabled,
+      onClick: () => {
+        state.selectedRatio = ratio;
+        ensureGenerationSelectionState();
+        renderGenerationChips();
+        refreshGenerationCostNote();
+      },
+    });
+    ratioChips.appendChild(chip);
+  }
+}
+
+function renderGenerationChips() {
+  ensureGenerationSelectionState();
+  renderModelChips();
+  renderResolutionChips();
+  renderRatioChips();
 }
 
 function saveState() {
@@ -670,6 +842,10 @@ function renderPlans(payload) {
   }
 
   for (const item of topups) {
+    const credits = Number(item.credits || 0);
+    const nb2Count = Math.floor(credits / (MODEL_COSTS["gemini-3.1-flash-image-preview"] || 1));
+    const nbproCount = Math.floor(credits / (MODEL_COSTS["gemini-3-pro-image-preview"] || 1));
+    const gptCount = Math.floor(credits / (MODEL_COSTS["gpt-image-2"] || 1));
     const card = document.createElement("article");
     card.className = "plan-card";
     card.dataset.code = item.code;
@@ -679,7 +855,7 @@ function renderPlans(payload) {
         <span class="chip">${escapeHtml(item.credits)} credits</span>
       </div>
       <div class="plan-price">${escapeHtml(item.price_rub)} ₽</div>
-      <div class="plan-meta">Разовая покупка, без автосписаний</div>
+      <div class="plan-meta">~${nb2Count} NB2 · ~${nbproCount} NB Pro · ~${gptCount} GPT2</div>
     `;
     card.addEventListener("click", () => selectTopup(item.code));
     plansGrid.appendChild(card);
@@ -762,7 +938,7 @@ function renderActiveJob(job) {
   const status = jobStatusLabel(job.status);
   const mode = job.is_edit ? "редактирование" : "генерация";
   const imageModel = imageModelLabel(job.provider_model);
-  activeJobMeta.textContent = `${status} · ${mode} · ${imageModel} · ${modelTierLabel(job.model_tier)} · ${job.output_size}`;
+  activeJobMeta.textContent = `${status} · ${mode} · ${imageModel} · ${job.output_size}`;
 
   activeResult.className = "active-result";
   if (job.result_image_url) {
@@ -803,7 +979,7 @@ function renderHistory(payload) {
           <span class="status-pill ${escapeHtml(statusClass)}">${escapeHtml(jobStatusLabel(job.status))}</span>
         </div>
         <p class="history-prompt">${escapeHtml(job.prompt)}</p>
-        <div class="plan-meta">${escapeHtml(imageModelLabel(job.provider_model))} · ${escapeHtml(modelTierLabel(job.model_tier))} · ${escapeHtml(job.output_size)}</div>
+        <div class="plan-meta">${escapeHtml(imageModelLabel(job.provider_model))} · ${escapeHtml(job.output_size)} · ${escapeHtml(String(job.requested_credits || 0))} credits</div>
         <div class="history-actions">
           <button class="soft-btn btn-compact" data-action="use-prompt" type="button">Вставить промпт</button>
           <button class="soft-btn btn-compact" data-action="open-image" type="button" ${job.result_image_url ? "" : "disabled"}>Открыть</button>
@@ -905,12 +1081,11 @@ function buildClientRequestId() {
   return `webapp_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 }
 
-async function createTextGeneration(prompt, modelTier, imageModel, outputSize, clientRequestId) {
+async function createTextGeneration(prompt, imageModel, outputSize, clientRequestId) {
   return authorizedFetch("/v1/generations", {
     method: "POST",
     body: {
       prompt,
-      model_tier: modelTier,
       image_model: imageModel,
       output_size: outputSize,
       client_request_id: clientRequestId,
@@ -919,10 +1094,9 @@ async function createTextGeneration(prompt, modelTier, imageModel, outputSize, c
   });
 }
 
-async function createEditGeneration(prompt, modelTier, imageModel, outputSize, sourceImage, clientRequestId) {
+async function createEditGeneration(prompt, imageModel, outputSize, sourceImage, clientRequestId) {
   const form = new FormData();
   form.append("prompt", prompt);
-  form.append("model_tier", modelTier);
   form.append("image_model", imageModel);
   form.append("output_size", outputSize);
   form.append("client_request_id", clientRequestId);
@@ -953,16 +1127,18 @@ async function pollActiveJob(jobId) {
 
 async function handleCreate() {
   const prompt = promptInput.value.trim();
-  const modelTier = modelTierSelect.value;
-  const imageModel = imageModelSelect.value || DEFAULT_IMAGE_MODEL;
-  const outputSize = aspectRatioSelect.value;
+  const imageModel = state.selectedImageModel || DEFAULT_IMAGE_MODEL;
+  const outputSize = currentOutputSizeSelection();
   const sourceImage = sourceImageInput.files && sourceImageInput.files[0] ? sourceImageInput.files[0] : null;
-  const cost = MODEL_COSTS[modelTier] || MODEL_COSTS.standard;
+  const cost = selectedGenerationCost();
 
   try {
     ensureAuthorizedForCreate();
     if (!prompt) {
       throw new Error("Добавь промпт.");
+    }
+    if (!outputSize) {
+      throw new Error("Недоступная комбинация разрешения и соотношения.");
     }
     createButton.disabled = true;
     createButton.textContent = "Создаю...";
@@ -970,8 +1146,8 @@ async function handleCreate() {
 
     const clientRequestId = buildClientRequestId();
     const job = sourceImage
-      ? await createEditGeneration(prompt, modelTier, imageModel, outputSize, sourceImage, clientRequestId)
-      : await createTextGeneration(prompt, modelTier, imageModel, outputSize, clientRequestId);
+      ? await createEditGeneration(prompt, imageModel, outputSize, sourceImage, clientRequestId)
+      : await createTextGeneration(prompt, imageModel, outputSize, clientRequestId);
 
     state.activeJobId = job.id;
     renderActiveJob(job);
@@ -1023,41 +1199,6 @@ function bindEvents() {
     setCreateNote(`История не загрузилась: ${error.message}`, true);
   }));
 
-  imageModelSelect.addEventListener("change", () => {
-    const previous = aspectRatioSelect.value;
-    renderOutputSizeOptions({ model: imageModelSelect.value, preserveValue: previous });
-    const cost = MODEL_COSTS[modelTierSelect.value] || MODEL_COSTS.standard;
-    const qualityNote = qualityNoteByModel(imageModelSelect.value);
-    setCreateNote(
-      `Выбрано: ${imageModelLabel(imageModelSelect.value)}, ${aspectRatioSelect.value}. Стоимость текущего режима: ${cost} credits. ${qualityNote}`,
-    );
-  });
-
-  modelTierSelect.addEventListener("change", () => {
-    syncTierChips();
-    const cost = MODEL_COSTS[modelTierSelect.value] || MODEL_COSTS.standard;
-    const qualityNote = qualityNoteByModel(imageModelSelect.value);
-    setCreateNote(
-      `Выбрано: ${imageModelLabel(imageModelSelect.value)}, ${aspectRatioSelect.value}. Стоимость текущего режима: ${cost} credits. ${qualityNote}`,
-    );
-  });
-
-  for (const chip of tierChips) {
-    chip.addEventListener("click", () => {
-      const tier = chip.dataset.tier;
-      if (!tier) {
-        return;
-      }
-      modelTierSelect.value = tier;
-      syncTierChips();
-      const cost = MODEL_COSTS[tier] || MODEL_COSTS.standard;
-      const qualityNote = qualityNoteByModel(imageModelSelect.value);
-      setCreateNote(
-        `Выбрано: ${imageModelLabel(imageModelSelect.value)}, ${aspectRatioSelect.value}. Стоимость текущего режима: ${cost} credits. ${qualityNote}`,
-      );
-    });
-  }
-
   uploadPhotoButton.addEventListener("click", () => sourceImageInput.click());
   uploadDropzone.addEventListener("click", () => sourceImageInput.click());
   sourceImageInput.addEventListener("change", renderSelectedSourceImage);
@@ -1082,13 +1223,10 @@ async function bootstrap() {
   loadState();
   setEnvHint();
   apiBaseInput.value = state.apiBase;
-  renderOutputSizeOptions({
-    model: imageModelSelect.value || DEFAULT_IMAGE_MODEL,
-    preserveValue: aspectRatioSelect.value,
-  });
+  renderGenerationChips();
   bindEvents();
-  syncTierChips();
   renderSelectedSourceImage();
+  refreshGenerationCostNote();
   refreshIcons();
 
   try {
