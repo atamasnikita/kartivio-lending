@@ -14,6 +14,31 @@ const MODEL_COSTS = {
   premium: 35,
 };
 
+const MODEL_TIER_LABELS = {
+  cheap: "Эконом",
+  standard: "Стандарт",
+  premium: "Премиум",
+};
+
+const IMAGE_MODEL_SIZES = {
+  "gpt-image-1": [
+    { value: "1024x1024", label: "1024x1024 · 1:1 квадрат" },
+    { value: "1536x1024", label: "1536x1024 · 3:2 горизонтально" },
+    { value: "1024x1536", label: "1024x1536 · 2:3 вертикально" },
+    { value: "auto", label: "Auto · выбрать автоматически" },
+  ],
+  "gpt-image-2": [
+    { value: "1024x1024", label: "1024x1024 · 1:1 квадрат" },
+    { value: "1536x1024", label: "1536x1024 · 3:2 горизонтально" },
+    { value: "1024x1536", label: "1024x1536 · 2:3 вертикально" },
+    { value: "2560x1440", label: "2K · 2560x1440" },
+    { value: "3840x2160", label: "4K · 3840x2160" },
+    { value: "auto", label: "Auto · выбрать автоматически" },
+  ],
+};
+
+const DEFAULT_IMAGE_MODEL = "gpt-image-1";
+
 const STATUS_LABELS = {
   queued: "В очереди",
   processing: "В работе",
@@ -45,6 +70,7 @@ const creditsValue = document.getElementById("creditsValue");
 const plansGrid = document.getElementById("plansGrid");
 const templatesGrid = document.getElementById("templatesGrid");
 const promptInput = document.getElementById("promptInput");
+const imageModelSelect = document.getElementById("imageModelSelect");
 const modelTierSelect = document.getElementById("modelTierSelect");
 const aspectRatioSelect = document.getElementById("aspectRatioSelect");
 const sourceImageInput = document.getElementById("sourceImageInput");
@@ -80,6 +106,40 @@ function uniqueApiBases(items) {
     out.push(normalized);
   }
   return out;
+}
+
+function sizeOptionsForModel(model) {
+  if (IMAGE_MODEL_SIZES[model]) {
+    return IMAGE_MODEL_SIZES[model];
+  }
+  return IMAGE_MODEL_SIZES[DEFAULT_IMAGE_MODEL];
+}
+
+function modelTierLabel(tier) {
+  const key = String(tier || "").trim().toLowerCase();
+  return MODEL_TIER_LABELS[key] || key || "—";
+}
+
+function renderOutputSizeOptions({ model, preserveValue = "" } = {}) {
+  const selectedModel = model || imageModelSelect.value || DEFAULT_IMAGE_MODEL;
+  const options = sizeOptionsForModel(selectedModel);
+  const previousValue = String(preserveValue || aspectRatioSelect.value || "").trim();
+
+  aspectRatioSelect.innerHTML = "";
+  for (const option of options) {
+    const element = document.createElement("option");
+    element.value = option.value;
+    element.textContent = option.label;
+    aspectRatioSelect.appendChild(element);
+  }
+
+  const hasPrevious = options.some((option) => option.value === previousValue);
+  if (hasPrevious) {
+    aspectRatioSelect.value = previousValue;
+    return;
+  }
+
+  aspectRatioSelect.value = options[0].value;
 }
 
 function saveState() {
@@ -282,6 +342,22 @@ async function parseJsonResponse(response) {
   }
 }
 
+function extractErrorMessage(payload, fallback) {
+  if (!payload || typeof payload !== "object") {
+    return fallback;
+  }
+  if (typeof payload.message === "string" && payload.message.trim()) {
+    return payload.message.trim();
+  }
+  if (payload.detail && typeof payload.detail === "object" && typeof payload.detail.message === "string") {
+    return payload.detail.message.trim() || fallback;
+  }
+  if (typeof payload.detail === "string" && payload.detail.trim()) {
+    return payload.detail.trim();
+  }
+  return fallback;
+}
+
 async function apiFetch(path, { method = "GET", body, auth = false, idempotencyKey } = {}) {
   const headers = headersForApiBase(state.apiBase);
   if (body !== undefined) {
@@ -301,7 +377,7 @@ async function apiFetch(path, { method = "GET", body, auth = false, idempotencyK
   });
   const payload = await parseJsonResponse(response);
   if (!response.ok) {
-    const message = payload && payload.message ? payload.message : `HTTP ${response.status}`;
+    const message = extractErrorMessage(payload, `HTTP ${response.status}`);
     throw new Error(message);
   }
   return payload;
@@ -323,7 +399,7 @@ async function apiMultipart(path, formData, { auth = false, idempotencyKey } = {
   });
   const payload = await parseJsonResponse(response);
   if (!response.ok) {
-    const message = payload && payload.message ? payload.message : `HTTP ${response.status}`;
+    const message = extractErrorMessage(payload, `HTTP ${response.status}`);
     throw new Error(message);
   }
   return payload;
@@ -574,7 +650,8 @@ async function renderActiveImage(job, renderToken) {
 function renderActiveJob(job) {
   const status = jobStatusLabel(job.status);
   const mode = job.is_edit ? "редактирование" : "генерация";
-  activeJobMeta.textContent = `${status} · ${mode} · ${job.model_tier} · ${job.output_size}`;
+  const imageModel = job.provider_model || "—";
+  activeJobMeta.textContent = `${status} · ${mode} · ${imageModel} · ${modelTierLabel(job.model_tier)} · ${job.output_size}`;
 
   activeResult.className = "active-result";
   if (job.result_image_url) {
@@ -590,10 +667,10 @@ function renderActiveJob(job) {
 }
 
 function historyThumb(job) {
-  if (job.result_image_url) {
-    return "Загрузка…";
+  if (!job.result_image_url) {
+    return escapeHtml(jobStatusLabel(job.status));
   }
-  return escapeHtml(jobStatusLabel(job.status));
+  return "Превью";
 }
 
 function renderHistory(payload) {
@@ -615,7 +692,7 @@ function renderHistory(payload) {
           <span class="status-pill ${escapeHtml(statusClass)}">${escapeHtml(jobStatusLabel(job.status))}</span>
         </div>
         <p class="history-prompt">${escapeHtml(job.prompt)}</p>
-        <div class="plan-meta">${escapeHtml(job.model_tier)} · ${escapeHtml(job.output_size)} · ${escapeHtml(job.requested_credits)} credits</div>
+        <div class="plan-meta">${escapeHtml(job.provider_model || "—")} · ${escapeHtml(modelTierLabel(job.model_tier))} · ${escapeHtml(job.output_size)} · ${escapeHtml(job.requested_credits)} credits</div>
         <div class="history-actions">
           <button class="btn btn-secondary btn-compact" data-action="use-prompt" type="button">Вставить промпт</button>
           <button class="btn btn-secondary btn-compact" data-action="open-image" type="button" ${job.result_image_url ? "" : "disabled"}>Открыть</button>
@@ -713,12 +790,13 @@ function buildClientRequestId() {
   return `webapp_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 }
 
-async function createTextGeneration(prompt, modelTier, outputSize, clientRequestId) {
+async function createTextGeneration(prompt, modelTier, imageModel, outputSize, clientRequestId) {
   return authorizedFetch("/v1/generations", {
     method: "POST",
     body: {
       prompt,
       model_tier: modelTier,
+      image_model: imageModel,
       output_size: outputSize,
       client_request_id: clientRequestId,
     },
@@ -726,10 +804,11 @@ async function createTextGeneration(prompt, modelTier, outputSize, clientRequest
   });
 }
 
-async function createEditGeneration(prompt, modelTier, outputSize, sourceImage, clientRequestId) {
+async function createEditGeneration(prompt, modelTier, imageModel, outputSize, sourceImage, clientRequestId) {
   const form = new FormData();
   form.append("prompt", prompt);
   form.append("model_tier", modelTier);
+  form.append("image_model", imageModel);
   form.append("output_size", outputSize);
   form.append("client_request_id", clientRequestId);
   form.append("source_image", sourceImage);
@@ -760,6 +839,7 @@ async function pollActiveJob(jobId) {
 async function handleCreate() {
   const prompt = promptInput.value.trim();
   const modelTier = modelTierSelect.value;
+  const imageModel = imageModelSelect.value || DEFAULT_IMAGE_MODEL;
   const outputSize = aspectRatioSelect.value;
   const sourceImage = sourceImageInput.files && sourceImageInput.files[0] ? sourceImageInput.files[0] : null;
   const cost = MODEL_COSTS[modelTier] || MODEL_COSTS.standard;
@@ -775,8 +855,8 @@ async function handleCreate() {
 
     const clientRequestId = buildClientRequestId();
     const job = sourceImage
-      ? await createEditGeneration(prompt, modelTier, outputSize, sourceImage, clientRequestId)
-      : await createTextGeneration(prompt, modelTier, outputSize, clientRequestId);
+      ? await createEditGeneration(prompt, modelTier, imageModel, outputSize, sourceImage, clientRequestId)
+      : await createTextGeneration(prompt, modelTier, imageModel, outputSize, clientRequestId);
 
     state.activeJobId = job.id;
     renderActiveJob(job);
@@ -823,12 +903,22 @@ function bindEvents() {
   });
   authButton.addEventListener("click", loginViaTelegram);
   createButton.addEventListener("click", handleCreate);
+  imageModelSelect.addEventListener("change", () => {
+    const previous = aspectRatioSelect.value;
+    renderOutputSizeOptions({ model: imageModelSelect.value, preserveValue: previous });
+    const cost = MODEL_COSTS[modelTierSelect.value] || MODEL_COSTS.standard;
+    setCreateNote(
+      `Выбрано: ${imageModelSelect.value}, ${aspectRatioSelect.value}. Стоимость текущего режима: ${cost} credits.`,
+    );
+  });
   refreshHistoryButton.addEventListener("click", () => loadHistory().catch((error) => {
     setCreateNote(`История не загрузилась: ${error.message}`, true);
   }));
   modelTierSelect.addEventListener("change", () => {
     const cost = MODEL_COSTS[modelTierSelect.value] || MODEL_COSTS.standard;
-    setCreateNote(`Стоимость текущего режима: ${cost} credits.`);
+    setCreateNote(
+      `Выбрано: ${imageModelSelect.value}, ${aspectRatioSelect.value}. Стоимость текущего режима: ${cost} credits.`,
+    );
   });
 }
 
@@ -836,6 +926,10 @@ async function bootstrap() {
   loadState();
   setEnvHint();
   apiBaseInput.value = state.apiBase;
+  renderOutputSizeOptions({
+    model: imageModelSelect.value || DEFAULT_IMAGE_MODEL,
+    preserveValue: aspectRatioSelect.value,
+  });
   bindEvents();
 
   try {

@@ -98,15 +98,22 @@
           </label>
           <div class="settings-stack">
             <label class="field">
-              <span>Модель / качество</span>
-              <select id="modelTierSelect">
-                <option value="cheap">Cheap · 4 credits</option>
-                <option value="standard" selected>Standard · 10 credits</option>
-                <option value="premium">Premium · 35 credits</option>
+              <span>Модель генерации</span>
+              <select id="imageModelSelect">
+                <option value="gpt-image-1" selected>GPT Image 1</option>
+                <option value="gpt-image-2">GPT Image 2 (2K/4K)</option>
               </select>
             </label>
             <label class="field">
-              <span>Соотношение сторон</span>
+              <span>Качество / кредиты</span>
+              <select id="modelTierSelect">
+                <option value="cheap">Эконом · 4 credits</option>
+                <option value="standard" selected>Стандарт · 10 credits</option>
+                <option value="premium">Премиум · 35 credits</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Размер / соотношение</span>
               <select id="aspectRatioSelect">
                 <option value="1024x1024" selected>1:1 · квадрат</option>
                 <option value="1536x1024">3:2 · горизонтально</option>
@@ -159,6 +166,6 @@
       </section>
     </main>
 
-    <script src="./app.js?v=20260507i"></script>
+    <script src="./app.js?v=20260508a"></script>
   </body>
 </html>
