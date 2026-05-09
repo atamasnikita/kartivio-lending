@@ -792,6 +792,15 @@ textarea {
   gap: 10px;
 }
 
+.google-signin-wrap {
+  display: flex;
+  justify-content: center;
+}
+
+.google-signin-wrap.is-hidden {
+  display: none;
+}
+
 .auth-btn {
   width: 100%;
 }

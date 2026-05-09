@@ -136,6 +136,8 @@ const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : 
 const apiBaseInput = document.getElementById("apiBaseInput");
 const authButton = document.getElementById("authButton");
 const googleAuthButton = document.getElementById("googleAuthButton");
+const googleSigninWrap = document.getElementById("googleSigninWrap");
+const googleSigninButton = document.getElementById("googleSigninButton");
 const envHint = document.getElementById("envHint");
 const authNote = document.getElementById("authNote");
 const userName = document.getElementById("userName");
@@ -171,6 +173,7 @@ const navButtons = Array.from(document.querySelectorAll("[data-nav]"));
 const jumpButtons = Array.from(document.querySelectorAll("[data-nav-target]"));
 const screens = Array.from(document.querySelectorAll("[data-screen]"));
 let googleAuthPending = false;
+let googleIdentityInitialized = false;
 
 function refreshIcons() {
   if (window.lucide && typeof window.lucide.createIcons === "function") {
@@ -206,6 +209,10 @@ function googleAuthLaunchUrl() {
   const url = new URL(window.location.href);
   url.searchParams.set("google_auto", "1");
   return url.toString();
+}
+
+function hasGoogleSdk() {
+  return Boolean(window.google && window.google.accounts && window.google.accounts.id);
 }
 
 function trimApiBase(raw) {
@@ -688,8 +695,12 @@ function setEnvHint() {
 function refreshAuthButtons() {
   if (isTelegramMiniAppRuntime()) {
     googleAuthButton.textContent = "Войти через Google в браузере";
+    if (googleSigninWrap) {
+      googleSigninWrap.classList.add("is-hidden");
+    }
   } else {
     googleAuthButton.textContent = "Войти через Google";
+    renderGoogleSigninButtonIfPossible();
   }
 }
 
@@ -1291,7 +1302,7 @@ async function loginViaTelegram() {
 function setGoogleAuthButtonIdle() {
   googleAuthPending = false;
   googleAuthButton.disabled = false;
-  googleAuthButton.textContent = "Войти через Google";
+  refreshAuthButtons();
 }
 
 async function loginViaGoogleCredential(idToken) {
@@ -1306,35 +1317,10 @@ async function loginViaGoogleCredential(idToken) {
   await Promise.allSettled([loadPrivateData(), loadHistory()]);
 }
 
-function loginViaGoogle() {
-  if (googleAuthPending) {
+function ensureGoogleIdentityInitialized(clientId) {
+  if (googleIdentityInitialized) {
     return;
   }
-  const clientId = googleClientIdFromMeta();
-  if (!clientId) {
-    setNote("Google Client ID не задан в мета-теге kartivio-google-client-id.", true);
-    return;
-  }
-  if (!window.google || !window.google.accounts || !window.google.accounts.id) {
-    setNote("Google SDK не загрузился. Обнови страницу.", true);
-    return;
-  }
-
-  if (isTelegramMiniAppRuntime()) {
-    const url = googleAuthLaunchUrl();
-    setNote("Открываю внешний браузер для входа через Google.");
-    if (tg && typeof tg.openLink === "function") {
-      tg.openLink(url);
-      return;
-    }
-    window.open(url, "_blank", "noopener,noreferrer");
-    return;
-  }
-
-  googleAuthPending = true;
-  googleAuthButton.disabled = true;
-  googleAuthButton.textContent = "Открываю Google...";
-
   window.google.accounts.id.initialize({
     client_id: clientId,
     callback: async (response) => {
@@ -1351,20 +1337,72 @@ function loginViaGoogle() {
       }
     },
   });
+  googleIdentityInitialized = true;
+}
 
-  window.google.accounts.id.prompt((notification) => {
-    if (!notification || typeof notification.isNotDisplayed !== "function") {
+function renderGoogleSigninButtonIfPossible() {
+  if (!googleSigninWrap || !googleSigninButton) {
+    return false;
+  }
+  if (isTelegramMiniAppRuntime()) {
+    googleSigninWrap.classList.add("is-hidden");
+    return false;
+  }
+  const clientId = googleClientIdFromMeta();
+  if (!clientId || !hasGoogleSdk()) {
+    googleSigninWrap.classList.add("is-hidden");
+    return false;
+  }
+  ensureGoogleIdentityInitialized(clientId);
+  googleSigninButton.innerHTML = "";
+  window.google.accounts.id.renderButton(googleSigninButton, {
+    type: "standard",
+    theme: "outline",
+    size: "large",
+    text: "signin_with",
+    shape: "pill",
+    logo_alignment: "left",
+    width: "360",
+  });
+  googleSigninWrap.classList.remove("is-hidden");
+  return true;
+}
+
+function loginViaGoogle() {
+  if (googleAuthPending) {
+    return;
+  }
+  const clientId = googleClientIdFromMeta();
+  if (!clientId) {
+    setNote("Google Client ID не задан в мета-теге kartivio-google-client-id.", true);
+    return;
+  }
+  if (isTelegramMiniAppRuntime()) {
+    const url = googleAuthLaunchUrl();
+    setNote("Открываю внешний браузер для входа через Google.");
+    if (tg && typeof tg.openLink === "function") {
+      tg.openLink(url);
       return;
     }
-    if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-      setGoogleAuthButtonIdle();
-      const notDisplayedReason =
-        typeof notification.getNotDisplayedReason === "function" ? notification.getNotDisplayedReason() : "";
-      const skippedReason = typeof notification.getSkippedReason === "function" ? notification.getSkippedReason() : "";
-      const reason = notDisplayedReason || skippedReason || "not_displayed";
-      setNote(`Google login недоступен (${reason}).`, true);
+    window.open(url, "_blank", "noopener,noreferrer");
+    return;
+  }
+
+  googleAuthButton.disabled = true;
+  googleAuthButton.textContent = "Готовлю кнопку Google...";
+  const rendered = renderGoogleSigninButtonIfPossible();
+  if (!rendered) {
+    setGoogleAuthButtonIdle();
+    if (!hasGoogleSdk()) {
+      setNote("Google SDK не загрузился. Обнови страницу.", true);
+      return;
     }
-  });
+    setNote("Google login недоступен для этого окружения.", true);
+    return;
+  }
+  setGoogleAuthButtonIdle();
+  setNote("Нажми кнопку Google ниже.");
+  googleSigninWrap.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
 function bindEvents() {
