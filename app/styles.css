@@ -787,6 +787,11 @@ textarea {
   font-size: 22px;
 }
 
+.auth-actions {
+  display: grid;
+  gap: 10px;
+}
+
 .auth-btn {
   width: 100%;
 }

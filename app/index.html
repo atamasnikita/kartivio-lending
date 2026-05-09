@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Kartivio AI App</title>
     <meta name="theme-color" content="#050507" />
+    <meta name="kartivio-google-client-id" content="" />
     <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
     <link rel="stylesheet" href="./styles.css" />
     <script src="https://telegram.org/js/telegram-web-app.js?62"></script>
@@ -208,7 +209,10 @@
               <span>API Base URL</span>
               <input id="apiBaseInput" type="text" placeholder="https://api.kartivio-ai.ru" />
             </label>
-            <button id="authButton" class="soft-btn auth-btn" type="button">Войти через Telegram</button>
+            <div class="auth-actions">
+              <button id="authButton" class="soft-btn auth-btn" type="button">Войти через Telegram</button>
+              <button id="googleAuthButton" class="soft-btn auth-btn" type="button">Войти через Google</button>
+            </div>
             <p id="envHint" class="note"></p>
             <p id="authNote" class="note"></p>
           </section>
@@ -243,6 +247,7 @@
       </nav>
     </div>
 
-    <script src="./app.js?v=20260508k"></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="./app.js?v=20260509a"></script>
   </body>
 </html>

@@ -7,6 +7,7 @@ const STORAGE_KEYS = {
 const DEFAULT_PROD_API_BASE = "https://api.kartivio-ai.ru";
 const DEFAULT_LOCAL_API_BASE = "http://127.0.0.1:8093";
 const DEFAULT_NGROK_API_BASE = "https://sweptback-semivolcanic-reagan.ngrok-free.dev";
+const GOOGLE_CLIENT_ID_META_NAME = "kartivio-google-client-id";
 
 const MODEL_COSTS = {
   "gemini-3.1-flash-image-preview": 10,
@@ -134,6 +135,7 @@ const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : 
 
 const apiBaseInput = document.getElementById("apiBaseInput");
 const authButton = document.getElementById("authButton");
+const googleAuthButton = document.getElementById("googleAuthButton");
 const envHint = document.getElementById("envHint");
 const authNote = document.getElementById("authNote");
 const userName = document.getElementById("userName");
@@ -168,6 +170,7 @@ const refreshHistoryButton = document.getElementById("refreshHistoryButton");
 const navButtons = Array.from(document.querySelectorAll("[data-nav]"));
 const jumpButtons = Array.from(document.querySelectorAll("[data-nav-target]"));
 const screens = Array.from(document.querySelectorAll("[data-screen]"));
+let googleAuthPending = false;
 
 function refreshIcons() {
   if (window.lucide && typeof window.lucide.createIcons === "function") {
@@ -181,6 +184,14 @@ function pickDefaultApiBase() {
     return DEFAULT_LOCAL_API_BASE;
   }
   return DEFAULT_PROD_API_BASE;
+}
+
+function googleClientIdFromMeta() {
+  const tag = document.querySelector(`meta[name="${GOOGLE_CLIENT_ID_META_NAME}"]`);
+  if (!tag) {
+    return "";
+  }
+  return String(tag.getAttribute("content") || "").trim();
 }
 
 function trimApiBase(raw) {
@@ -1255,6 +1266,74 @@ async function loginViaTelegram() {
   }
 }
 
+function setGoogleAuthButtonIdle() {
+  googleAuthPending = false;
+  googleAuthButton.disabled = false;
+  googleAuthButton.textContent = "Войти через Google";
+}
+
+async function loginViaGoogleCredential(idToken) {
+  const payload = await apiFetch("/v1/auth/google", {
+    method: "POST",
+    body: { id_token: idToken },
+  });
+  state.accessToken = payload.access_token;
+  state.refreshToken = payload.refresh_token;
+  saveState();
+  setNote("Авторизация через Google успешна.");
+  await Promise.allSettled([loadPrivateData(), loadHistory()]);
+}
+
+function loginViaGoogle() {
+  if (googleAuthPending) {
+    return;
+  }
+  const clientId = googleClientIdFromMeta();
+  if (!clientId) {
+    setNote("Google Client ID не задан в мета-теге kartivio-google-client-id.", true);
+    return;
+  }
+  if (!window.google || !window.google.accounts || !window.google.accounts.id) {
+    setNote("Google SDK не загрузился. Обнови страницу.", true);
+    return;
+  }
+
+  googleAuthPending = true;
+  googleAuthButton.disabled = true;
+  googleAuthButton.textContent = "Открываю Google...";
+
+  window.google.accounts.id.initialize({
+    client_id: clientId,
+    callback: async (response) => {
+      try {
+        const credential = response && response.credential ? String(response.credential) : "";
+        if (!credential) {
+          throw new Error("Google не вернул credential.");
+        }
+        await loginViaGoogleCredential(credential);
+      } catch (error) {
+        setNote(`Ошибка авторизации Google: ${error.message}`, true);
+      } finally {
+        setGoogleAuthButtonIdle();
+      }
+    },
+  });
+
+  window.google.accounts.id.prompt((notification) => {
+    if (!notification || typeof notification.isNotDisplayed !== "function") {
+      return;
+    }
+    if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+      setGoogleAuthButtonIdle();
+      const notDisplayedReason =
+        typeof notification.getNotDisplayedReason === "function" ? notification.getNotDisplayedReason() : "";
+      const skippedReason = typeof notification.getSkippedReason === "function" ? notification.getSkippedReason() : "";
+      const reason = notDisplayedReason || skippedReason || "not_displayed";
+      setNote(`Google login недоступен (${reason}).`, true);
+    }
+  });
+}
+
 function bindEvents() {
   apiBaseInput.addEventListener("change", () => {
     state.apiBase = trimApiBase(apiBaseInput.value);
@@ -1262,6 +1341,7 @@ function bindEvents() {
   });
 
   authButton.addEventListener("click", loginViaTelegram);
+  googleAuthButton.addEventListener("click", loginViaGoogle);
   createButton.addEventListener("click", handleCreate);
   refreshHistoryButton.addEventListener("click", () => loadHistory().catch((error) => {
     setCreateNote(`История не загрузилась: ${error.message}`, true);
