@@ -187,6 +187,10 @@ function pickDefaultApiBase() {
 }
 
 function googleClientIdFromMeta() {
+  const queryClientId = String(new URLSearchParams(window.location.search).get("google_client_id") || "").trim();
+  if (queryClientId) {
+    return queryClientId;
+  }
   const tag = document.querySelector(`meta[name="${GOOGLE_CLIENT_ID_META_NAME}"]`);
   if (!tag) {
     return "";
