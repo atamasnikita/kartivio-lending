@@ -381,6 +381,16 @@ a {
   color: #858da8;
 }
 
+.footer-meta {
+  display: grid;
+  gap: 6px;
+}
+
+.footer-legal {
+  font-size: 14px;
+  color: #7f88a5;
+}
+
 .footer-links {
   display: flex;
   gap: 14px;
