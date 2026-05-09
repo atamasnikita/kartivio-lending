@@ -109,9 +109,21 @@
         </section>
 
         <section class="screen" data-screen="studio">
-          <section class="info-banner">
-            <strong id="selectedTemplateLabel">Шаблон не выбран</strong>
-            <span>Генерация и редактирование в одном экране</span>
+          <section id="selectedTemplateCard" class="selected-template is-hidden">
+            <img
+              id="selectedTemplatePreview"
+              class="selected-template-preview"
+              src="https://picsum.photos/seed/kartivio-template/320/320"
+              alt="Выбранный шаблон"
+              loading="lazy"
+            />
+            <div class="selected-template-body">
+              <strong id="selectedTemplateTitle">Шаблон</strong>
+              <span id="selectedTemplateMeta">Готовый промпт для старта</span>
+            </div>
+            <button id="clearTemplateButton" class="template-clear-btn" type="button" aria-label="Убрать шаблон">
+              <i data-lucide="x"></i>
+            </button>
           </section>
 
           <button id="uploadDropzone" class="upload-dropzone" type="button">
@@ -231,6 +243,6 @@
       </nav>
     </div>
 
-    <script src="./app.js?v=20260508i"></script>
+    <script src="./app.js?v=20260508k"></script>
   </body>
 </html>

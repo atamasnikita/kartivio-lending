@@ -122,6 +122,7 @@ const state = {
   activeJobId: "",
   activePollTimer: null,
   selectedTemplateId: "",
+  selectedTemplate: null,
   activeImageRenderToken: 0,
   imageBlobUrlCache: new Map(),
   currentScreen: "feed",
@@ -155,7 +156,11 @@ const dropzoneTitle = document.getElementById("dropzoneTitle");
 const sourceImageMeta = document.getElementById("sourceImageMeta");
 const createButton = document.getElementById("createButton");
 const createNote = document.getElementById("createNote");
-const selectedTemplateLabel = document.getElementById("selectedTemplateLabel");
+const selectedTemplateCard = document.getElementById("selectedTemplateCard");
+const selectedTemplatePreview = document.getElementById("selectedTemplatePreview");
+const selectedTemplateTitle = document.getElementById("selectedTemplateTitle");
+const selectedTemplateMeta = document.getElementById("selectedTemplateMeta");
+const clearTemplateButton = document.getElementById("clearTemplateButton");
 const activeJobMeta = document.getElementById("activeJobMeta");
 const activeResult = document.getElementById("activeResult");
 const historyList = document.getElementById("historyList");
@@ -211,6 +216,11 @@ function imageModelLabel(model) {
 function selectedGenerationCost() {
   const key = String(state.selectedImageModel || DEFAULT_IMAGE_MODEL).trim().toLowerCase();
   return MODEL_COSTS[key] || MODEL_COSTS[DEFAULT_IMAGE_MODEL];
+}
+
+function setCreateButtonIdleLabel() {
+  const cost = selectedGenerationCost();
+  createButton.textContent = `Генерировать · ${cost} credits`;
 }
 
 function ratioLabel(ratio) {
@@ -289,6 +299,7 @@ function refreshGenerationCostNote() {
   setCreateNote(
     `Выбрано: ${model}, ${resolutionLabel(resolution)}, ${ratioLabel(ratio)} (${outputSize}). Списание: ${cost} credits.`
   );
+  setCreateButtonIdleLabel();
 }
 
 function createChoiceChip({
@@ -589,6 +600,56 @@ function renderSelectedSourceImage() {
   sourceImageMeta.textContent = `${Math.max(1, Math.round(file.size / 1024 / 1024))} MB`;
 }
 
+function clearSelectedTemplate({ clearPrompt } = { clearPrompt: false }) {
+  state.selectedTemplateId = "";
+  state.selectedTemplate = null;
+  if (clearPrompt) {
+    promptInput.value = "";
+  }
+  renderSelectedTemplateCard();
+}
+
+function selectedTemplatePromptStatus() {
+  if (!state.selectedTemplate) {
+    return "";
+  }
+  const currentPrompt = String(promptInput.value || "").trim();
+  const sourcePrompt = String(state.selectedTemplate.prompt || "").trim();
+  if (!currentPrompt) {
+    return "Промпт очищен";
+  }
+  if (currentPrompt === sourcePrompt) {
+    return "Шаблон вставлен без изменений";
+  }
+  return "Шаблон выбран, промпт изменен";
+}
+
+function renderSelectedTemplateCard() {
+  if (!state.selectedTemplate) {
+    selectedTemplateCard.classList.add("is-hidden");
+    return;
+  }
+  const preview = String(state.selectedTemplate.preview_image_url || "").trim();
+  selectedTemplatePreview.src = preview || "https://picsum.photos/seed/kartivio-template/320/320";
+  selectedTemplateTitle.textContent = state.selectedTemplate.title || "Выбран шаблон";
+  const category = String(state.selectedTemplate.category || "").trim();
+  const status = selectedTemplatePromptStatus();
+  selectedTemplateMeta.textContent = category ? `${category} · ${status}` : status;
+  selectedTemplateCard.classList.remove("is-hidden");
+}
+
+function syncTemplateStateFromPrompt() {
+  if (!state.selectedTemplate) {
+    return;
+  }
+  const currentPrompt = String(promptInput.value || "").trim();
+  if (!currentPrompt) {
+    clearSelectedTemplate({ clearPrompt: false });
+    return;
+  }
+  renderSelectedTemplateCard();
+}
+
 function setEnvHint() {
   if (!tg) {
     envHint.textContent = "Открыто в обычном браузере.";
@@ -865,8 +926,15 @@ function renderPlans(payload) {
 
 function selectTemplate(item) {
   state.selectedTemplateId = item.id;
-  promptInput.value = item.prompt;
-  selectedTemplateLabel.textContent = `Шаблон: ${item.title}`;
+  state.selectedTemplate = {
+    id: item.id,
+    title: item.title,
+    category: item.category,
+    prompt: item.prompt,
+    preview_image_url: item.preview_image_url,
+  };
+  promptInput.value = item.prompt || "";
+  renderSelectedTemplateCard();
   switchScreen("studio");
   promptInput.focus();
 }
@@ -990,7 +1058,7 @@ function renderHistory(payload) {
     item.querySelector('[data-action="use-prompt"]').addEventListener("click", () => {
       if (job.prompt) {
         promptInput.value = job.prompt;
-        selectedTemplateLabel.textContent = "Промпт из истории";
+        clearSelectedTemplate({ clearPrompt: false });
         switchScreen("studio");
         promptInput.focus();
       }
@@ -1158,7 +1226,7 @@ async function handleCreate() {
     setCreateNote(error.message, true);
   } finally {
     createButton.disabled = false;
-    createButton.textContent = "Генерировать";
+    setCreateButtonIdleLabel();
   }
 }
 
@@ -1198,6 +1266,11 @@ function bindEvents() {
   refreshHistoryButton.addEventListener("click", () => loadHistory().catch((error) => {
     setCreateNote(`История не загрузилась: ${error.message}`, true);
   }));
+  clearTemplateButton.addEventListener("click", () => {
+    clearSelectedTemplate({ clearPrompt: true });
+    promptInput.focus();
+  });
+  promptInput.addEventListener("input", syncTemplateStateFromPrompt);
 
   uploadPhotoButton.addEventListener("click", () => sourceImageInput.click());
   uploadDropzone.addEventListener("click", () => sourceImageInput.click());
@@ -1225,6 +1298,7 @@ async function bootstrap() {
   apiBaseInput.value = state.apiBase;
   renderGenerationChips();
   bindEvents();
+  renderSelectedTemplateCard();
   renderSelectedSourceImage();
   refreshGenerationCostNote();
   refreshIcons();
