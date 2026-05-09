@@ -178,6 +178,10 @@ function refreshIcons() {
   }
 }
 
+function isTelegramMiniAppRuntime() {
+  return Boolean(tg && tg.initData);
+}
+
 function pickDefaultApiBase() {
   const host = window.location.hostname || "";
   if (host === "localhost" || host === "127.0.0.1") {
@@ -196,6 +200,12 @@ function googleClientIdFromMeta() {
     return "";
   }
   return String(tag.getAttribute("content") || "").trim();
+}
+
+function googleAuthLaunchUrl() {
+  const url = new URL(window.location.href);
+  url.searchParams.set("google_auto", "1");
+  return url.toString();
 }
 
 function trimApiBase(raw) {
@@ -673,6 +683,14 @@ function setEnvHint() {
   tg.ready();
   tg.expand();
   envHint.textContent = "Открыто в Telegram Mini App.";
+}
+
+function refreshAuthButtons() {
+  if (isTelegramMiniAppRuntime()) {
+    googleAuthButton.textContent = "Войти через Google в браузере";
+  } else {
+    googleAuthButton.textContent = "Войти через Google";
+  }
 }
 
 async function parseJsonResponse(response) {
@@ -1302,6 +1320,17 @@ function loginViaGoogle() {
     return;
   }
 
+  if (isTelegramMiniAppRuntime()) {
+    const url = googleAuthLaunchUrl();
+    setNote("Открываю внешний браузер для входа через Google.");
+    if (tg && typeof tg.openLink === "function") {
+      tg.openLink(url);
+      return;
+    }
+    window.open(url, "_blank", "noopener,noreferrer");
+    return;
+  }
+
   googleAuthPending = true;
   googleAuthButton.disabled = true;
   googleAuthButton.textContent = "Открываю Google...";
@@ -1379,6 +1408,7 @@ function bindEvents() {
 async function bootstrap() {
   loadState();
   setEnvHint();
+  refreshAuthButtons();
   apiBaseInput.value = state.apiBase;
   renderGenerationChips();
   bindEvents();
@@ -1398,6 +1428,13 @@ async function bootstrap() {
     await Promise.allSettled([loadPrivateData(), loadHistory()]);
   } else {
     await loadHistory();
+  }
+
+  const autoGoogle = new URLSearchParams(window.location.search).get("google_auto");
+  if (autoGoogle === "1" && !isTelegramMiniAppRuntime() && !state.accessToken) {
+    window.setTimeout(() => {
+      loginViaGoogle();
+    }, 150);
   }
 
   switchScreen("feed");
