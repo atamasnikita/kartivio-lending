@@ -60,10 +60,10 @@
         <p>Войди через Google или Telegram, чтобы генерировать и редактировать изображения.</p>
         <div class="auth-actions">
           <button id="googleAuthButton" class="primary-action auth-primary" type="button">Войти через Google</button>
-          <div id="googleSigninWrap" class="google-signin-wrap is-hidden">
-            <div id="googleSigninButton"></div>
-          </div>
           <button id="authButton" class="soft-btn auth-btn" type="button">Войти через Telegram</button>
+        </div>
+        <div id="googleSigninWrap" class="google-signin-wrap is-hidden" aria-hidden="true">
+          <div id="googleSigninButton"></div>
         </div>
         <p id="authNote" class="note"></p>
         <section id="devPanel" class="panel-card auth-dev is-hidden">
@@ -249,9 +249,12 @@
               <article class="identity-item">
                 <span>Telegram</span>
                 <strong id="identityTelegram">—</strong>
+                <button id="linkTelegramButton" class="soft-btn btn-compact identity-action" type="button">
+                  Привязать Telegram
+                </button>
+                <small id="telegramLinkNote" class="identity-note">—</small>
               </article>
             </div>
-            <p class="note">Привязка Telegram к веб-аккаунту добавляется следующим этапом.</p>
           </section>
 
           <a class="bot-link" href="https://t.me/kartivio_ai_bot" target="_blank" rel="noreferrer">
@@ -285,6 +288,6 @@
     </div>
 
     <script src="https://accounts.google.com/gsi/client" async defer></script>
-    <script src="./app.js?v=20260512b"></script>
+    <script src="./app.js?v=20260512c"></script>
   </body>
 </html>

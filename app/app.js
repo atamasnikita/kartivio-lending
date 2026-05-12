@@ -131,6 +131,9 @@ const state = {
   currentScreen: "feed",
   topups: [],
   selectedTopupCode: "",
+  linkedProviders: new Set(),
+  telegramLinkToken: "",
+  telegramLinkPollTimer: null,
 };
 
 const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
@@ -153,6 +156,8 @@ const creditsBadge = document.getElementById("creditsBadge");
 const profileAvatar = document.getElementById("profileAvatar");
 const identityGoogle = document.getElementById("identityGoogle");
 const identityTelegram = document.getElementById("identityTelegram");
+const linkTelegramButton = document.getElementById("linkTelegramButton");
+const telegramLinkNote = document.getElementById("telegramLinkNote");
 const plansGrid = document.getElementById("plansGrid");
 const plansActionButton = document.getElementById("plansActionButton");
 const plansNote = document.getElementById("plansNote");
@@ -754,13 +759,51 @@ function refreshAuthButtons() {
   }
   if (isTelegramMiniAppRuntime()) {
     googleAuthButton.textContent = "Войти через Google в браузере";
-    googleAuthButton.classList.remove("is-hidden");
-    if (googleSigninWrap) {
-      googleSigninWrap.classList.add("is-hidden");
-    }
   } else {
-    googleAuthButton.classList.add("is-hidden");
-    renderGoogleSigninButtonIfPossible({ redirectFlow: true });
+    googleAuthButton.textContent = "Войти через Google";
+  }
+  googleAuthButton.classList.remove("is-hidden");
+  if (googleSigninWrap) {
+    googleSigninWrap.classList.add("is-hidden");
+  }
+}
+
+function setTelegramLinkNote(message, isError = false) {
+  if (!telegramLinkNote) {
+    return;
+  }
+  telegramLinkNote.textContent = message;
+  telegramLinkNote.style.color = isError ? "#ff8f8f" : "#8f98b0";
+}
+
+function clearTelegramLinkPolling() {
+  if (!state.telegramLinkPollTimer) {
+    return;
+  }
+  window.clearTimeout(state.telegramLinkPollTimer);
+  state.telegramLinkPollTimer = null;
+}
+
+function renderIdentityActions() {
+  const linkedTelegram = state.linkedProviders.has("telegram");
+  if (identityTelegram) {
+    identityTelegram.textContent = linkedTelegram ? "Подключен" : "Не подключен";
+  }
+  if (identityGoogle) {
+    identityGoogle.textContent = state.linkedProviders.has("google") ? "Подключен" : "Не подключен";
+  }
+
+  if (linkTelegramButton) {
+    linkTelegramButton.disabled = linkedTelegram || !state.accessToken;
+    linkTelegramButton.textContent = linkedTelegram ? "Telegram привязан" : "Привязать Telegram";
+  }
+
+  if (linkedTelegram) {
+    clearTelegramLinkPolling();
+    state.telegramLinkToken = "";
+    setTelegramLinkNote("Связка активна.");
+  } else {
+    setTelegramLinkNote("Привяжи Telegram, чтобы синхронизировать вход в боте и вебе.");
   }
 }
 
@@ -957,12 +1000,7 @@ function renderUser(me, wallet) {
   creditsValue.textContent = `${balance} credits`;
   creditsBadge.textContent = String(balance);
   profileAvatar.textContent = display === "—" ? "K" : display[0].toUpperCase();
-  if (identityTelegram) {
-    identityTelegram.textContent = me.telegram_user_id ? "Подключен" : "Не подключен";
-  }
-  if (identityGoogle) {
-    identityGoogle.textContent = state.lastAuthProvider === "google" ? "Подключен" : "Не подключен";
-  }
+  renderIdentityActions();
 }
 
 function openCheckout(url) {
@@ -1248,25 +1286,44 @@ async function loadPublicData() {
   setNote("");
 }
 
+async function loadIdentities() {
+  const payload = await authorizedGetWithRetry("/v1/account/identities", 1);
+  const providers = Array.isArray(payload.providers) ? payload.providers : [];
+  state.linkedProviders = new Set(
+    providers
+      .map((item) => String(item || "").trim().toLowerCase())
+      .filter((item) => item.length > 0),
+  );
+  if (payload.linked_telegram && !state.linkedProviders.has("telegram")) {
+    state.linkedProviders.add("telegram");
+  }
+  if (payload.linked_google && !state.linkedProviders.has("google")) {
+    state.linkedProviders.add("google");
+  }
+  if (!state.linkedProviders.has("telegram") && payload.telegram_user_id) {
+    state.linkedProviders.add("telegram");
+  }
+  renderIdentityActions();
+}
+
 async function loadPrivateData() {
   if (!state.accessToken) {
+    clearTelegramLinkPolling();
+    state.telegramLinkToken = "";
+    state.linkedProviders = new Set();
     userName.textContent = "—";
     userTgId.textContent = "—";
     creditsValue.textContent = "—";
     creditsBadge.textContent = "0";
     profileAvatar.textContent = "K";
-    if (identityGoogle) {
-      identityGoogle.textContent = "Не подключен";
-    }
-    if (identityTelegram) {
-      identityTelegram.textContent = "Не подключен";
-    }
+    renderIdentityActions();
     return;
   }
   const [me, wallet] = await Promise.all([
     authorizedGetWithRetry("/v1/me", 1),
     authorizedGetWithRetry("/v1/wallet?limit=1", 1),
   ]);
+  await loadIdentities();
   renderUser(me, wallet);
 }
 
@@ -1388,6 +1445,99 @@ function openBotLink() {
   window.open(TELEGRAM_BOT_URL, "_blank", "noopener,noreferrer");
 }
 
+function openTelegramDeepLink(url) {
+  if (tg && typeof tg.openTelegramLink === "function") {
+    tg.openTelegramLink(url);
+    return;
+  }
+  if (tg && typeof tg.openLink === "function") {
+    tg.openLink(url);
+    return;
+  }
+  window.open(url, "_blank", "noopener,noreferrer");
+}
+
+async function pollTelegramLinkStatus() {
+  if (!state.accessToken || !state.telegramLinkToken) {
+    return;
+  }
+  try {
+    const payload = await authorizedGetWithRetry(
+      `/v1/account/link/telegram/status?link_token=${encodeURIComponent(state.telegramLinkToken)}`,
+      1,
+    );
+    const status = String(payload.status || "").trim().toLowerCase();
+    if (status === "pending") {
+      setTelegramLinkNote(payload.message || "Ожидаем подтверждение в Telegram.");
+      state.telegramLinkPollTimer = window.setTimeout(() => {
+        pollTelegramLinkStatus().catch(() => {});
+      }, 2000);
+      return;
+    }
+    if (status === "linked") {
+      setTelegramLinkNote(payload.message || "Telegram успешно привязан.");
+      state.telegramLinkToken = "";
+      clearTelegramLinkPolling();
+      await loadPrivateData();
+      return;
+    }
+    if (status === "conflict") {
+      setTelegramLinkNote(payload.message || "Этот Telegram уже привязан к другому аккаунту.", true);
+      state.telegramLinkToken = "";
+      clearTelegramLinkPolling();
+      return;
+    }
+    setTelegramLinkNote(payload.message || "Ссылка истекла. Создай новую.", true);
+    state.telegramLinkToken = "";
+    clearTelegramLinkPolling();
+  } catch (error) {
+    setTelegramLinkNote(`Не удалось проверить привязку: ${error.message}`, true);
+    state.telegramLinkPollTimer = window.setTimeout(() => {
+      pollTelegramLinkStatus().catch(() => {});
+    }, 3000);
+  }
+}
+
+async function startTelegramLink() {
+  if (!state.accessToken) {
+    setAuthGateVisible(true);
+    return;
+  }
+  if (state.linkedProviders.has("telegram")) {
+    setTelegramLinkNote("Telegram уже привязан.");
+    return;
+  }
+
+  if (linkTelegramButton) {
+    linkTelegramButton.disabled = true;
+    linkTelegramButton.textContent = "Готовлю ссылку...";
+  }
+
+  try {
+    const payload = await authorizedFetch("/v1/account/link/telegram/start", {
+      method: "POST",
+    });
+    state.telegramLinkToken = String(payload.link_token || "").trim();
+    if (!state.telegramLinkToken) {
+      throw new Error("Не пришел link_token.");
+    }
+    const deepLink = String(payload.deep_link_url || "").trim();
+    if (!deepLink) {
+      throw new Error("Не пришла deep-link ссылка.");
+    }
+    setTelegramLinkNote("Открываю Telegram. Нажми Start в боте, затем вернись в веб.");
+    openTelegramDeepLink(deepLink);
+    clearTelegramLinkPolling();
+    state.telegramLinkPollTimer = window.setTimeout(() => {
+      pollTelegramLinkStatus().catch(() => {});
+    }, 1500);
+  } catch (error) {
+    setTelegramLinkNote(`Ошибка старта привязки: ${error.message}`, true);
+  } finally {
+    renderIdentityActions();
+  }
+}
+
 async function hydrateAuthorizedSession() {
   if (!state.accessToken) {
     return false;
@@ -1482,7 +1632,7 @@ function ensureGoogleIdentityInitialized(clientId) {
   googleIdentitySignature = signature;
 }
 
-function renderGoogleSigninButtonIfPossible({ redirectFlow = false } = {}) {
+function renderGoogleSigninButtonIfPossible({ redirectFlow = false, show = false } = {}) {
   if (!googleSigninWrap || !googleSigninButton) {
     return false;
   }
@@ -1512,8 +1662,31 @@ function renderGoogleSigninButtonIfPossible({ redirectFlow = false } = {}) {
     width: "380",
     state: stateToken,
   });
-  googleSigninWrap.classList.remove("is-hidden");
+  googleSigninWrap.classList.toggle("is-hidden", !show);
   return true;
+}
+
+function triggerRenderedGoogleButtonClick() {
+  if (!googleSigninButton) {
+    return false;
+  }
+  const clickable =
+    googleSigninButton.querySelector('div[role="button"]') ||
+    googleSigninButton.querySelector('iframe[title*="Google"]') ||
+    googleSigninButton.querySelector("iframe");
+  if (!clickable) {
+    return false;
+  }
+  try {
+    if (typeof clickable.click === "function") {
+      clickable.click();
+    } else {
+      clickable.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window }));
+    }
+    return true;
+  } catch (_error) {
+    return false;
+  }
 }
 
 function loginViaGoogle() {
@@ -1540,7 +1713,7 @@ function loginViaGoogle() {
   }
 
   googleAuthPending = true;
-  const rendered = renderGoogleSigninButtonIfPossible({ redirectFlow: true });
+  const rendered = renderGoogleSigninButtonIfPossible({ redirectFlow: true, show: false });
   if (!rendered) {
     setGoogleAuthButtonIdle();
     if (!hasGoogleSdk()) {
@@ -1550,9 +1723,17 @@ function loginViaGoogle() {
     setNote("Google login недоступен для этого окружения.", true);
     return;
   }
+  const opened = triggerRenderedGoogleButtonClick();
   googleAuthPending = false;
-  setNote("Выбери аккаунт Google.");
-  googleSigninWrap.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  if (opened) {
+    setNote("Открываю Google...");
+    return;
+  }
+  if (googleSigninWrap) {
+    googleSigninWrap.classList.remove("is-hidden");
+    googleSigninWrap.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+  setNote("Нажми кнопку Google ниже.");
 }
 
 function bindEvents() {
@@ -1571,6 +1752,13 @@ function bindEvents() {
   }
   if (googleAuthButton) {
     googleAuthButton.addEventListener("click", loginViaGoogle);
+  }
+  if (linkTelegramButton) {
+    linkTelegramButton.addEventListener("click", () => {
+      startTelegramLink().catch((error) => {
+        setTelegramLinkNote(`Ошибка: ${error.message}`, true);
+      });
+    });
   }
   createButton.addEventListener("click", handleCreate);
   refreshHistoryButton.addEventListener("click", () => loadHistory().catch((error) => {
@@ -1616,6 +1804,7 @@ async function bootstrap() {
   renderSelectedSourceImage();
   refreshGenerationCostNote();
   refreshIcons();
+  renderIdentityActions();
   setAuthGateVisible(!state.accessToken);
 
   try {
