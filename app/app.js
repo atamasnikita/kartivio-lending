@@ -2,6 +2,7 @@ const STORAGE_KEYS = {
   apiBase: "kartivio.api_base",
   accessToken: "kartivio.access_token",
   refreshToken: "kartivio.refresh_token",
+  lastAuthProvider: "kartivio.last_auth_provider",
 };
 
 const DEFAULT_PROD_API_BASE = "https://api.kartivio-ai.ru";
@@ -117,6 +118,7 @@ const state = {
   apiBase: "",
   accessToken: "",
   refreshToken: "",
+  lastAuthProvider: "",
   selectedImageModel: DEFAULT_IMAGE_MODEL,
   selectedResolution: DEFAULT_RESOLUTION,
   selectedRatio: DEFAULT_RATIO,
@@ -132,7 +134,11 @@ const state = {
 };
 
 const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+const TELEGRAM_BOT_URL = "https://t.me/kartivio_ai_bot";
 
+const appShell = document.getElementById("appShell");
+const authGate = document.getElementById("authGate");
+const devPanel = document.getElementById("devPanel");
 const apiBaseInput = document.getElementById("apiBaseInput");
 const authButton = document.getElementById("authButton");
 const googleAuthButton = document.getElementById("googleAuthButton");
@@ -145,6 +151,8 @@ const userTgId = document.getElementById("userTgId");
 const creditsValue = document.getElementById("creditsValue");
 const creditsBadge = document.getElementById("creditsBadge");
 const profileAvatar = document.getElementById("profileAvatar");
+const identityGoogle = document.getElementById("identityGoogle");
+const identityTelegram = document.getElementById("identityTelegram");
 const plansGrid = document.getElementById("plansGrid");
 const plansActionButton = document.getElementById("plansActionButton");
 const plansNote = document.getElementById("plansNote");
@@ -173,7 +181,7 @@ const navButtons = Array.from(document.querySelectorAll("[data-nav]"));
 const jumpButtons = Array.from(document.querySelectorAll("[data-nav-target]"));
 const screens = Array.from(document.querySelectorAll("[data-screen]"));
 let googleAuthPending = false;
-let googleIdentityInitialized = false;
+let googleIdentitySignature = "";
 
 function refreshIcons() {
   if (window.lucide && typeof window.lucide.createIcons === "function") {
@@ -183,6 +191,26 @@ function refreshIcons() {
 
 function isTelegramMiniAppRuntime() {
   return Boolean(tg && tg.initData);
+}
+
+function isDevMode() {
+  return new URLSearchParams(window.location.search).get("dev") === "1";
+}
+
+function setAuthGateVisible(visible) {
+  if (authGate) {
+    authGate.classList.toggle("is-hidden", !visible);
+  }
+  if (appShell) {
+    appShell.classList.toggle("is-hidden", visible);
+  }
+}
+
+function setDevPanelVisibility() {
+  if (!devPanel) {
+    return;
+  }
+  devPanel.classList.toggle("is-hidden", !isDevMode());
 }
 
 function pickDefaultApiBase() {
@@ -213,6 +241,26 @@ function googleAuthLaunchUrl() {
 
 function hasGoogleSdk() {
   return Boolean(window.google && window.google.accounts && window.google.accounts.id);
+}
+
+function currentReturnToUrl() {
+  const url = new URL(window.location.href);
+  url.searchParams.delete("google_auto");
+  return url.toString();
+}
+
+function googleRedirectLoginUri() {
+  return `${trimApiBase(state.apiBase)}/v1/auth/google/redirect`;
+}
+
+function encodeGoogleButtonState(payload) {
+  const raw = JSON.stringify(payload);
+  const bytes = new TextEncoder().encode(raw);
+  let binary = "";
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 
 function trimApiBase(raw) {
@@ -428,6 +476,7 @@ function saveState() {
   localStorage.setItem(STORAGE_KEYS.apiBase, state.apiBase);
   localStorage.setItem(STORAGE_KEYS.accessToken, state.accessToken);
   localStorage.setItem(STORAGE_KEYS.refreshToken, state.refreshToken);
+  localStorage.setItem(STORAGE_KEYS.lastAuthProvider, state.lastAuthProvider);
 }
 
 function loadState() {
@@ -436,6 +485,7 @@ function loadState() {
   state.apiBase = queryApiBase || storedApiBase || pickDefaultApiBase();
   state.accessToken = localStorage.getItem(STORAGE_KEYS.accessToken) || "";
   state.refreshToken = localStorage.getItem(STORAGE_KEYS.refreshToken) || "";
+  state.lastAuthProvider = String(localStorage.getItem(STORAGE_KEYS.lastAuthProvider) || "").trim().toLowerCase();
 }
 
 function escapeHtml(raw) {
@@ -448,6 +498,9 @@ function escapeHtml(raw) {
 }
 
 function setNote(message, isError = false) {
+  if (!authNote) {
+    return;
+  }
   authNote.textContent = message;
   authNote.style.color = isError ? "#ff8f8f" : "#8f98b0";
 }
@@ -683,6 +736,9 @@ function syncTemplateStateFromPrompt() {
 }
 
 function setEnvHint() {
+  if (!envHint) {
+    return;
+  }
   if (!tg) {
     envHint.textContent = "Открыто в обычном браузере.";
     return;
@@ -693,14 +749,18 @@ function setEnvHint() {
 }
 
 function refreshAuthButtons() {
+  if (!googleAuthButton) {
+    return;
+  }
   if (isTelegramMiniAppRuntime()) {
     googleAuthButton.textContent = "Войти через Google в браузере";
+    googleAuthButton.classList.remove("is-hidden");
     if (googleSigninWrap) {
       googleSigninWrap.classList.add("is-hidden");
     }
   } else {
-    googleAuthButton.textContent = "Войти через Google";
-    renderGoogleSigninButtonIfPossible();
+    googleAuthButton.classList.add("is-hidden");
+    renderGoogleSigninButtonIfPossible({ redirectFlow: true });
   }
 }
 
@@ -715,6 +775,19 @@ async function parseJsonResponse(response) {
 function extractErrorMessage(payload, fallback) {
   if (!payload || typeof payload !== "object") {
     return fallback;
+  }
+  if (Array.isArray(payload.detail) && payload.detail.length > 0) {
+    const first = payload.detail[0];
+    if (first && typeof first === "object") {
+      const loc = Array.isArray(first.loc) ? first.loc.join(".") : "";
+      const msg = typeof first.msg === "string" ? first.msg.trim() : "";
+      if (loc && msg) {
+        return `${loc}: ${msg}`;
+      }
+      if (msg) {
+        return msg;
+      }
+    }
   }
   if (typeof payload.message === "string" && payload.message.trim()) {
     return payload.message.trim();
@@ -835,6 +908,7 @@ async function authorizedFetch(path, options = {}) {
     }
     const refreshed = await refreshSession();
     if (!refreshed) {
+      setAuthGateVisible(true);
       throw error;
     }
     return apiFetch(path, { ...options, auth: true });
@@ -850,6 +924,7 @@ async function authorizedMultipart(path, formData, options = {}) {
     }
     const refreshed = await refreshSession();
     if (!refreshed) {
+      setAuthGateVisible(true);
       throw error;
     }
     return apiMultipart(path, formData, { ...options, auth: true });
@@ -882,6 +957,12 @@ function renderUser(me, wallet) {
   creditsValue.textContent = `${balance} credits`;
   creditsBadge.textContent = String(balance);
   profileAvatar.textContent = display === "—" ? "K" : display[0].toUpperCase();
+  if (identityTelegram) {
+    identityTelegram.textContent = me.telegram_user_id ? "Подключен" : "Не подключен";
+  }
+  if (identityGoogle) {
+    identityGoogle.textContent = state.lastAuthProvider === "google" ? "Подключен" : "Не подключен";
+  }
 }
 
 function openCheckout(url) {
@@ -897,8 +978,8 @@ function openCheckout(url) {
 
 async function buyPackage(code) {
   if (!state.accessToken) {
-    setPlansNote("Сначала авторизуйся через Telegram.", true);
-    switchScreen("profile");
+    setPlansNote("Сначала войди в аккаунт.", true);
+    setAuthGateVisible(true);
     return;
   }
   const idem = `webapp_buy_${code}_${Date.now()}`;
@@ -1174,6 +1255,12 @@ async function loadPrivateData() {
     creditsValue.textContent = "—";
     creditsBadge.textContent = "0";
     profileAvatar.textContent = "K";
+    if (identityGoogle) {
+      identityGoogle.textContent = "Не подключен";
+    }
+    if (identityTelegram) {
+      identityTelegram.textContent = "Не подключен";
+    }
     return;
   }
   const [me, wallet] = await Promise.all([
@@ -1185,7 +1272,8 @@ async function loadPrivateData() {
 
 function ensureAuthorizedForCreate() {
   if (!state.accessToken) {
-    throw new Error("Сначала войди через Telegram.");
+    setAuthGateVisible(true);
+    throw new Error("Сначала войди в аккаунт.");
   }
 }
 
@@ -1241,7 +1329,8 @@ async function handleCreate() {
   const prompt = promptInput.value.trim();
   const imageModel = state.selectedImageModel || DEFAULT_IMAGE_MODEL;
   const outputSize = currentOutputSizeSelection();
-  const sourceImage = sourceImageInput.files && sourceImageInput.files[0] ? sourceImageInput.files[0] : null;
+  const selectedFile = sourceImageInput.files && sourceImageInput.files[0] ? sourceImageInput.files[0] : null;
+  const sourceImage = selectedFile instanceof File ? selectedFile : null;
   const cost = selectedGenerationCost();
 
   try {
@@ -1251,6 +1340,23 @@ async function handleCreate() {
     }
     if (!outputSize) {
       throw new Error("Недоступная комбинация разрешения и соотношения.");
+    }
+    if (selectedFile && !(selectedFile instanceof File)) {
+      throw new Error("Не удалось прочитать файл. Выбери фото заново.");
+    }
+    if (sourceImage) {
+      const maxBytes = 10 * 1024 * 1024;
+      const mime = String(sourceImage.type || "").toLowerCase();
+      const allowedMime = new Set(["image/png", "image/jpeg", "image/webp"]);
+      if (!sourceImage.size) {
+        throw new Error("Файл пустой. Выбери другое фото.");
+      }
+      if (sourceImage.size > maxBytes) {
+        throw new Error("Файл больше 10 MB. Сожми изображение и повтори.");
+      }
+      if (mime && !allowedMime.has(mime)) {
+        throw new Error("Поддерживаются только PNG, JPG и WEBP.");
+      }
     }
     createButton.disabled = true;
     createButton.textContent = "Создаю...";
@@ -1274,13 +1380,42 @@ async function handleCreate() {
   }
 }
 
-async function loginViaTelegram() {
-  if (!tg || !tg.initData) {
-    setNote("Нет Telegram initData. Открой страницу через кнопку Web App в боте.", true);
+function openBotLink() {
+  if (tg && typeof tg.openLink === "function") {
+    tg.openLink(TELEGRAM_BOT_URL);
     return;
   }
-  authButton.disabled = true;
-  authButton.textContent = "Проверяю...";
+  window.open(TELEGRAM_BOT_URL, "_blank", "noopener,noreferrer");
+}
+
+async function hydrateAuthorizedSession() {
+  if (!state.accessToken) {
+    return false;
+  }
+  try {
+    await Promise.all([loadPrivateData(), loadHistory()]);
+    return true;
+  } catch (_error) {
+    state.accessToken = "";
+    state.refreshToken = "";
+    saveState();
+    return false;
+  }
+}
+
+async function loginViaTelegram(options = {}) {
+  const { silent = false, targetScreen = "feed" } = options;
+  if (!tg || !tg.initData) {
+    openBotLink();
+    if (!silent) {
+      setNote("Открой Mini App из бота для входа через Telegram.");
+    }
+    return false;
+  }
+  if (authButton) {
+    authButton.disabled = true;
+    authButton.textContent = "Проверяю...";
+  }
   try {
     const payload = await apiFetch("/v1/auth/telegram/miniapp", {
       method: "POST",
@@ -1288,20 +1423,33 @@ async function loginViaTelegram() {
     });
     state.accessToken = payload.access_token;
     state.refreshToken = payload.refresh_token;
+    state.lastAuthProvider = "telegram";
     saveState();
-    setNote("Авторизация успешна.");
-    await Promise.allSettled([loadPrivateData(), loadHistory()]);
+    setAuthGateVisible(false);
+    if (!silent) {
+      setNote("Авторизация успешна.");
+    }
+    await Promise.all([loadPrivateData(), loadHistory()]);
+    switchScreen(targetScreen);
+    return true;
   } catch (error) {
-    setNote(`Ошибка авторизации: ${error.message}`, true);
+    if (!silent) {
+      setNote(`Ошибка авторизации: ${error.message}`, true);
+    }
+    return false;
   } finally {
-    authButton.disabled = false;
-    authButton.textContent = "Войти через Telegram";
+    if (authButton) {
+      authButton.disabled = false;
+      authButton.textContent = "Войти через Telegram";
+    }
   }
 }
 
 function setGoogleAuthButtonIdle() {
   googleAuthPending = false;
-  googleAuthButton.disabled = false;
+  if (googleAuthButton) {
+    googleAuthButton.disabled = false;
+  }
   refreshAuthButtons();
 }
 
@@ -1312,35 +1460,29 @@ async function loginViaGoogleCredential(idToken) {
   });
   state.accessToken = payload.access_token;
   state.refreshToken = payload.refresh_token;
+  state.lastAuthProvider = "google";
   saveState();
+  setAuthGateVisible(false);
   setNote("Авторизация через Google успешна.");
-  await Promise.allSettled([loadPrivateData(), loadHistory()]);
+  await Promise.all([loadPrivateData(), loadHistory()]);
+  switchScreen("feed");
 }
 
 function ensureGoogleIdentityInitialized(clientId) {
-  if (googleIdentityInitialized) {
+  const loginUri = googleRedirectLoginUri();
+  const signature = `${clientId}|redirect|${loginUri}`;
+  if (googleIdentitySignature === signature) {
     return;
   }
   window.google.accounts.id.initialize({
     client_id: clientId,
-    callback: async (response) => {
-      try {
-        const credential = response && response.credential ? String(response.credential) : "";
-        if (!credential) {
-          throw new Error("Google не вернул credential.");
-        }
-        await loginViaGoogleCredential(credential);
-      } catch (error) {
-        setNote(`Ошибка авторизации Google: ${error.message}`, true);
-      } finally {
-        setGoogleAuthButtonIdle();
-      }
-    },
+    ux_mode: "redirect",
+    login_uri: loginUri,
   });
-  googleIdentityInitialized = true;
+  googleIdentitySignature = signature;
 }
 
-function renderGoogleSigninButtonIfPossible() {
+function renderGoogleSigninButtonIfPossible({ redirectFlow = false } = {}) {
   if (!googleSigninWrap || !googleSigninButton) {
     return false;
   }
@@ -1353,22 +1495,31 @@ function renderGoogleSigninButtonIfPossible() {
     googleSigninWrap.classList.add("is-hidden");
     return false;
   }
+  if (!state.apiBase) {
+    googleSigninWrap.classList.add("is-hidden");
+    return false;
+  }
   ensureGoogleIdentityInitialized(clientId);
+  const stateToken = encodeGoogleButtonState({ return_to: currentReturnToUrl() });
   googleSigninButton.innerHTML = "";
   window.google.accounts.id.renderButton(googleSigninButton, {
     type: "standard",
-    theme: "outline",
+    theme: redirectFlow ? "filled_blue" : "outline",
     size: "large",
     text: "signin_with",
-    shape: "pill",
+    shape: "rectangular",
     logo_alignment: "left",
-    width: "360",
+    width: "380",
+    state: stateToken,
   });
   googleSigninWrap.classList.remove("is-hidden");
   return true;
 }
 
 function loginViaGoogle() {
+  if (!googleAuthButton) {
+    return;
+  }
   if (googleAuthPending) {
     return;
   }
@@ -1388,9 +1539,8 @@ function loginViaGoogle() {
     return;
   }
 
-  googleAuthButton.disabled = true;
-  googleAuthButton.textContent = "Готовлю кнопку Google...";
-  const rendered = renderGoogleSigninButtonIfPossible();
+  googleAuthPending = true;
+  const rendered = renderGoogleSigninButtonIfPossible({ redirectFlow: true });
   if (!rendered) {
     setGoogleAuthButtonIdle();
     if (!hasGoogleSdk()) {
@@ -1400,19 +1550,28 @@ function loginViaGoogle() {
     setNote("Google login недоступен для этого окружения.", true);
     return;
   }
-  setGoogleAuthButtonIdle();
-  setNote("Нажми кнопку Google ниже.");
+  googleAuthPending = false;
+  setNote("Выбери аккаунт Google.");
   googleSigninWrap.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
 function bindEvents() {
-  apiBaseInput.addEventListener("change", () => {
-    state.apiBase = trimApiBase(apiBaseInput.value);
-    saveState();
-  });
+  if (apiBaseInput) {
+    apiBaseInput.addEventListener("change", () => {
+      state.apiBase = trimApiBase(apiBaseInput.value);
+      saveState();
+      refreshAuthButtons();
+    });
+  }
 
-  authButton.addEventListener("click", loginViaTelegram);
-  googleAuthButton.addEventListener("click", loginViaGoogle);
+  if (authButton) {
+    authButton.addEventListener("click", () => {
+      loginViaTelegram({ silent: false, targetScreen: isTelegramMiniAppRuntime() ? "studio" : "feed" });
+    });
+  }
+  if (googleAuthButton) {
+    googleAuthButton.addEventListener("click", loginViaGoogle);
+  }
   createButton.addEventListener("click", handleCreate);
   refreshHistoryButton.addEventListener("click", () => loadHistory().catch((error) => {
     setCreateNote(`История не загрузилась: ${error.message}`, true);
@@ -1445,27 +1604,50 @@ function bindEvents() {
 
 async function bootstrap() {
   loadState();
+  setDevPanelVisibility();
   setEnvHint();
   refreshAuthButtons();
-  apiBaseInput.value = state.apiBase;
+  if (apiBaseInput) {
+    apiBaseInput.value = state.apiBase;
+  }
   renderGenerationChips();
   bindEvents();
   renderSelectedTemplateCard();
   renderSelectedSourceImage();
   refreshGenerationCostNote();
   refreshIcons();
+  setAuthGateVisible(!state.accessToken);
 
   try {
     await resolveApiBase();
+    refreshAuthButtons();
     await loadPublicData();
   } catch (error) {
     setNote(`Не удалось загрузить публичные данные: ${error.message}`, true);
   }
 
+  let authorized = false;
   if (state.accessToken) {
-    await Promise.allSettled([loadPrivateData(), loadHistory()]);
+    authorized = await hydrateAuthorizedSession();
+  }
+
+  if (!authorized && isTelegramMiniAppRuntime()) {
+    setNote("Выполняю вход через Telegram...");
+    authorized = await loginViaTelegram({ silent: true, targetScreen: "studio" });
+    if (!authorized) {
+      setNote("Не удалось автоматически войти через Telegram.", true);
+    }
+  }
+
+  if (authorized) {
+    setAuthGateVisible(false);
   } else {
+    state.accessToken = "";
+    state.refreshToken = "";
+    saveState();
+    await loadPrivateData();
     await loadHistory();
+    setAuthGateVisible(true);
   }
 
   const autoGoogle = new URLSearchParams(window.location.search).get("google_auto");
@@ -1475,7 +1657,12 @@ async function bootstrap() {
     }, 150);
   }
 
-  switchScreen("feed");
+  if (authorized) {
+    switchScreen(isTelegramMiniAppRuntime() ? "studio" : "feed");
+  } else {
+    setNote("Войди через Google или Telegram, чтобы начать.");
+    switchScreen("feed");
+  }
 }
 
 bootstrap();

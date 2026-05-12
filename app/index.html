@@ -50,7 +50,37 @@
     <noscript><div><img src="https://mc.yandex.ru/watch/109102691" style="position:absolute; left:-9999px;" alt="" /></div></noscript>
     <!-- /Yandex.Metrika counter -->
 
-    <div class="app-shell">
+    <section id="authGate" class="auth-gate">
+      <div class="auth-gate-card">
+        <div class="auth-brand-row">
+          <div class="auth-logo">K</div>
+          <strong>Kartivio</strong>
+        </div>
+        <h1>Вход в Kartivio</h1>
+        <p>Войди через Google или Telegram, чтобы генерировать и редактировать изображения.</p>
+        <div class="auth-actions">
+          <button id="googleAuthButton" class="primary-action auth-primary" type="button">Войти через Google</button>
+          <div id="googleSigninWrap" class="google-signin-wrap is-hidden">
+            <div id="googleSigninButton"></div>
+          </div>
+          <button id="authButton" class="soft-btn auth-btn" type="button">Войти через Telegram</button>
+        </div>
+        <p id="authNote" class="note"></p>
+        <section id="devPanel" class="panel-card auth-dev is-hidden">
+          <label class="field">
+            <span>API Base URL (dev)</span>
+            <input id="apiBaseInput" type="text" placeholder="https://api.kartivio-ai.ru" />
+          </label>
+          <p id="envHint" class="note"></p>
+        </section>
+        <a class="bot-link" href="https://t.me/kartivio_ai_bot" target="_blank" rel="noreferrer">
+          <i data-lucide="message-circle"></i>
+          <span>Открыть бота</span>
+        </a>
+      </div>
+    </section>
+
+    <div id="appShell" class="app-shell">
       <header class="app-header">
         <button class="avatar-chip" id="profileAvatar" type="button" data-nav-target="profile">K</button>
         <div class="brand-title" id="brandName">Kartivio</div>
@@ -208,19 +238,20 @@
           </section>
 
           <section class="panel-card">
-            <label class="field">
-              <span>API Base URL</span>
-              <input id="apiBaseInput" type="text" placeholder="https://api.kartivio-ai.ru" />
-            </label>
-            <div class="auth-actions">
-              <button id="authButton" class="soft-btn auth-btn" type="button">Войти через Telegram</button>
-              <button id="googleAuthButton" class="soft-btn auth-btn" type="button">Войти через Google</button>
-              <div id="googleSigninWrap" class="google-signin-wrap is-hidden">
-                <div id="googleSigninButton"></div>
-              </div>
+            <div class="section-row section-row-tight">
+              <h3>Способы входа</h3>
             </div>
-            <p id="envHint" class="note"></p>
-            <p id="authNote" class="note"></p>
+            <div class="identity-grid">
+              <article class="identity-item">
+                <span>Google</span>
+                <strong id="identityGoogle">—</strong>
+              </article>
+              <article class="identity-item">
+                <span>Telegram</span>
+                <strong id="identityTelegram">—</strong>
+              </article>
+            </div>
+            <p class="note">Привязка Telegram к веб-аккаунту добавляется следующим этапом.</p>
           </section>
 
           <a class="bot-link" href="https://t.me/kartivio_ai_bot" target="_blank" rel="noreferrer">
@@ -254,6 +285,6 @@
     </div>
 
     <script src="https://accounts.google.com/gsi/client" async defer></script>
-    <script src="./app.js?v=20260509b"></script>
+    <script src="./app.js?v=20260512b"></script>
   </body>
 </html>
