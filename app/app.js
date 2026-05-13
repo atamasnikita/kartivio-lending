@@ -9,6 +9,9 @@ const DEFAULT_PROD_API_BASE = "https://api.kartivio-ai.ru";
 const DEFAULT_LOCAL_API_BASE = "http://127.0.0.1:8093";
 const DEFAULT_NGROK_API_BASE = "https://sweptback-semivolcanic-reagan.ngrok-free.dev";
 const GOOGLE_CLIENT_ID_META_NAME = "kartivio-google-client-id";
+const MAX_SOURCE_IMAGES = 3;
+const TEMPLATE_IMAGE_PRELOAD_TIMEOUT_MS = 6000;
+const TEMPLATE_SKELETON_RATIOS = ["1 / 1", "4 / 5", "3 / 4", "5 / 4", "2 / 3", "3 / 2"];
 
 const MODEL_COSTS = {
   "gemini-3.1-flash-image-preview": 10,
@@ -129,11 +132,19 @@ const state = {
   activeImageRenderToken: 0,
   imageBlobUrlCache: new Map(),
   currentScreen: "feed",
+  templates: [],
+  templatesLoading: false,
+  templatesRenderToken: 0,
+  selectedTemplateFilter: "all",
+  activeTemplateModalId: "",
+  activeTemplateModalItem: null,
   topups: [],
   selectedTopupCode: "",
   linkedProviders: new Set(),
   telegramLinkToken: "",
   telegramLinkPollTimer: null,
+  sourceImageFiles: [],
+  sourceImagePreviewUrls: [],
 };
 
 const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
@@ -161,6 +172,7 @@ const telegramLinkNote = document.getElementById("telegramLinkNote");
 const plansGrid = document.getElementById("plansGrid");
 const plansActionButton = document.getElementById("plansActionButton");
 const plansNote = document.getElementById("plansNote");
+const templateFilterChips = document.getElementById("templateFilterChips");
 const templatesGrid = document.getElementById("templatesGrid");
 const promptInput = document.getElementById("promptInput");
 const modelChips = document.getElementById("modelChips");
@@ -169,7 +181,13 @@ const ratioChips = document.getElementById("ratioChips");
 const sourceImageInput = document.getElementById("sourceImageInput");
 const uploadPhotoButton = document.getElementById("uploadPhotoButton");
 const uploadDropzone = document.getElementById("uploadDropzone");
+const dropzoneEmptyState = document.getElementById("dropzoneEmptyState");
 const dropzoneTitle = document.getElementById("dropzoneTitle");
+const sourceImagePreviewGrid = document.getElementById("sourceImagePreviewGrid");
+const dropzonePreviewBadge = document.getElementById("dropzonePreviewBadge");
+const clearSourceImageButton = document.getElementById("clearSourceImageButton");
+const sourceTipsButton = document.getElementById("sourceTipsButton");
+const sourceTipsPanel = document.getElementById("sourceTipsPanel");
 const sourceImageMeta = document.getElementById("sourceImageMeta");
 const createButton = document.getElementById("createButton");
 const createNote = document.getElementById("createNote");
@@ -182,6 +200,15 @@ const activeJobMeta = document.getElementById("activeJobMeta");
 const activeResult = document.getElementById("activeResult");
 const historyList = document.getElementById("historyList");
 const refreshHistoryButton = document.getElementById("refreshHistoryButton");
+const templateModal = document.getElementById("templateModal");
+const templateModalClose = document.getElementById("templateModalClose");
+const templateModalImage = document.getElementById("templateModalImage");
+const templateModalTitle = document.getElementById("templateModalTitle");
+const templateModalCategory = document.getElementById("templateModalCategory");
+const templateModalPrompt = document.getElementById("templateModalPrompt");
+const templateCopyPromptButton = document.getElementById("templateCopyPromptButton");
+const templateUseButton = document.getElementById("templateUseButton");
+const templateModalNote = document.getElementById("templateModalNote");
 const navButtons = Array.from(document.querySelectorAll("[data-nav]"));
 const jumpButtons = Array.from(document.querySelectorAll("[data-nav-target]"));
 const screens = Array.from(document.querySelectorAll("[data-screen]"));
@@ -665,6 +692,7 @@ function switchScreen(nextScreen) {
   if (!target) {
     return;
   }
+  closeTemplateModal();
   state.currentScreen = target;
   for (const screen of screens) {
     screen.classList.toggle("screen-active", screen.dataset.screen === target);
@@ -679,15 +707,211 @@ function switchScreen(nextScreen) {
   }
 }
 
-function renderSelectedSourceImage() {
-  const file = sourceImageInput.files && sourceImageInput.files[0] ? sourceImageInput.files[0] : null;
-  if (!file) {
-    dropzoneTitle.textContent = "Добавить фото";
-    sourceImageMeta.textContent = "Файл не выбран";
+function sourceImageFiles() {
+  return Array.isArray(state.sourceImageFiles) ? state.sourceImageFiles : [];
+}
+
+function sourceImageFilesForUpload() {
+  return sourceImageFiles().slice(0, MAX_SOURCE_IMAGES);
+}
+
+function selectedFilesFromInput() {
+  if (!sourceImageInput || !sourceImageInput.files) {
+    return [];
+  }
+  return Array.from(sourceImageInput.files).filter((item) => item instanceof File);
+}
+
+function revokeSourceImagePreview() {
+  for (const url of state.sourceImagePreviewUrls) {
+    URL.revokeObjectURL(url);
+  }
+  state.sourceImagePreviewUrls = [];
+}
+
+function sourceImageSizeLabel(bytes) {
+  const mb = Number(bytes || 0) / 1024 / 1024;
+  if (mb <= 0) {
+    return "0 MB";
+  }
+  if (mb < 1) {
+    return `${mb.toFixed(2)} MB`;
+  }
+  return `${mb.toFixed(1)} MB`;
+}
+
+function sourceImageTotalSizeLabel(files) {
+  const totalBytes = files.reduce((sum, file) => sum + Number(file.size || 0), 0);
+  return sourceImageSizeLabel(totalBytes);
+}
+
+function setSourceImagePreviewFromFiles(files) {
+  revokeSourceImagePreview();
+  if (!files.length) {
     return;
   }
-  dropzoneTitle.textContent = file.name;
-  sourceImageMeta.textContent = `${Math.max(1, Math.round(file.size / 1024 / 1024))} MB`;
+  state.sourceImagePreviewUrls = files.map((file) => URL.createObjectURL(file));
+}
+
+function fileIdentity(file) {
+  return `${file.name}::${file.size}::${file.lastModified}::${file.type}`;
+}
+
+function setSourceImages(files) {
+  state.sourceImageFiles = files.slice(0, MAX_SOURCE_IMAGES);
+  setSourceImagePreviewFromFiles(state.sourceImageFiles);
+}
+
+function appendSourceImages(filesToAppend) {
+  const next = sourceImageFiles().slice();
+  const seen = new Set(next.map((item) => fileIdentity(item)));
+  let skipped = 0;
+
+  for (const file of filesToAppend) {
+    if (next.length >= MAX_SOURCE_IMAGES) {
+      skipped += 1;
+      continue;
+    }
+    const key = fileIdentity(file);
+    if (seen.has(key)) {
+      skipped += 1;
+      continue;
+    }
+    seen.add(key);
+    next.push(file);
+  }
+  setSourceImages(next);
+  return { skipped };
+}
+
+function removeSourceImageAt(index) {
+  const current = sourceImageFiles();
+  if (index < 0 || index >= current.length) {
+    return;
+  }
+  const next = current.filter((_item, itemIndex) => itemIndex !== index);
+  setSourceImages(next);
+}
+
+function openSourceImagePicker() {
+  if (!sourceImageInput) {
+    return;
+  }
+  sourceImageInput.value = "";
+  if (typeof sourceImageInput.showPicker === "function") {
+    try {
+      sourceImageInput.showPicker();
+      return;
+    } catch (_error) {
+      // fallback to click() for environments where showPicker is unavailable or blocked
+    }
+  }
+  sourceImageInput.click();
+}
+
+function clearSelectedSourceImage() {
+  if (sourceImageInput) {
+    sourceImageInput.value = "";
+  }
+  setSourceImages([]);
+  renderSelectedSourceImage();
+}
+
+function renderSelectedSourceImage() {
+  const files = sourceImageFiles();
+  const hasFiles = files.length > 0;
+
+  if (!files.length) {
+    dropzoneTitle.textContent = "Добавить фото";
+    sourceImageMeta.textContent = "Файл не выбран";
+    uploadDropzone.classList.remove("has-image");
+    if (dropzoneEmptyState) {
+      dropzoneEmptyState.classList.remove("is-hidden");
+    }
+    if (sourceImagePreviewGrid) {
+      sourceImagePreviewGrid.classList.add("is-hidden");
+      sourceImagePreviewGrid.innerHTML = "";
+    }
+    if (dropzonePreviewBadge) {
+      dropzonePreviewBadge.classList.add("is-hidden");
+    }
+    if (clearSourceImageButton) {
+      clearSourceImageButton.classList.add("is-hidden");
+    }
+    return;
+  }
+
+  const totalCount = files.length;
+  dropzoneTitle.textContent = totalCount === 1 ? files[0].name : `Выбрано ${totalCount} фото`;
+  sourceImageMeta.textContent = `${totalCount} фото · ${sourceImageTotalSizeLabel(files)}`;
+
+  if (hasFiles && sourceImagePreviewGrid) {
+    sourceImagePreviewGrid.innerHTML = "";
+    for (const [index, file] of files.entries()) {
+      const cell = document.createElement("figure");
+      cell.className = "dropzone-preview-thumb";
+
+      const img = document.createElement("img");
+      img.src = state.sourceImagePreviewUrls[index] || "";
+      img.alt = `Референс ${index + 1}: ${file.name}`;
+      img.loading = "lazy";
+      cell.appendChild(img);
+
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.className = "dropzone-thumb-remove";
+      removeBtn.setAttribute("aria-label", `Убрать референс ${index + 1}`);
+      removeBtn.textContent = "×";
+      removeBtn.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        removeSourceImageAt(index);
+        renderSelectedSourceImage();
+        renderSelectedTemplateCard();
+        setCreateNote("Референс удален.");
+      });
+      cell.appendChild(removeBtn);
+
+      sourceImagePreviewGrid.appendChild(cell);
+    }
+    sourceImagePreviewGrid.classList.remove("is-hidden");
+    uploadDropzone.classList.add("has-image");
+  } else {
+    uploadDropzone.classList.remove("has-image");
+    if (sourceImagePreviewGrid) {
+      sourceImagePreviewGrid.classList.add("is-hidden");
+      sourceImagePreviewGrid.innerHTML = "";
+    }
+  }
+  if (dropzoneEmptyState) {
+    dropzoneEmptyState.classList.toggle("is-hidden", hasFiles);
+  }
+  if (dropzonePreviewBadge) {
+    dropzonePreviewBadge.textContent = `${files.length} фото для редактирования`;
+    dropzonePreviewBadge.classList.toggle("is-hidden", !hasFiles);
+  }
+  if (clearSourceImageButton) {
+    clearSourceImageButton.classList.remove("is-hidden");
+  }
+}
+
+function handleSourceImageChange() {
+  const pickedFiles = selectedFilesFromInput();
+  if (sourceImageInput) {
+    sourceImageInput.value = "";
+  }
+  if (!pickedFiles.length) {
+    return;
+  }
+
+  const { skipped } = appendSourceImages(pickedFiles);
+  if (skipped > 0) {
+    setCreateNote(`Добавлено до ${MAX_SOURCE_IMAGES} уникальных фото. Лишние пропущены.`, true);
+  } else {
+    refreshGenerationCostNote();
+  }
+  renderSelectedSourceImage();
+  renderSelectedTemplateCard();
 }
 
 function clearSelectedTemplate({ clearPrompt } = { clearPrompt: false }) {
@@ -703,15 +927,24 @@ function selectedTemplatePromptStatus() {
   if (!state.selectedTemplate) {
     return "";
   }
+  const hasSourceImage = sourceImageFilesForUpload().length > 0;
   const currentPrompt = String(promptInput.value || "").trim();
   const sourcePrompt = String(state.selectedTemplate.prompt || "").trim();
   if (!currentPrompt) {
-    return "Промпт очищен";
+    return hasSourceImage ? "Промпт очищен · фото добавлено" : "Промпт очищен";
   }
   if (currentPrompt === sourcePrompt) {
-    return "Шаблон вставлен без изменений";
+    return hasSourceImage ? "Шаблон вставлен · фото добавлено" : "Шаблон вставлен без изменений";
   }
-  return "Шаблон выбран, промпт изменен";
+  return hasSourceImage ? "Шаблон выбран · промпт изменен · фото добавлено" : "Шаблон выбран, промпт изменен";
+}
+
+function toggleSourceTips(forceVisible = null) {
+  if (!sourceTipsPanel) {
+    return;
+  }
+  const nextVisible = forceVisible === null ? sourceTipsPanel.classList.contains("is-hidden") : Boolean(forceVisible);
+  sourceTipsPanel.classList.toggle("is-hidden", !nextVisible);
 }
 
 function renderSelectedTemplateCard() {
@@ -1095,6 +1328,7 @@ function selectTemplate(item) {
     category: item.category,
     prompt: item.prompt,
     preview_image_url: item.preview_image_url,
+    full_image_url: item.full_image_url,
   };
   promptInput.value = item.prompt || "";
   renderSelectedTemplateCard();
@@ -1102,28 +1336,279 @@ function selectTemplate(item) {
   promptInput.focus();
 }
 
-function renderTemplates(payload) {
-  const items = Array.isArray(payload && payload.items) ? payload.items : [];
-  templatesGrid.innerHTML = "";
-  if (!items.length) {
-    templatesGrid.innerHTML = '<article class="tool-card"><div class="tool-overlay"><strong>Скоро</strong></div></article>';
+function normalizeTemplateCategory(raw) {
+  return String(raw || "").trim() || "Разное";
+}
+
+function templatePreviewUrl(item) {
+  const preview = String(item.preview_image_url || "").trim();
+  return preview || "https://picsum.photos/seed/kartivio-fallback/720/960";
+}
+
+function templateFullUrl(item) {
+  const full = String(item.full_image_url || "").trim();
+  return full || templatePreviewUrl(item);
+}
+
+function templateFilterLabel(filterId) {
+  return filterId === "all" ? "Все темы" : filterId;
+}
+
+function currentTemplateModalItem() {
+  if (state.activeTemplateModalItem) {
+    return state.activeTemplateModalItem;
+  }
+  if (!state.activeTemplateModalId) {
+    return null;
+  }
+  return state.templates.find((item) => item.id === state.activeTemplateModalId) || null;
+}
+
+function setTemplateModalNote(message, isError = false) {
+  if (!templateModalNote) {
     return;
   }
-  for (const item of items.slice(0, 8)) {
+  templateModalNote.textContent = message;
+  templateModalNote.style.color = isError ? "#ff8f8f" : "#8f98b0";
+}
+
+async function copyPromptToClipboard(prompt) {
+  const value = String(prompt || "").trim();
+  if (!value) {
+    throw new Error("Промпт пустой.");
+  }
+  if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+  const area = document.createElement("textarea");
+  area.value = value;
+  area.setAttribute("readonly", "true");
+  area.style.position = "absolute";
+  area.style.left = "-9999px";
+  document.body.appendChild(area);
+  area.select();
+  const copied = document.execCommand("copy");
+  area.remove();
+  if (!copied) {
+    throw new Error("Копирование не поддерживается в этом браузере.");
+  }
+}
+
+function closeTemplateModal() {
+  state.activeTemplateModalId = "";
+  state.activeTemplateModalItem = null;
+  if (templateModal) {
+    templateModal.classList.add("is-hidden");
+  }
+  document.body.classList.remove("template-modal-open");
+  setTemplateModalNote("");
+}
+
+function openTemplateModal(item) {
+  state.activeTemplateModalId = item.id;
+  state.activeTemplateModalItem = { ...item };
+  if (!templateModal) {
+    return;
+  }
+  const imageUrl = templateFullUrl(item) || "https://picsum.photos/seed/kartivio-template/1080/1440";
+  templateModalImage.src = imageUrl;
+  templateModalImage.alt = item.title || "Шаблон";
+  templateModalTitle.textContent = item.title || "Шаблон";
+  templateModalCategory.textContent = normalizeTemplateCategory(item.category);
+  templateModalPrompt.textContent = item.prompt || "";
+  setTemplateModalNote("");
+  templateModal.classList.remove("is-hidden");
+  document.body.classList.add("template-modal-open");
+}
+
+function templateFilters() {
+  const categories = [];
+  const seen = new Set();
+  for (const item of state.templates) {
+    const category = normalizeTemplateCategory(item.category);
+    if (seen.has(category)) {
+      continue;
+    }
+    seen.add(category);
+    categories.push(category);
+  }
+  return ["all", ...categories];
+}
+
+function renderTemplateFilters() {
+  if (!templateFilterChips) {
+    return;
+  }
+  const filters = templateFilters();
+  if (!filters.includes(state.selectedTemplateFilter)) {
+    state.selectedTemplateFilter = "all";
+  }
+  templateFilterChips.innerHTML = "";
+
+  for (const filterId of filters) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "template-filter-chip";
+    button.textContent = templateFilterLabel(filterId);
+    button.setAttribute("role", "tab");
+    const isActive = state.selectedTemplateFilter === filterId;
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-selected", isActive ? "true" : "false");
+    button.addEventListener("click", () => {
+      state.selectedTemplateFilter = filterId;
+      renderTemplateFilters();
+      renderTemplateCards();
+    });
+    templateFilterChips.appendChild(button);
+  }
+}
+
+function filteredTemplateItems() {
+  if (state.selectedTemplateFilter === "all") {
+    return state.templates;
+  }
+  return state.templates.filter((item) => normalizeTemplateCategory(item.category) === state.selectedTemplateFilter);
+}
+
+function renderTemplateSkeleton(count = 6) {
+  const total = Math.min(Math.max(Number(count || 0), 6), 18);
+  templatesGrid.innerHTML = "";
+  for (let index = 0; index < total; index += 1) {
+    const ratio = TEMPLATE_SKELETON_RATIOS[index % TEMPLATE_SKELETON_RATIOS.length];
     const card = document.createElement("article");
-    card.className = "tool-card";
-    const imageUrl = item.preview_image_url || "https://picsum.photos/seed/kartivio-fallback/720/960";
+    card.className = "tool-card tool-card-skeleton";
+    card.style.setProperty("--template-ratio", ratio);
     card.innerHTML = `
-      <img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(item.title)}" loading="lazy" />
+      <div class="tool-media"></div>
       <div class="tool-overlay">
-        <strong>${escapeHtml(item.title)}</strong>
-        <p>${escapeHtml(item.category)}</p>
-        <button class="soft-btn" type="button">Использовать</button>
+        <strong class="skeleton-line skeleton-line-title"></strong>
+        <p class="skeleton-line skeleton-line-subtitle"></p>
       </div>
     `;
-    card.querySelector("button").addEventListener("click", () => selectTemplate(item));
     templatesGrid.appendChild(card);
   }
+}
+
+function preloadTemplateImageMeta(url) {
+  return new Promise((resolve) => {
+    const image = new Image();
+    let done = false;
+    const finish = (result) => {
+      if (done) {
+        return;
+      }
+      done = true;
+      resolve(result);
+    };
+    const timeout = window.setTimeout(() => {
+      finish({ ratio: 1 });
+    }, TEMPLATE_IMAGE_PRELOAD_TIMEOUT_MS);
+
+    image.onload = () => {
+      window.clearTimeout(timeout);
+      const width = Number(image.naturalWidth || 0);
+      const height = Number(image.naturalHeight || 0);
+      if (width > 0 && height > 0) {
+        finish({ ratio: width / height });
+        return;
+      }
+      finish({ ratio: 1 });
+    };
+    image.onerror = () => {
+      window.clearTimeout(timeout);
+      finish({ ratio: 1 });
+    };
+    image.src = url;
+  });
+}
+
+async function hydrateTemplatesWithImageMeta(items, token) {
+  const prepared = await Promise.all(
+    items.map(async (item) => {
+      const url = templatePreviewUrl(item);
+      const meta = await preloadTemplateImageMeta(url);
+      return {
+        ...item,
+        preview_image_url: url,
+        preview_ratio: Number(meta.ratio) > 0 ? Number(meta.ratio) : 1,
+      };
+    }),
+  );
+  if (token !== state.templatesRenderToken) {
+    return;
+  }
+  state.templates = prepared;
+  state.templatesLoading = false;
+  renderTemplateFilters();
+  renderTemplateCards();
+}
+
+function renderTemplateCards() {
+  const items = filteredTemplateItems();
+  if (state.templatesLoading) {
+    renderTemplateSkeleton(items.length || 6);
+    return;
+  }
+  templatesGrid.innerHTML = "";
+  if (!items.length) {
+    templatesGrid.innerHTML = '<article class="tool-card"><div class="tool-overlay"><strong>Нет шаблонов</strong><p>Попробуй другой фильтр</p></div></article>';
+    return;
+  }
+
+  for (const item of items) {
+    const card = document.createElement("article");
+    card.className = "tool-card";
+    card.setAttribute("role", "button");
+    card.setAttribute("tabindex", "0");
+    const imageUrl = templatePreviewUrl(item);
+    const ratio = Number(item.preview_ratio || 1);
+    card.style.setProperty("--template-ratio", Number.isFinite(ratio) && ratio > 0 ? String(ratio) : "1");
+    card.innerHTML = `
+      <div class="tool-media">
+        <img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(item.title)}" loading="lazy" decoding="async" />
+      </div>
+      <div class="tool-overlay">
+        <strong>${escapeHtml(item.title)}</strong>
+        <p>${escapeHtml(normalizeTemplateCategory(item.category))}</p>
+      </div>
+    `;
+    card.addEventListener("click", () => openTemplateModal(item));
+    card.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        openTemplateModal(item);
+      }
+    });
+    templatesGrid.appendChild(card);
+  }
+}
+
+function renderTemplates(payload) {
+  const items = Array.isArray(payload && payload.items) ? payload.items : [];
+  const normalized = items.map((item) => ({
+    id: String(item.id || "").trim(),
+    title: String(item.title || "").trim() || "Шаблон",
+    category: normalizeTemplateCategory(item.category),
+    prompt: String(item.prompt || "").trim(),
+    preview_image_url: String(item.preview_image_url || "").trim(),
+    full_image_url: String(item.full_image_url || "").trim(),
+  })).filter((item) => item.id && item.prompt);
+  state.templatesRenderToken += 1;
+  const token = state.templatesRenderToken;
+  state.templates = normalized;
+  state.templatesLoading = true;
+  renderTemplateFilters();
+  renderTemplateSkeleton(normalized.length || 6);
+  hydrateTemplatesWithImageMeta(normalized, token).catch(() => {
+    if (token !== state.templatesRenderToken) {
+      return;
+    }
+    state.templatesLoading = false;
+    state.templates = normalized.map((item) => ({ ...item, preview_ratio: 1 }));
+    renderTemplateFilters();
+    renderTemplateCards();
+  });
 }
 
 function jobStatusLabel(status) {
@@ -1351,13 +1836,15 @@ async function createTextGeneration(prompt, imageModel, outputSize, clientReques
   });
 }
 
-async function createEditGeneration(prompt, imageModel, outputSize, sourceImage, clientRequestId) {
+async function createEditGeneration(prompt, imageModel, outputSize, sourceImages, clientRequestId) {
   const form = new FormData();
   form.append("prompt", prompt);
   form.append("image_model", imageModel);
   form.append("output_size", outputSize);
   form.append("client_request_id", clientRequestId);
-  form.append("source_image", sourceImage);
+  for (const sourceImage of sourceImages) {
+    form.append("source_image", sourceImage);
+  }
   return authorizedMultipart("/v1/generations/edit", form, {
     idempotencyKey: clientRequestId,
   });
@@ -1386,8 +1873,8 @@ async function handleCreate() {
   const prompt = promptInput.value.trim();
   const imageModel = state.selectedImageModel || DEFAULT_IMAGE_MODEL;
   const outputSize = currentOutputSizeSelection();
-  const selectedFile = sourceImageInput.files && sourceImageInput.files[0] ? sourceImageInput.files[0] : null;
-  const sourceImage = selectedFile instanceof File ? selectedFile : null;
+  const sourceImages = sourceImageFilesForUpload();
+  const totalSelectedFiles = sourceImageFiles().length;
   const cost = selectedGenerationCost();
 
   try {
@@ -1398,21 +1885,23 @@ async function handleCreate() {
     if (!outputSize) {
       throw new Error("Недоступная комбинация разрешения и соотношения.");
     }
-    if (selectedFile && !(selectedFile instanceof File)) {
-      throw new Error("Не удалось прочитать файл. Выбери фото заново.");
+    if (totalSelectedFiles > MAX_SOURCE_IMAGES) {
+      throw new Error(`Можно загрузить не более ${MAX_SOURCE_IMAGES} фото.`);
     }
-    if (sourceImage) {
+    if (sourceImages.length > 0) {
       const maxBytes = 10 * 1024 * 1024;
-      const mime = String(sourceImage.type || "").toLowerCase();
       const allowedMime = new Set(["image/png", "image/jpeg", "image/webp"]);
-      if (!sourceImage.size) {
-        throw new Error("Файл пустой. Выбери другое фото.");
-      }
-      if (sourceImage.size > maxBytes) {
-        throw new Error("Файл больше 10 MB. Сожми изображение и повтори.");
-      }
-      if (mime && !allowedMime.has(mime)) {
-        throw new Error("Поддерживаются только PNG, JPG и WEBP.");
+      for (const sourceImage of sourceImages) {
+        const mime = String(sourceImage.type || "").toLowerCase();
+        if (!sourceImage.size) {
+          throw new Error("Один из файлов пустой. Выбери другое фото.");
+        }
+        if (sourceImage.size > maxBytes) {
+          throw new Error("Один из файлов больше 10 MB. Сожми изображение и повтори.");
+        }
+        if (mime && !allowedMime.has(mime)) {
+          throw new Error("Поддерживаются только PNG, JPG и WEBP.");
+        }
       }
     }
     createButton.disabled = true;
@@ -1420,8 +1909,8 @@ async function handleCreate() {
     setCreateNote(`Списываю ${cost} credits и ставлю задачу в очередь.`);
 
     const clientRequestId = buildClientRequestId();
-    const job = sourceImage
-      ? await createEditGeneration(prompt, imageModel, outputSize, sourceImage, clientRequestId)
+    const job = sourceImages.length > 0
+      ? await createEditGeneration(prompt, imageModel, outputSize, sourceImages, clientRequestId)
       : await createTextGeneration(prompt, imageModel, outputSize, clientRequestId);
 
     state.activeJobId = job.id;
@@ -1747,7 +2236,7 @@ function bindEvents() {
 
   if (authButton) {
     authButton.addEventListener("click", () => {
-      loginViaTelegram({ silent: false, targetScreen: isTelegramMiniAppRuntime() ? "studio" : "feed" });
+      loginViaTelegram({ silent: false, targetScreen: "feed" });
     });
   }
   if (googleAuthButton) {
@@ -1769,10 +2258,81 @@ function bindEvents() {
     promptInput.focus();
   });
   promptInput.addEventListener("input", syncTemplateStateFromPrompt);
+  if (templateUseButton) {
+    templateUseButton.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const item = currentTemplateModalItem();
+      if (!item) {
+        setTemplateModalNote("Шаблон не найден.", true);
+        return;
+      }
+      selectTemplate(item);
+      setCreateNote("Шаблон выбран и промпт вставлен.");
+    });
+  }
+  if (templateCopyPromptButton) {
+    templateCopyPromptButton.addEventListener("click", async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const item = currentTemplateModalItem();
+      if (!item) {
+        setTemplateModalNote("Шаблон не найден.", true);
+        return;
+      }
+      try {
+        await copyPromptToClipboard(item.prompt);
+        setTemplateModalNote("Промпт скопирован.");
+      } catch (error) {
+        setTemplateModalNote(`Не удалось скопировать: ${error.message}`, true);
+      }
+    });
+  }
+  if (templateModalClose) {
+    templateModalClose.addEventListener("click", closeTemplateModal);
+  }
+  if (templateModal) {
+    templateModal.addEventListener("click", (event) => {
+      if (event.target === templateModal) {
+        closeTemplateModal();
+      }
+    });
+  }
 
-  uploadPhotoButton.addEventListener("click", () => sourceImageInput.click());
-  uploadDropzone.addEventListener("click", () => sourceImageInput.click());
-  sourceImageInput.addEventListener("change", renderSelectedSourceImage);
+  uploadPhotoButton.addEventListener("click", () => openSourceImagePicker());
+  uploadDropzone.addEventListener("click", (event) => {
+    if (
+      event.target instanceof Element &&
+      (event.target.closest("#clearSourceImageButton") || event.target.closest(".dropzone-thumb-remove"))
+    ) {
+      return;
+    }
+    openSourceImagePicker();
+  });
+  uploadDropzone.addEventListener("keydown", (event) => {
+    const key = event.key;
+    if (key === "Enter" || key === " ") {
+      event.preventDefault();
+      openSourceImagePicker();
+    }
+  });
+  sourceImageInput.addEventListener("change", handleSourceImageChange);
+  if (clearSourceImageButton) {
+    clearSourceImageButton.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      clearSelectedSourceImage();
+      renderSelectedTemplateCard();
+      setCreateNote("Фото для редактирования убрано.");
+    });
+  }
+  if (sourceTipsButton) {
+    sourceTipsButton.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      toggleSourceTips(null);
+    });
+  }
 
   for (const button of navButtons) {
     button.addEventListener("click", () => switchScreen(button.dataset.nav));
@@ -1787,6 +2347,27 @@ function bindEvents() {
       return;
     }
     buyPackage(state.selectedTopupCode);
+  });
+
+  window.addEventListener("beforeunload", () => {
+    revokeSourceImagePreview();
+  });
+  document.addEventListener("click", (event) => {
+    if (!sourceTipsPanel || !sourceTipsButton) {
+      return;
+    }
+    if (
+      event.target instanceof Element &&
+      (sourceTipsPanel.contains(event.target) || sourceTipsButton.contains(event.target))
+    ) {
+      return;
+    }
+    toggleSourceTips(false);
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && templateModal && !templateModal.classList.contains("is-hidden")) {
+      closeTemplateModal();
+    }
   });
 }
 
@@ -1822,7 +2403,7 @@ async function bootstrap() {
 
   if (!authorized && isTelegramMiniAppRuntime()) {
     setNote("Выполняю вход через Telegram...");
-    authorized = await loginViaTelegram({ silent: true, targetScreen: "studio" });
+    authorized = await loginViaTelegram({ silent: true, targetScreen: "feed" });
     if (!authorized) {
       setNote("Не удалось автоматически войти через Telegram.", true);
     }
@@ -1847,7 +2428,7 @@ async function bootstrap() {
   }
 
   if (authorized) {
-    switchScreen(isTelegramMiniAppRuntime() ? "studio" : "feed");
+    switchScreen("feed");
   } else {
     setNote("Войди через Google или Telegram, чтобы начать.");
     switchScreen("feed");

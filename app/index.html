@@ -10,7 +10,7 @@
       content="547797863553-g3jsqvf2p31p0ffu029f1p25kjjdn2bn.apps.googleusercontent.com"
     />
     <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
-    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./styles.css?v=20260513i" />
     <script src="https://telegram.org/js/telegram-web-app.js?62"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
   </head>
@@ -93,43 +93,13 @@
       <main class="app-main">
         <section class="screen screen-active" data-screen="feed">
           <div class="section-row">
-            <h2>AI инструменты</h2>
+            <h2>Лента шаблонов</h2>
             <button class="icon-btn" type="button" data-nav-target="studio">
               <i data-lucide="chevron-right"></i>
             </button>
           </div>
+          <div id="templateFilterChips" class="template-filter-row" role="tablist" aria-label="Фильтр тем"></div>
           <div id="templatesGrid" class="tools-grid"></div>
-
-          <div class="section-row">
-            <h2>Лента</h2>
-          </div>
-          <div class="feed-grid">
-            <article class="feed-card">
-              <h3>Трендовые фото</h3>
-              <p>Подборка обновляется каждый день</p>
-              <button class="soft-btn" type="button" data-nav-target="studio">Попробовать</button>
-            </article>
-            <article class="feed-card">
-              <h3>Стили недели</h3>
-              <p>Готовые промпты под популярные образы</p>
-              <button class="soft-btn" type="button" data-nav-target="studio">Открыть</button>
-            </article>
-          </div>
-
-          <div class="section-row">
-            <h2>Сеты</h2>
-          </div>
-          <div class="placeholder-row">
-            <article class="placeholder-tile">
-              <img src="https://picsum.photos/seed/kartivio-feed-1/640/840" alt="Пример сета" loading="lazy" />
-            </article>
-            <article class="placeholder-tile">
-              <img src="https://picsum.photos/seed/kartivio-feed-2/640/840" alt="Пример сета" loading="lazy" />
-            </article>
-            <article class="placeholder-tile">
-              <img src="https://picsum.photos/seed/kartivio-feed-3/640/840" alt="Пример сета" loading="lazy" />
-            </article>
-          </div>
         </section>
 
         <section class="screen" data-screen="history">
@@ -139,6 +109,7 @@
               <i data-lucide="refresh-cw"></i>
             </button>
           </div>
+          <p class="note history-retention-note">Результаты в истории храним 14 дней.</p>
           <div id="historyList" class="history-grid"></div>
         </section>
 
@@ -160,11 +131,23 @@
             </button>
           </section>
 
-          <button id="uploadDropzone" class="upload-dropzone" type="button">
-            <span class="dropzone-icon"><i data-lucide="image-plus"></i></span>
-            <span class="dropzone-title" id="dropzoneTitle">Добавить фото</span>
-            <span class="dropzone-subtitle">До 10 MB, PNG/JPG/WEBP</span>
-          </button>
+          <div id="uploadDropzone" class="upload-dropzone" role="button" tabindex="0" aria-label="Добавить фото для редактирования">
+            <span id="dropzoneEmptyState" class="dropzone-empty">
+              <span class="dropzone-icon"><i data-lucide="image-plus"></i></span>
+              <span class="dropzone-title" id="dropzoneTitle">Добавить фото</span>
+              <span class="dropzone-subtitle">До 3 фото, до 10 MB каждое, PNG/JPG/WEBP</span>
+            </span>
+            <div id="sourceImagePreviewGrid" class="dropzone-preview-grid is-hidden" aria-label="Превью референсов"></div>
+            <button
+              id="clearSourceImageButton"
+              class="dropzone-clear-btn is-hidden"
+              type="button"
+              aria-label="Убрать фото"
+            >
+              <i data-lucide="x"></i>
+            </button>
+            <span id="dropzonePreviewBadge" class="dropzone-preview-badge is-hidden">Фото для редактирования</span>
+          </div>
 
           <section class="panel-card">
             <textarea id="promptInput" rows="6" placeholder="Напишите, что хотите создать или изменить..."></textarea>
@@ -173,9 +156,31 @@
                 <i data-lucide="paperclip"></i>
                 <span>Добавить фото</span>
               </button>
+              <button id="sourceTipsButton" class="icon-btn help-icon-btn" type="button" aria-label="Рекомендации по фото">
+                <i data-lucide="circle-help"></i>
+              </button>
               <span id="sourceImageMeta" class="muted-inline">Файл не выбран</span>
             </div>
-            <input id="sourceImageInput" type="file" accept="image/png,image/jpeg,image/webp" hidden />
+            <div id="sourceTipsPanel" class="tips-panel is-hidden" role="note">
+              <strong>Рекомендации по референсам</strong>
+              <ul>
+                <li>Лучше 2-3 фото одного человека: фронт, 3/4 и профиль.</li>
+                <li>Без фильтров, масок и сильного ретуша.</li>
+                <li>Лицо крупно, резкость нормальная, без пересвета.</li>
+                <li>Не смешивай фото разных людей.</li>
+              </ul>
+            </div>
+            <p class="storage-note">
+              Результаты генерации храним 14 дней.
+              <a href="/privacy/" target="_blank" rel="noreferrer">Подробнее</a>
+            </p>
+            <input
+              id="sourceImageInput"
+              class="visually-hidden-input"
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              multiple
+            />
           </section>
 
           <details class="settings-panel" open>
@@ -287,7 +292,26 @@
       </nav>
     </div>
 
+    <div id="templateModal" class="template-modal is-hidden" role="dialog" aria-modal="true" aria-labelledby="templateModalTitle">
+      <article class="template-modal-card">
+        <button id="templateModalClose" class="template-modal-close" type="button" aria-label="Закрыть">×</button>
+        <img id="templateModalImage" class="template-modal-image" src="" alt="Превью шаблона" loading="lazy" />
+        <div class="template-modal-body">
+          <strong id="templateModalTitle">Шаблон</strong>
+          <span id="templateModalCategory">Категория</span>
+          <div class="template-modal-prompt-scroll">
+            <p id="templateModalPrompt" class="template-modal-prompt"></p>
+          </div>
+          <div class="template-modal-actions">
+            <button id="templateCopyPromptButton" class="soft-btn" type="button">Скопировать промпт</button>
+            <button id="templateUseButton" class="primary-action template-use-btn" type="button">Выбрать шаблон</button>
+          </div>
+          <p id="templateModalNote" class="note template-modal-note"></p>
+        </div>
+      </article>
+    </div>
+
     <script src="https://accounts.google.com/gsi/client" async defer></script>
-    <script src="./app.js?v=20260512c"></script>
+    <script src="./app.js?v=20260513f"></script>
   </body>
 </html>
