@@ -186,22 +186,38 @@ a {
   position: relative;
   margin-top: 72px;
   padding-bottom: 12px;
-}
-
-.hero-rail {
-  display: grid;
-  grid-template-columns: repeat(8, minmax(170px, 1fr));
-  gap: 14px;
   overflow: hidden;
 }
 
+.hero-rail {
+  display: flex;
+  width: max-content;
+  gap: 14px;
+  will-change: transform;
+  animation: heroRailLoop var(--hero-loop-duration, 40s) linear infinite;
+}
+
+.hero-rail:not(.is-loop-ready) {
+  animation: none;
+}
+
 .hero-rail img {
-  width: 100%;
+  width: clamp(170px, 16vw, 230px);
+  flex: 0 0 clamp(170px, 16vw, 230px);
   height: 220px;
   object-fit: cover;
   border-radius: 18px;
   border: 1px solid #1d2437;
   display: block;
+}
+
+@keyframes heroRailLoop {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(calc(-1 * var(--hero-loop-distance)), 0, 0);
+  }
 }
 
 .section {
@@ -491,13 +507,12 @@ a {
   }
 
   .hero-rail {
-    grid-template-columns: repeat(8, 160px);
-    overflow-x: auto;
-    padding-bottom: 6px;
-    scrollbar-width: thin;
+    gap: 12px;
   }
 
   .hero-rail img {
+    width: 160px;
+    flex-basis: 160px;
     height: 200px;
   }
 
@@ -507,6 +522,13 @@ a {
 
   .how-demo {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-rail {
+    animation: none !important;
+    transform: none !important;
   }
 }
 

@@ -35,6 +35,40 @@
       }));
   }
 
+  function recalculateHeroLoop(heroRail) {
+    if (!heroRail) {
+      return;
+    }
+    const originalsCount = Number(heroRail.dataset.originalCount || 0);
+    if (!originalsCount) {
+      heroRail.classList.remove("is-loop-ready");
+      return;
+    }
+    const images = heroRail.querySelectorAll("img");
+    if (!images || images.length < originalsCount + 1) {
+      heroRail.classList.remove("is-loop-ready");
+      return;
+    }
+    const first = images[0];
+    const firstClone = images[originalsCount];
+    if (!first || !firstClone) {
+      heroRail.classList.remove("is-loop-ready");
+      return;
+    }
+
+    const loopDistance = firstClone.offsetLeft - first.offsetLeft;
+    if (!Number.isFinite(loopDistance) || loopDistance <= 0) {
+      heroRail.classList.remove("is-loop-ready");
+      return;
+    }
+
+    // ~55 px/s: плавный скролл без ощущения рывка
+    const durationSeconds = Math.max(18, Math.min(72, loopDistance / 55));
+    heroRail.style.setProperty("--hero-loop-distance", `${Math.round(loopDistance)}px`);
+    heroRail.style.setProperty("--hero-loop-duration", `${durationSeconds.toFixed(2)}s`);
+    heroRail.classList.add("is-loop-ready");
+  }
+
   function renderHero(heroRail, items) {
     if (!heroRail) {
       return;
@@ -42,14 +76,18 @@
     const finalItems = normalizeHeroItems(items);
     const source = finalItems.length ? finalItems : HERO_FALLBACK;
     heroRail.innerHTML = "";
-    for (let idx = 0; idx < source.length; idx += 1) {
-      const item = source[idx];
+    heroRail.classList.remove("is-loop-ready");
+
+    const appendImage = (item, idx, isClone) => {
       const image = document.createElement("img");
       const fallback = HERO_FALLBACK[idx % HERO_FALLBACK.length];
       image.src = item.src;
       image.alt = item.alt;
       image.loading = "lazy";
       image.decoding = "async";
+      if (isClone) {
+        image.setAttribute("aria-hidden", "true");
+      }
       image.onerror = () => {
         if (image.dataset.fallbackApplied === "1") {
           return;
@@ -59,7 +97,17 @@
         image.alt = fallback.alt;
       };
       heroRail.appendChild(image);
+    };
+
+    for (let idx = 0; idx < source.length; idx += 1) {
+      appendImage(source[idx], idx, false);
     }
+    for (let idx = 0; idx < source.length; idx += 1) {
+      appendImage(source[idx], idx, true);
+    }
+
+    heroRail.dataset.originalCount = String(source.length);
+    requestAnimationFrame(() => recalculateHeroLoop(heroRail));
   }
 
   function applyHowImage(imageEl, placeholderEl, data, fallback) {
@@ -110,6 +158,7 @@
     const manifest = await loadManifest();
 
     renderHero(heroRail, manifest && manifest.hero);
+    window.addEventListener("resize", () => recalculateHeroLoop(heroRail));
     applyHowImage(
       howBeforeImage,
       howBeforePlaceholder,
