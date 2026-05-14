@@ -110,23 +110,87 @@
           <div class="grid grid-4">
             <article class="card problem-card">
               <h3>Долгая и дорогая съемка</h3>
-              <p class="problem-copy">Проблема: студия, фотограф и команда съедают время и бюджет.</p>
-              <p class="solution-copy">Решение: запускаешь фотосессию в приложении и получаешь результат за минуты.</p>
+              <div class="problem-split">
+                <div class="tone tone-problem">
+                  <span class="tone-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false">
+                      <path d="M12 3.5L21 20.5H3L12 3.5zM12 9v5m0 3h.01" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                  </span>
+                  <p>Студия, фотограф и команда съедают время и бюджет.</p>
+                </div>
+                <div class="tone tone-solution">
+                  <span class="tone-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false">
+                      <path d="M20 6L9 17l-5-5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                  </span>
+                  <p>Запускаешь фотосессию в приложении и получаешь результат за минуты.</p>
+                </div>
+              </div>
             </article>
             <article class="card problem-card">
               <h3>Нужен свежий контент регулярно</h3>
-              <p class="problem-copy">Проблема: для соцсетей и рекламы контент быстро устаревает.</p>
-              <p class="solution-copy">Решение: генерируешь новые образы под задачу без повторных съемок.</p>
+              <div class="problem-split">
+                <div class="tone tone-problem">
+                  <span class="tone-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false">
+                      <path d="M12 3.5L21 20.5H3L12 3.5zM12 9v5m0 3h.01" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                  </span>
+                  <p>Для соцсетей и рекламы контент быстро устаревает.</p>
+                </div>
+                <div class="tone tone-solution">
+                  <span class="tone-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false">
+                      <path d="M20 6L9 17l-5-5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                  </span>
+                  <p>Генерируешь новые образы под задачу без повторных съемок.</p>
+                </div>
+              </div>
             </article>
             <article class="card problem-card">
               <h3>Сложно придумать идею кадра</h3>
-              <p class="problem-copy">Проблема: тяжело быстро собрать референсы и сформулировать стиль.</p>
-              <p class="solution-copy">Решение: берешь готовые шаблоны и дорабатываешь промпт под себя.</p>
+              <div class="problem-split">
+                <div class="tone tone-problem">
+                  <span class="tone-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false">
+                      <path d="M12 3.5L21 20.5H3L12 3.5zM12 9v5m0 3h.01" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                  </span>
+                  <p>Тяжело быстро собрать референсы и сформулировать стиль.</p>
+                </div>
+                <div class="tone tone-solution">
+                  <span class="tone-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false">
+                      <path d="M20 6L9 17l-5-5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                  </span>
+                  <p>Берешь готовые шаблоны и дорабатываешь промпт под себя.</p>
+                </div>
+              </div>
             </article>
             <article class="card problem-card">
               <h3>Сервисы без VPN не работают</h3>
-              <p class="problem-copy">Проблема: часть сервисов недоступна без обходных решений.</p>
-              <p class="solution-copy">Решение: Kartivio работает в Telegram и web-приложении без VPN.</p>
+              <div class="problem-split">
+                <div class="tone tone-problem">
+                  <span class="tone-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false">
+                      <path d="M12 3.5L21 20.5H3L12 3.5zM12 9v5m0 3h.01" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                  </span>
+                  <p>Часть сервисов недоступна без обходных решений.</p>
+                </div>
+                <div class="tone tone-solution">
+                  <span class="tone-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false">
+                      <path d="M20 6L9 17l-5-5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                  </span>
+                  <p>Kartivio работает в Telegram и web-приложении без VPN.</p>
+                </div>
+              </div>
             </article>
           </div>
         </div>
@@ -335,14 +399,98 @@
         const faq = document.querySelector(".faq");
         if (!faq) return;
         const items = Array.from(faq.querySelectorAll("details"));
-        for (const item of items) {
-          item.addEventListener("toggle", function () {
-            if (!item.open) return;
-            for (const other of items) {
-              if (other !== item) other.open = false;
-            }
+        const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        const panels = new Map();
+
+        function buildPanel(item) {
+          const summary = item.querySelector("summary");
+          if (!summary) return null;
+
+          let panel = item.querySelector(".faq-answer");
+          if (panel) return panel;
+
+          panel = document.createElement("div");
+          panel.className = "faq-answer";
+          const inner = document.createElement("div");
+          inner.className = "faq-answer-inner";
+
+          const moveNodes = Array.from(item.children).filter((node) => node !== summary);
+          for (const node of moveNodes) inner.appendChild(node);
+          panel.appendChild(inner);
+          item.appendChild(panel);
+          return panel;
+        }
+
+        function closeItem(item) {
+          const panel = panels.get(item);
+          if (!panel || !item.open) return;
+
+          if (reduceMotion) {
+            item.open = false;
+            panel.style.maxHeight = "0px";
+            return;
+          }
+
+          panel.style.maxHeight = panel.scrollHeight + "px";
+          requestAnimationFrame(() => {
+            panel.style.maxHeight = "0px";
+          });
+
+          const onEnd = (event) => {
+            if (event.propertyName !== "max-height") return;
+            panel.removeEventListener("transitionend", onEnd);
+            if (panel.style.maxHeight === "0px") item.open = false;
+          };
+          panel.addEventListener("transitionend", onEnd);
+        }
+
+        function openItem(item) {
+          const panel = panels.get(item);
+          if (!panel) return;
+
+          for (const other of items) {
+            if (other !== item && other.open) closeItem(other);
+          }
+
+          item.open = true;
+
+          if (reduceMotion) {
+            panel.style.maxHeight = "none";
+            return;
+          }
+
+          panel.style.maxHeight = "0px";
+          const targetHeight = panel.scrollHeight;
+          requestAnimationFrame(() => {
+            panel.style.maxHeight = targetHeight + "px";
           });
         }
+
+        for (const item of items) {
+          const summary = item.querySelector("summary");
+          const panel = buildPanel(item);
+          if (!summary || !panel) continue;
+
+          panels.set(item, panel);
+          if (item.open) panel.style.maxHeight = reduceMotion ? "none" : panel.scrollHeight + "px";
+          else panel.style.maxHeight = "0px";
+
+          summary.addEventListener("click", (event) => {
+            event.preventDefault();
+            if (item.open) closeItem(item);
+            else openItem(item);
+          });
+        }
+
+        window.addEventListener("resize", () => {
+          if (reduceMotion) return;
+          for (const item of items) {
+            if (!item.open) continue;
+            const panel = panels.get(item);
+            if (!panel) continue;
+            panel.style.maxHeight = panel.scrollHeight + "px";
+          }
+        });
       })();
     </script>
   </body>
