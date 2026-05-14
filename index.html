@@ -216,55 +216,140 @@
         <div class="container">
           <div class="section-head">
             <h2>Как это работает</h2>
-            <p>Простой путь от исходного фото до готовой ИИ-фотосессии.</p>
+            <p>Пошаговый сценарий: загрузил фото, задал задачу и получил готовый кадр.</p>
           </div>
-          <div class="grid grid-3">
-            <article class="card step-card">
-              <span class="step">01</span>
-              <h3>Загружаешь фото</h3>
-              <p>Добавляешь 1–3 фото, чтобы сохранить лицо и пропорции.</p>
-            </article>
-            <article class="card step-card">
-              <span class="step">02</span>
-              <h3>Даешь задачу</h3>
-              <p>Пишешь промпт, задаешь стиль и формат результата.</p>
-            </article>
-            <article class="card step-card">
-              <span class="step">03</span>
-              <h3>Получаешь результат</h3>
-              <p>Готовые кадры приходят в приложение и в чат бота.</p>
+          <div class="how-flow" id="howFlow">
+            <div class="how-step-list" role="tablist" aria-label="Шаги генерации">
+              <button
+                class="how-step is-active"
+                type="button"
+                role="tab"
+                aria-selected="true"
+                id="howTab1"
+                aria-controls="howScene1"
+                data-how-step="1"
+              >
+                <span class="how-step-index">01</span>
+                <span class="how-step-text">
+                  <strong>Загружаешь фото</strong>
+                  <span>Добавляешь 1–3 фото одного человека без сильных фильтров.</span>
+                </span>
+              </button>
+              <button
+                class="how-step"
+                type="button"
+                role="tab"
+                aria-selected="false"
+                id="howTab2"
+                aria-controls="howScene2"
+                data-how-step="2"
+              >
+                <span class="how-step-index">02</span>
+                <span class="how-step-text">
+                  <strong>Выбираешь шаблон или пишешь промпт</strong>
+                  <span>Берешь готовую идею из ленты или задаешь свой стиль и задачу.</span>
+                </span>
+              </button>
+              <button
+                class="how-step"
+                type="button"
+                role="tab"
+                aria-selected="false"
+                id="howTab3"
+                aria-controls="howScene3"
+                data-how-step="3"
+              >
+                <span class="how-step-index">03</span>
+                <span class="how-step-text">
+                  <strong>Запускаешь генерацию</strong>
+                  <span>Выбираешь модель, формат и соотношение сторон, затем запускаешь.</span>
+                </span>
+              </button>
+              <button
+                class="how-step"
+                type="button"
+                role="tab"
+                aria-selected="false"
+                id="howTab4"
+                aria-controls="howScene4"
+                data-how-step="4"
+              >
+                <span class="how-step-index">04</span>
+                <span class="how-step-text">
+                  <strong>Получаешь результат и скачиваешь</strong>
+                  <span>Готовый кадр приходит в приложение и сохраняется в пару кликов.</span>
+                </span>
+              </button>
+            </div>
+
+            <article class="card how-stage" aria-live="polite">
+              <section class="how-scene is-active" role="tabpanel" id="howScene1" aria-labelledby="howTab1" data-how-scene="1">
+                <span class="how-scene-title">Шаг 1 · Загрузка фото</span>
+                <div class="how-upload-layout">
+                  <figure class="how-thumb">
+                    <img id="howBeforeImage" class="how-thumb-image is-hidden" src="" alt="Исходное фото" loading="lazy" decoding="async" />
+                    <div id="howBeforePlaceholder" class="how-thumb-placeholder">Пример исходного фото</div>
+                  </figure>
+                  <div class="how-upload-drop">
+                    <span class="how-upload-icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" focusable="false">
+                        <path d="M12 16V6m0 0l-3.5 3.5M12 6l3.5 3.5M4 16.5v1.5A2 2 0 0 0 6 20h12a2 2 0 0 0 2-2v-1.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                      </svg>
+                    </span>
+                    <p>Добавить фото</p>
+                    <small>До 3 фото · JPG/PNG/WEBP · до 10 МБ</small>
+                  </div>
+                </div>
+              </section>
+
+              <section class="how-scene" role="tabpanel" id="howScene2" aria-labelledby="howTab2" data-how-scene="2">
+                <span class="how-scene-title">Шаг 2 · Шаблон или свой промпт</span>
+                <div class="how-prompt-layout">
+                  <div class="how-template-chip is-active">Портрет со студийным светом</div>
+                  <div class="how-template-chip">Бизнес-образ в офисе</div>
+                  <div class="how-template-chip">Fashion на улице</div>
+                  <div class="how-prompt-box">
+                    <p>Сделай аккуратный портрет в мягком студийном свете, сохрани черты лица, естественный тон кожи и выразительный взгляд.</p>
+                  </div>
+                </div>
+              </section>
+
+              <section class="how-scene" role="tabpanel" id="howScene3" aria-labelledby="howTab3" data-how-scene="3">
+                <span class="how-scene-title">Шаг 3 · Генерация</span>
+                <div class="how-generate-layout">
+                  <div class="how-setting-row">
+                    <span>Модель</span>
+                    <strong>Nano Banana Pro</strong>
+                  </div>
+                  <div class="how-setting-row">
+                    <span>Соотношение</span>
+                    <strong>3:4</strong>
+                  </div>
+                  <div class="how-setting-row">
+                    <span>Списание</span>
+                    <strong>20 кредитов</strong>
+                  </div>
+                  <button class="how-generate-btn" type="button" disabled>
+                    <span class="how-loader-dots" aria-hidden="true"></span>
+                    Генерация...
+                  </button>
+                </div>
+              </section>
+
+              <section class="how-scene" role="tabpanel" id="howScene4" aria-labelledby="howTab4" data-how-scene="4">
+                <span class="how-scene-title">Шаг 4 · Готовый результат</span>
+                <figure class="how-result-shot">
+                  <img id="howAfterImage" class="how-result-image is-hidden" src="" alt="Результат фотосессии" loading="lazy" decoding="async" />
+                  <div id="howAfterPlaceholder" class="how-result-placeholder">Итоговый кадр</div>
+                </figure>
+                <div class="how-result-actions">
+                  <span class="how-ready-badge">Готово</span>
+                  <button class="how-download-btn" type="button">Скачать</button>
+                </div>
+              </section>
             </article>
           </div>
-          <div class="how-demo">
-            <article class="card how-shot">
-              <span class="how-shot-label">Исходное фото</span>
-              <figure class="how-shot-media">
-                <img
-                  id="howBeforeImage"
-                  class="how-shot-image is-hidden"
-                  src=""
-                  alt="Исходное фото"
-                  loading="lazy"
-                  decoding="async"
-                />
-                <div id="howBeforePlaceholder" class="how-shot-placeholder">Заглушка — добавим твое фото</div>
-              </figure>
-            </article>
-            <article class="card how-shot">
-              <span class="how-shot-label">Результат фотосессии</span>
-              <figure class="how-shot-media">
-                <img
-                  id="howAfterImage"
-                  class="how-shot-image is-hidden"
-                  src=""
-                  alt="Результат фотосессии"
-                  loading="lazy"
-                  decoding="async"
-                />
-                <div id="howAfterPlaceholder" class="how-shot-placeholder">Заглушка — добавим итоговый кадр</div>
-              </figure>
-            </article>
-          </div>
+          <p class="how-flow-note">Обычно 30–90 секунд до результата. Скорость зависит от модели и нагрузки.</p>
         </div>
       </section>
 

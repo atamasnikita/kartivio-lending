@@ -136,6 +136,83 @@
     imageEl.src = source.src;
   }
 
+  function initHowFlow() {
+    const root = document.getElementById("howFlow");
+    if (!root) {
+      return;
+    }
+
+    const stepButtons = Array.from(root.querySelectorAll(".how-step[data-how-step]"));
+    const scenes = Array.from(root.querySelectorAll(".how-scene[data-how-scene]"));
+    if (!stepButtons.length || !scenes.length) {
+      return;
+    }
+
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    let currentStep = Number(stepButtons.find((button) => button.classList.contains("is-active"))?.dataset.howStep || 1);
+    let autoplayTimer = null;
+
+    function syncState(step) {
+      currentStep = step;
+      for (const button of stepButtons) {
+        const isActive = Number(button.dataset.howStep) === step;
+        button.classList.toggle("is-active", isActive);
+        button.setAttribute("aria-selected", isActive ? "true" : "false");
+        button.setAttribute("tabindex", isActive ? "0" : "-1");
+      }
+      for (const scene of scenes) {
+        const isActive = Number(scene.dataset.howScene) === step;
+        scene.classList.toggle("is-active", isActive);
+        scene.setAttribute("aria-hidden", isActive ? "false" : "true");
+        if (isActive) {
+          scene.removeAttribute("hidden");
+        } else {
+          scene.setAttribute("hidden", "");
+        }
+      }
+    }
+
+    function startAutoplay() {
+      if (reduceMotion || stepButtons.length < 2) {
+        return;
+      }
+      if (autoplayTimer) {
+        window.clearInterval(autoplayTimer);
+      }
+      autoplayTimer = window.setInterval(() => {
+        const activeIndex = stepButtons.findIndex((button) => Number(button.dataset.howStep) === currentStep);
+        const nextIndex = activeIndex >= 0 ? (activeIndex + 1) % stepButtons.length : 0;
+        const nextStep = Number(stepButtons[nextIndex].dataset.howStep);
+        syncState(nextStep);
+      }, 5000);
+    }
+
+    for (const button of stepButtons) {
+      button.addEventListener("click", () => {
+        const step = Number(button.dataset.howStep);
+        if (!Number.isFinite(step)) {
+          return;
+        }
+        syncState(step);
+        startAutoplay();
+      });
+    }
+
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) {
+        if (autoplayTimer) {
+          window.clearInterval(autoplayTimer);
+          autoplayTimer = null;
+        }
+        return;
+      }
+      startAutoplay();
+    });
+
+    syncState(currentStep);
+    startAutoplay();
+  }
+
   async function loadManifest() {
     try {
       const response = await fetch(MANIFEST_URL, { cache: "no-store" });
@@ -166,6 +243,7 @@
       HOW_FALLBACK.before
     );
     applyHowImage(howAfterImage, howAfterPlaceholder, manifest && manifest.how && manifest.how.after, HOW_FALLBACK.after);
+    initHowFlow();
   }
 
   document.addEventListener("DOMContentLoaded", initLandingMedia);
