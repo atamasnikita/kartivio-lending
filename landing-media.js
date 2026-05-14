@@ -213,6 +213,36 @@
     startAutoplay();
   }
 
+  function initProblemMobileToggle() {
+    const section = document.getElementById("problems");
+    if (!section) {
+      return;
+    }
+    const toggles = Array.from(section.querySelectorAll(".problem-mobile-toggle button[data-problem-view]"));
+    if (!toggles.length) {
+      return;
+    }
+
+    function applyView(view) {
+      section.setAttribute("data-mobile-view", view);
+      for (const button of toggles) {
+        const active = button.dataset.problemView === view;
+        button.classList.toggle("is-active", active);
+        button.setAttribute("aria-selected", active ? "true" : "false");
+      }
+    }
+
+    for (const button of toggles) {
+      button.addEventListener("click", () => {
+        const view = button.dataset.problemView;
+        if (!view) return;
+        applyView(view);
+      });
+    }
+
+    applyView("pain");
+  }
+
   async function loadManifest() {
     try {
       const response = await fetch(MANIFEST_URL, { cache: "no-store" });
@@ -244,6 +274,7 @@
     );
     applyHowImage(howAfterImage, howAfterPlaceholder, manifest && manifest.how && manifest.how.after, HOW_FALLBACK.after);
     initHowFlow();
+    initProblemMobileToggle();
   }
 
   document.addEventListener("DOMContentLoaded", initLandingMedia);
