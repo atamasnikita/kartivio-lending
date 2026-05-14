@@ -114,26 +114,51 @@
     if (!imageEl || !placeholderEl) {
       return;
     }
-    const source = data && typeof data.src === "string" && data.src.trim() ? data : fallback;
-    if (!source || !source.src) {
+    const preferred = data && typeof data.src === "string" && data.src.trim() ? data : fallback;
+    if (!preferred || !preferred.src) {
       return;
     }
-    const alt = typeof source.alt === "string" && source.alt.trim() ? source.alt.trim() : imageEl.alt;
-    imageEl.alt = alt;
-    imageEl.onload = () => {
+
+    let currentSource = preferred;
+    const fallbackUrl = fallback && typeof fallback.src === "string" && fallback.src.trim() ? fallback.src.trim() : "";
+
+    const showImage = () => {
       imageEl.classList.remove("is-hidden");
       placeholderEl.classList.add("is-hidden");
     };
-    imageEl.onerror = () => {
-      if (source !== fallback && fallback && fallback.src) {
-        imageEl.src = fallback.src;
-        imageEl.alt = fallback.alt || imageEl.alt;
-        return;
-      }
+
+    const showPlaceholder = () => {
       imageEl.classList.add("is-hidden");
       placeholderEl.classList.remove("is-hidden");
     };
-    imageEl.src = source.src;
+
+    const onError = () => {
+      const nextFallback =
+        currentSource !== fallback && fallbackUrl && imageEl.getAttribute("src") !== fallbackUrl ? fallback : null;
+      if (nextFallback) {
+        currentSource = nextFallback;
+        imageEl.alt =
+          typeof nextFallback.alt === "string" && nextFallback.alt.trim() ? nextFallback.alt.trim() : imageEl.alt;
+        imageEl.src = fallbackUrl;
+        return;
+      }
+      showPlaceholder();
+    };
+
+    imageEl.onload = showImage;
+    imageEl.onerror = onError;
+
+    imageEl.alt =
+      typeof currentSource.alt === "string" && currentSource.alt.trim() ? currentSource.alt.trim() : imageEl.alt;
+    imageEl.src = currentSource.src;
+
+    if (imageEl.complete) {
+      if (imageEl.naturalWidth > 0) {
+        showImage();
+      } else {
+        onError();
+      }
+    }
   }
 
   function initHowFlow() {

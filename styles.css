@@ -521,28 +521,34 @@ a {
 }
 
 .how-thumb-image {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
+  transition: opacity 180ms ease;
 }
 
 .how-thumb-image.is-hidden {
-  display: none;
+  opacity: 0;
 }
 
 .how-thumb-placeholder {
-  height: 100%;
+  position: absolute;
+  inset: 0;
   display: grid;
   place-items: center;
   text-align: center;
   color: #8d9db9;
   font-size: 14px;
   padding: 10px;
+  transition: opacity 180ms ease;
 }
 
 .how-thumb-placeholder.is-hidden {
-  display: none;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .how-upload-drop {
@@ -691,31 +697,38 @@ a {
   border: 1px solid #273246;
   background: #0f1623;
   min-height: 246px;
+  position: relative;
 }
 
 .how-result-image {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
+  transition: opacity 180ms ease;
 }
 
 .how-result-image.is-hidden {
-  display: none;
+  opacity: 0;
 }
 
 .how-result-placeholder {
-  min-height: 246px;
+  position: absolute;
+  inset: 0;
   display: grid;
   place-items: center;
   color: #8f9eb9;
   font-size: 15px;
   text-align: center;
   padding: 14px;
+  transition: opacity 180ms ease;
 }
 
 .how-result-placeholder.is-hidden {
-  display: none;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .how-result-actions {
