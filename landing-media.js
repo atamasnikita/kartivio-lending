@@ -123,6 +123,13 @@
     const fallbackUrl = fallback && typeof fallback.src === "string" && fallback.src.trim() ? fallback.src.trim() : "";
 
     const showImage = () => {
+      if (imageEl.naturalWidth > 0 && imageEl.naturalHeight > 0) {
+        const ratio = imageEl.naturalWidth / imageEl.naturalHeight;
+        if (imageEl.id === "howAfterImage") {
+          imageEl.classList.toggle("is-portrait", ratio < 1);
+          imageEl.classList.toggle("is-landscape", ratio >= 1);
+        }
+      }
       imageEl.classList.remove("is-hidden");
       placeholderEl.classList.add("is-hidden");
     };
