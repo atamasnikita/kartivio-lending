@@ -88,7 +88,7 @@
           <p class="hero-note">Без VPN, на русском языке, с оплатой в рублях</p>
         </div>
         <div class="hero-rail-wrap" aria-label="Примеры изображений">
-          <div class="hero-rail">
+          <div id="heroRail" class="hero-rail">
             <img src="https://picsum.photos/seed/kartivio-1/420/560" alt="Пример генерации 1" />
             <img src="https://picsum.photos/seed/kartivio-2/420/560" alt="Пример генерации 2" />
             <img src="https://picsum.photos/seed/kartivio-3/420/560" alt="Пример генерации 3" />
@@ -127,11 +127,31 @@
           <div class="how-demo">
             <article class="card how-shot">
               <span class="how-shot-label">Исходное фото</span>
-              <div class="how-shot-placeholder">Заглушка — добавим твое фото</div>
+              <figure class="how-shot-media">
+                <img
+                  id="howBeforeImage"
+                  class="how-shot-image is-hidden"
+                  src=""
+                  alt="Исходное фото"
+                  loading="lazy"
+                  decoding="async"
+                />
+                <div id="howBeforePlaceholder" class="how-shot-placeholder">Заглушка — добавим твое фото</div>
+              </figure>
             </article>
             <article class="card how-shot">
               <span class="how-shot-label">Результат фотосессии</span>
-              <div class="how-shot-placeholder">Заглушка — добавим итоговый кадр</div>
+              <figure class="how-shot-media">
+                <img
+                  id="howAfterImage"
+                  class="how-shot-image is-hidden"
+                  src=""
+                  alt="Результат фотосессии"
+                  loading="lazy"
+                  decoding="async"
+                />
+                <div id="howAfterPlaceholder" class="how-shot-placeholder">Заглушка — добавим итоговый кадр</div>
+              </figure>
             </article>
           </div>
         </div>
@@ -305,5 +325,6 @@
         </div>
       </div>
     </footer>
+    <script src="/landing-media.js"></script>
   </body>
 </html>

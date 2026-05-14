@@ -1,0 +1,16 @@
+{
+  "hero": [
+    { "src": "https://picsum.photos/seed/kartivio-1/420/560", "alt": "Портрет в городском стиле" },
+    { "src": "https://picsum.photos/seed/kartivio-2/420/560", "alt": "Портрет в студийном свете" },
+    { "src": "https://picsum.photos/seed/kartivio-3/420/560", "alt": "Уличный образ на закате" },
+    { "src": "https://picsum.photos/seed/kartivio-4/420/560", "alt": "Мягкий fashion-портрет" },
+    { "src": "https://picsum.photos/seed/kartivio-5/420/560", "alt": "Деловой образ" },
+    { "src": "https://picsum.photos/seed/kartivio-6/420/560", "alt": "Повседневный образ" },
+    { "src": "https://picsum.photos/seed/kartivio-7/420/560", "alt": "Крупный портрет" },
+    { "src": "https://picsum.photos/seed/kartivio-8/420/560", "alt": "Кинематографичный портрет" }
+  ],
+  "how": {
+    "before": { "src": "https://picsum.photos/seed/kartivio-before/960/1280", "alt": "Исходное фото пользователя" },
+    "after": { "src": "https://picsum.photos/seed/kartivio-after/960/1280", "alt": "Результат ИИ-фотосессии" }
+  }
+}
