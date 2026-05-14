@@ -1372,7 +1372,7 @@ function renderPlans(payload) {
         <span class="chip">${escapeHtml(formatCredits(item.credits))}</span>
       </div>
       <div class="plan-price">${escapeHtml(item.price_rub)} ₽</div>
-      <div class="plan-meta">~${nb2Count} NB2 · ~${nbproCount} NB Pro · ~${gptCount} GPT2</div>
+      <div class="plan-meta">~${nb2Count} Nano Banana 2 · ~${nbproCount} Nano Banana Pro · ~${gptCount} GPT Image 2</div>
     `;
     card.addEventListener("click", () => selectTopup(item.code));
     plansGrid.appendChild(card);
