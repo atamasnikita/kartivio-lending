@@ -6,8 +6,8 @@
   --muted: #a1a7bc;
   --line: #1a2030;
   --card: #0e121c;
-  --accent: #6366f1;
-  --accent-2: #818cf8;
+  --accent: #19c7b5;
+  --accent-2: #12b3a3;
   --container: 1180px;
 }
 
@@ -103,9 +103,9 @@ a {
 
 .btn-primary {
   background: linear-gradient(135deg, var(--accent), var(--accent-2));
-  border-color: #6f73f8;
+  border-color: #1cb9a8;
   color: #fff;
-  box-shadow: 0 0 24px rgba(99, 102, 241, 0.34);
+  box-shadow: 0 0 24px rgba(25, 199, 181, 0.28);
 }
 
 .btn-ghost {
@@ -133,8 +133,8 @@ a {
   height: 700px;
   pointer-events: none;
   background:
-    radial-gradient(42% 52% at 50% 26%, rgba(104, 89, 255, 0.18), rgba(104, 89, 255, 0) 72%),
-    radial-gradient(54% 64% at 50% 46%, rgba(18, 34, 95, 0.3), rgba(18, 34, 95, 0) 70%);
+    radial-gradient(42% 52% at 50% 26%, rgba(25, 199, 181, 0.2), rgba(25, 199, 181, 0) 72%),
+    radial-gradient(54% 64% at 50% 46%, rgba(10, 39, 52, 0.34), rgba(10, 39, 52, 0) 70%);
 }
 
 .hero-inner {
@@ -149,7 +149,7 @@ a {
   text-transform: uppercase;
   letter-spacing: 0.1em;
   font-size: 16px;
-  color: #7279ee;
+  color: #4fd8ca;
 }
 
 .hero h1 {
@@ -264,8 +264,40 @@ a {
 
 .step-card .step {
   font-size: 14px;
-  color: #7f86f5;
+  color: #4fd8ca;
   font-weight: 700;
+}
+
+.how-demo {
+  margin-top: 14px;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.how-shot {
+  min-height: 280px;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 12px;
+}
+
+.how-shot-label {
+  font-size: 14px;
+  color: #7fc9bf;
+  font-weight: 600;
+}
+
+.how-shot-placeholder {
+  border-radius: 10px;
+  border: 1px dashed #2a4a4b;
+  background: linear-gradient(180deg, #111925, #0f1620);
+  display: grid;
+  place-items: center;
+  color: #8ea0b5;
+  font-size: 15px;
+  text-align: center;
+  padding: 16px;
 }
 
 .price-card {
@@ -294,8 +326,8 @@ a {
 }
 
 .featured {
-  border-color: #7076ff;
-  box-shadow: 0 0 0 1px rgba(106, 112, 255, 0.34);
+  border-color: #23c4b3;
+  box-shadow: 0 0 0 1px rgba(35, 196, 179, 0.34);
 }
 
 .badge {
@@ -304,7 +336,7 @@ a {
   margin-bottom: 10px;
   border-radius: 999px;
   padding: 4px 10px;
-  background: #6b70ff;
+  background: #18bca9;
   color: #fff;
   font-size: 12px;
   font-weight: 600;
@@ -445,6 +477,10 @@ a {
   }
 
   .grid-3 {
+    grid-template-columns: 1fr;
+  }
+
+  .how-demo {
     grid-template-columns: 1fr;
   }
 }

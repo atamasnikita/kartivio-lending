@@ -10,8 +10,8 @@ const DEFAULT_LOCAL_API_BASE = "http://127.0.0.1:8093";
 const DEFAULT_NGROK_API_BASE = "https://sweptback-semivolcanic-reagan.ngrok-free.dev";
 const GOOGLE_CLIENT_ID_META_NAME = "kartivio-google-client-id";
 const MAX_SOURCE_IMAGES = 3;
-const TEMPLATE_IMAGE_PRELOAD_TIMEOUT_MS = 6000;
 const TEMPLATE_SKELETON_RATIOS = ["1 / 1", "4 / 5", "3 / 4", "5 / 4", "2 / 3", "3 / 2"];
+const TEMPLATE_MODAL_ANIMATION_MS = 260;
 
 const MODEL_COSTS = {
   "gemini-3.1-flash-image-preview": 10,
@@ -134,7 +134,6 @@ const state = {
   currentScreen: "feed",
   templates: [],
   templatesLoading: false,
-  templatesRenderToken: 0,
   selectedTemplateFilter: "all",
   activeTemplateModalId: "",
   activeTemplateModalItem: null,
@@ -214,6 +213,7 @@ const jumpButtons = Array.from(document.querySelectorAll("[data-nav-target]"));
 const screens = Array.from(document.querySelectorAll("[data-screen]"));
 let googleAuthPending = false;
 let googleIdentitySignature = "";
+let templateModalCloseTimer = null;
 
 function refreshIcons() {
   if (window.lucide && typeof window.lucide.createIcons === "function") {
@@ -330,9 +330,27 @@ function selectedGenerationCost() {
   return MODEL_COSTS[key] || MODEL_COSTS[DEFAULT_IMAGE_MODEL];
 }
 
+function creditsWord(amount) {
+  const abs = Math.abs(Number(amount || 0));
+  const mod10 = abs % 10;
+  const mod100 = abs % 100;
+  if (mod10 === 1 && mod100 !== 11) {
+    return "кредит";
+  }
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) {
+    return "кредита";
+  }
+  return "кредитов";
+}
+
+function formatCredits(amount) {
+  const value = Number(amount || 0);
+  return `${value} ${creditsWord(value)}`;
+}
+
 function setCreateButtonIdleLabel() {
   const cost = selectedGenerationCost();
-  createButton.textContent = `Генерировать · ${cost} credits`;
+  createButton.textContent = `Генерировать · ${formatCredits(cost)}`;
 }
 
 function ratioLabel(ratio) {
@@ -341,6 +359,37 @@ function ratioLabel(ratio) {
 
 function resolutionLabel(resolution) {
   return RESOLUTION_LABELS[String(resolution || "").trim()] || String(resolution || "").trim();
+}
+
+function parseRatioDimensions(ratio) {
+  const raw = String(ratio || "").trim();
+  const parts = raw.split(":");
+  if (parts.length !== 2) {
+    return null;
+  }
+  const width = Number(parts[0]);
+  const height = Number(parts[1]);
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    return null;
+  }
+  return { width, height };
+}
+
+function createRatioPreview(ratio) {
+  const dimensions = parseRatioDimensions(ratio);
+  if (!dimensions) {
+    return null;
+  }
+  const preview = document.createElement("span");
+  preview.className = "ratio-chip-preview";
+  preview.setAttribute("aria-hidden", "true");
+  preview.style.setProperty("--ratio-width", String(dimensions.width));
+  preview.style.setProperty("--ratio-height", String(dimensions.height));
+
+  const frame = document.createElement("span");
+  frame.className = "ratio-chip-preview-frame";
+  preview.appendChild(frame);
+  return preview;
 }
 
 function availableResolutionsForModel(model) {
@@ -409,7 +458,7 @@ function refreshGenerationCostNote() {
     return;
   }
   setCreateNote(
-    `Выбрано: ${model}, ${resolutionLabel(resolution)}, ${ratioLabel(ratio)} (${outputSize}). Списание: ${cost} credits.`
+    `Выбрано: ${model}, ${resolutionLabel(resolution)}, ${ratioLabel(ratio)} (${outputSize}). Списание: ${formatCredits(cost)}.`
   );
   setCreateButtonIdleLabel();
 }
@@ -427,10 +476,15 @@ function createChoiceChip({
   button.setAttribute("role", "radio");
   button.setAttribute("aria-checked", selected ? "true" : "false");
   button.disabled = disabled;
+  const labelNode = document.createElement("span");
+  labelNode.className = "choice-chip-label";
+  labelNode.textContent = label;
+  button.appendChild(labelNode);
   if (lock) {
-    button.innerHTML = `${escapeHtml(label)}<span class="chip-lock">🔒</span>`;
-  } else {
-    button.textContent = label;
+    const lockNode = document.createElement("span");
+    lockNode.className = "chip-lock";
+    lockNode.textContent = "🔒";
+    button.appendChild(lockNode);
   }
   if (!disabled && typeof onClick === "function") {
     button.addEventListener("click", onClick);
@@ -493,6 +547,12 @@ function renderRatioChips() {
         refreshGenerationCostNote();
       },
     });
+    chip.classList.add("choice-chip-ratio");
+    const preview = createRatioPreview(ratio);
+    if (preview) {
+      const labelNode = chip.querySelector(".choice-chip-label");
+      chip.insertBefore(preview, labelNode || null);
+    }
     ratioChips.appendChild(chip);
   }
 }
@@ -1230,7 +1290,7 @@ function renderUser(me, wallet) {
 
   userName.textContent = display;
   userTgId.textContent = tgId;
-  creditsValue.textContent = `${balance} credits`;
+  creditsValue.textContent = formatCredits(balance);
   creditsBadge.textContent = String(balance);
   profileAvatar.textContent = display === "—" ? "K" : display[0].toUpperCase();
   renderIdentityActions();
@@ -1309,7 +1369,7 @@ function renderPlans(payload) {
     card.innerHTML = `
       <div class="plan-title-row">
         <h3>${escapeHtml(item.title)}</h3>
-        <span class="chip">${escapeHtml(item.credits)} credits</span>
+        <span class="chip">${escapeHtml(formatCredits(item.credits))}</span>
       </div>
       <div class="plan-price">${escapeHtml(item.price_rub)} ₽</div>
       <div class="plan-meta">~${nb2Count} NB2 · ~${nbproCount} NB Pro · ~${gptCount} GPT2</div>
@@ -1348,6 +1408,15 @@ function templatePreviewUrl(item) {
 function templateFullUrl(item) {
   const full = String(item.full_image_url || "").trim();
   return full || templatePreviewUrl(item);
+}
+
+function templatePreviewRatio(item) {
+  const width = Number(item.preview_width || 0);
+  const height = Number(item.preview_height || 0);
+  if (Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0) {
+    return width / height;
+  }
+  return 1;
 }
 
 function templateFilterLabel(filterId) {
@@ -1398,8 +1467,26 @@ async function copyPromptToClipboard(prompt) {
 function closeTemplateModal() {
   state.activeTemplateModalId = "";
   state.activeTemplateModalItem = null;
-  if (templateModal) {
+  if (templateModalCloseTimer) {
+    window.clearTimeout(templateModalCloseTimer);
+    templateModalCloseTimer = null;
+  }
+  const shouldAnimateClose = Boolean(
+    templateModal &&
+    !templateModal.classList.contains("is-hidden") &&
+    templateModal.classList.contains("is-visible")
+  );
+  if (templateModal && shouldAnimateClose) {
+    templateModal.classList.remove("is-visible");
+    templateModalCloseTimer = window.setTimeout(() => {
+      if (templateModal && !templateModal.classList.contains("is-visible")) {
+        templateModal.classList.add("is-hidden");
+      }
+      templateModalCloseTimer = null;
+    }, TEMPLATE_MODAL_ANIMATION_MS);
+  } else if (templateModal) {
     templateModal.classList.add("is-hidden");
+    templateModal.classList.remove("is-visible");
   }
   document.body.classList.remove("template-modal-open");
   setTemplateModalNote("");
@@ -1418,7 +1505,16 @@ function openTemplateModal(item) {
   templateModalCategory.textContent = normalizeTemplateCategory(item.category);
   templateModalPrompt.textContent = item.prompt || "";
   setTemplateModalNote("");
+  if (templateModalCloseTimer) {
+    window.clearTimeout(templateModalCloseTimer);
+    templateModalCloseTimer = null;
+  }
   templateModal.classList.remove("is-hidden");
+  window.requestAnimationFrame(() => {
+    if (templateModal) {
+      templateModal.classList.add("is-visible");
+    }
+  });
   document.body.classList.add("template-modal-open");
 }
 
@@ -1490,60 +1586,6 @@ function renderTemplateSkeleton(count = 6) {
   }
 }
 
-function preloadTemplateImageMeta(url) {
-  return new Promise((resolve) => {
-    const image = new Image();
-    let done = false;
-    const finish = (result) => {
-      if (done) {
-        return;
-      }
-      done = true;
-      resolve(result);
-    };
-    const timeout = window.setTimeout(() => {
-      finish({ ratio: 1 });
-    }, TEMPLATE_IMAGE_PRELOAD_TIMEOUT_MS);
-
-    image.onload = () => {
-      window.clearTimeout(timeout);
-      const width = Number(image.naturalWidth || 0);
-      const height = Number(image.naturalHeight || 0);
-      if (width > 0 && height > 0) {
-        finish({ ratio: width / height });
-        return;
-      }
-      finish({ ratio: 1 });
-    };
-    image.onerror = () => {
-      window.clearTimeout(timeout);
-      finish({ ratio: 1 });
-    };
-    image.src = url;
-  });
-}
-
-async function hydrateTemplatesWithImageMeta(items, token) {
-  const prepared = await Promise.all(
-    items.map(async (item) => {
-      const url = templatePreviewUrl(item);
-      const meta = await preloadTemplateImageMeta(url);
-      return {
-        ...item,
-        preview_image_url: url,
-        preview_ratio: Number(meta.ratio) > 0 ? Number(meta.ratio) : 1,
-      };
-    }),
-  );
-  if (token !== state.templatesRenderToken) {
-    return;
-  }
-  state.templates = prepared;
-  state.templatesLoading = false;
-  renderTemplateFilters();
-  renderTemplateCards();
-}
-
 function renderTemplateCards() {
   const items = filteredTemplateItems();
   if (state.templatesLoading) {
@@ -1562,7 +1604,7 @@ function renderTemplateCards() {
     card.setAttribute("role", "button");
     card.setAttribute("tabindex", "0");
     const imageUrl = templatePreviewUrl(item);
-    const ratio = Number(item.preview_ratio || 1);
+    const ratio = Number(item.preview_ratio || templatePreviewRatio(item) || 1);
     card.style.setProperty("--template-ratio", Number.isFinite(ratio) && ratio > 0 ? String(ratio) : "1");
     card.innerHTML = `
       <div class="tool-media">
@@ -1593,22 +1635,16 @@ function renderTemplates(payload) {
     prompt: String(item.prompt || "").trim(),
     preview_image_url: String(item.preview_image_url || "").trim(),
     full_image_url: String(item.full_image_url || "").trim(),
+    preview_width: Number(item.preview_width || 0),
+    preview_height: Number(item.preview_height || 0),
   })).filter((item) => item.id && item.prompt);
-  state.templatesRenderToken += 1;
-  const token = state.templatesRenderToken;
-  state.templates = normalized;
-  state.templatesLoading = true;
+  state.templates = normalized.map((item) => ({
+    ...item,
+    preview_ratio: templatePreviewRatio(item),
+  }));
+  state.templatesLoading = false;
   renderTemplateFilters();
-  renderTemplateSkeleton(normalized.length || 6);
-  hydrateTemplatesWithImageMeta(normalized, token).catch(() => {
-    if (token !== state.templatesRenderToken) {
-      return;
-    }
-    state.templatesLoading = false;
-    state.templates = normalized.map((item) => ({ ...item, preview_ratio: 1 }));
-    renderTemplateFilters();
-    renderTemplateCards();
-  });
+  renderTemplateCards();
 }
 
 function jobStatusLabel(status) {
@@ -1695,7 +1731,7 @@ function renderHistory(payload) {
           <span class="status-pill ${escapeHtml(statusClass)}">${escapeHtml(jobStatusLabel(job.status))}</span>
         </div>
         <p class="history-prompt">${escapeHtml(job.prompt)}</p>
-        <div class="plan-meta">${escapeHtml(imageModelLabel(job.provider_model))} · ${escapeHtml(job.output_size)} · ${escapeHtml(String(job.requested_credits || 0))} credits</div>
+        <div class="plan-meta">${escapeHtml(imageModelLabel(job.provider_model))} · ${escapeHtml(job.output_size)} · ${escapeHtml(formatCredits(job.requested_credits || 0))}</div>
         <div class="history-actions">
           <button class="soft-btn btn-compact" data-action="use-prompt" type="button">Вставить промпт</button>
           <button class="soft-btn btn-compact" data-action="open-image" type="button" ${job.result_image_url ? "" : "disabled"}>Открыть</button>
@@ -1906,7 +1942,7 @@ async function handleCreate() {
     }
     createButton.disabled = true;
     createButton.textContent = "Создаю...";
-    setCreateNote(`Списываю ${cost} credits и ставлю задачу в очередь.`);
+    setCreateNote(`Списываю ${formatCredits(cost)} и ставлю задачу в очередь.`);
 
     const clientRequestId = buildClientRequestId();
     const job = sourceImages.length > 0

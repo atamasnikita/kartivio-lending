@@ -26,6 +26,8 @@ body {
   margin: 0;
   padding: 0;
   min-height: 100%;
+  width: 100%;
+  overflow-x: hidden;
   background: var(--bg);
   color: var(--text);
   font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -191,7 +193,7 @@ textarea {
 }
 
 .app-main {
-  padding: 14px 14px 94px;
+  padding: 14px 14px calc(118px + env(safe-area-inset-bottom));
 }
 
 .screen {
@@ -294,6 +296,8 @@ textarea {
   background: #11161f;
   cursor: pointer;
   break-inside: avoid;
+  transform: translateY(0) scale(1);
+  transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.22s ease, box-shadow 0.28s ease;
 }
 
 .tool-media {
@@ -308,6 +312,24 @@ textarea {
   height: 100%;
   object-fit: cover;
   display: block;
+  transform: scale(1.001);
+  transition: transform 0.44s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (hover: hover) {
+  .tool-card:hover {
+    transform: translateY(-2px) scale(1.006);
+    border-color: #32425f;
+    box-shadow: 0 14px 34px rgba(2, 5, 12, 0.42);
+  }
+
+  .tool-card:hover img {
+    transform: scale(1.03);
+  }
+}
+
+.tool-card:active {
+  transform: scale(0.992);
 }
 
 .tool-overlay {
@@ -753,12 +775,20 @@ textarea {
   font-weight: 600;
   line-height: 1;
   cursor: pointer;
-  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: background-color 0.16s ease, color 0.16s ease, border-color 0.16s ease, transform 0.16s ease;
+}
+
+.choice-chip-label {
+  white-space: nowrap;
 }
 
 .choice-chip:hover:not(:disabled) {
   border-color: #3a4254;
   color: #d6dcef;
+  transform: translateY(-1px);
 }
 
 .choice-chip[aria-checked="true"] {
@@ -782,6 +812,39 @@ textarea {
   margin-left: 6px;
   font-size: 12px;
   vertical-align: middle;
+}
+
+.choice-chip-ratio {
+  padding: 0 12px;
+}
+
+.ratio-chip-preview {
+  width: 28px;
+  height: 18px;
+  border-radius: 6px;
+  border: 1px solid #35415c;
+  background: #0d1220;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.ratio-chip-preview-frame {
+  height: 10px;
+  aspect-ratio: var(--ratio-width) / var(--ratio-height);
+  border-radius: 3px;
+  border: 1.5px solid #94a3c8;
+  background: rgba(148, 163, 200, 0.12);
+}
+
+.choice-chip[aria-checked="true"] .ratio-chip-preview {
+  border-color: rgba(23, 27, 36, 0.6);
+  background: rgba(255, 255, 255, 0.34);
+}
+
+.choice-chip[aria-checked="true"] .ratio-chip-preview-frame {
+  border-color: #1f2331;
+  background: rgba(21, 24, 33, 0.16);
 }
 
 .field {
@@ -857,10 +920,18 @@ textarea {
   padding: 14px;
   z-index: 50;
   overscroll-behavior: contain;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.26s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .template-modal.is-hidden {
   display: none;
+}
+
+.template-modal.is-visible {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .template-modal-card {
@@ -873,6 +944,17 @@ textarea {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   position: relative;
+  box-shadow: 0 28px 64px rgba(2, 7, 16, 0.52);
+  transform: translateY(16px) scale(0.98);
+  opacity: 0.92;
+  transition:
+    transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.24s ease;
+}
+
+.template-modal.is-visible .template-modal-card {
+  transform: translateY(0) scale(1);
+  opacity: 1;
 }
 
 .template-modal-close {
@@ -1240,16 +1322,30 @@ textarea {
 }
 
 .bottom-nav {
-  border-top: 1px solid var(--line);
   background: rgba(7, 9, 14, 0.96);
   backdrop-filter: blur(10px);
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   padding: 6px 8px max(10px, env(safe-area-inset-bottom));
   gap: 4px;
-  position: sticky;
+  position: fixed;
   bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(760px, 100%);
   z-index: 14;
+  overflow: hidden;
+}
+
+.bottom-nav::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 100vw;
+  transform: translateX(-50%);
+  border-top: 1px solid var(--line);
+  pointer-events: none;
 }
 
 .nav-btn {
@@ -1277,11 +1373,26 @@ textarea {
 }
 
 .nav-btn-center {
+  min-height: 0;
   border-color: #31374b;
   border-radius: 999px;
-  width: 56px;
-  height: 56px;
+  width: 64px;
+  height: 64px;
   margin: 0 auto;
+  padding: 0;
+  gap: 0;
+  background: #121a29;
+  box-shadow: inset 0 1px 0 rgba(171, 188, 255, 0.16), 0 10px 24px rgba(3, 7, 18, 0.38);
+}
+
+.nav-btn-center svg {
+  width: 24px;
+  height: 24px;
+}
+
+.nav-btn-center.is-active {
+  background: #1a2438;
+  border-color: #4f5f83;
 }
 
 .nav-btn-center span {
@@ -1299,6 +1410,21 @@ textarea {
 
   .dropzone-preview-thumb {
     --thumb-size: clamp(80px, 24vw, 120px);
+  }
+
+  .nav-btn-center {
+    width: 60px;
+    height: 60px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tool-card,
+  .tool-card img,
+  .template-modal,
+  .template-modal-card,
+  .choice-chip {
+    transition: none !important;
   }
 }
 
