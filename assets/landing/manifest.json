@@ -10,7 +10,7 @@
     { "src": "/assets/landing/hero/hero_08.jpg", "alt": "Пример ИИ-фотосессии 8" }
   ],
   "how": {
-    "before": { "src": "/assets/landing/how/before.jpg", "alt": "Исходное фото пользователя" },
-    "after": { "src": "/assets/landing/how/after.jpg", "alt": "Результат ИИ-фотосессии" }
+    "before": { "src": "/assets/landing/how/how_before.jpg", "alt": "Исходное фото пользователя" },
+    "after": { "src": "/assets/landing/how/how_after.jpg", "alt": "Результат ИИ-фотосессии" }
   }
 }
