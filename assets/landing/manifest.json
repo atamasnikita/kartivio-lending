@@ -1,16 +1,16 @@
 {
   "hero": [
-    { "src": "https://picsum.photos/seed/kartivio-1/420/560", "alt": "Портрет в городском стиле" },
-    { "src": "https://picsum.photos/seed/kartivio-2/420/560", "alt": "Портрет в студийном свете" },
-    { "src": "https://picsum.photos/seed/kartivio-3/420/560", "alt": "Уличный образ на закате" },
-    { "src": "https://picsum.photos/seed/kartivio-4/420/560", "alt": "Мягкий fashion-портрет" },
-    { "src": "https://picsum.photos/seed/kartivio-5/420/560", "alt": "Деловой образ" },
-    { "src": "https://picsum.photos/seed/kartivio-6/420/560", "alt": "Повседневный образ" },
-    { "src": "https://picsum.photos/seed/kartivio-7/420/560", "alt": "Крупный портрет" },
-    { "src": "https://picsum.photos/seed/kartivio-8/420/560", "alt": "Кинематографичный портрет" }
+    { "src": "/assets/landing/hero/hero_01.jpg", "alt": "Пример ИИ-фотосессии 1" },
+    { "src": "/assets/landing/hero/hero_02.jpg", "alt": "Пример ИИ-фотосессии 2" },
+    { "src": "/assets/landing/hero/hero_03.jpg", "alt": "Пример ИИ-фотосессии 3" },
+    { "src": "/assets/landing/hero/hero_04.jpg", "alt": "Пример ИИ-фотосессии 4" },
+    { "src": "/assets/landing/hero/hero_05.jpg", "alt": "Пример ИИ-фотосессии 5" },
+    { "src": "/assets/landing/hero/hero_06.jpg", "alt": "Пример ИИ-фотосессии 6" },
+    { "src": "/assets/landing/hero/hero_07.jpg", "alt": "Пример ИИ-фотосессии 7" },
+    { "src": "/assets/landing/hero/hero_08.jpg", "alt": "Пример ИИ-фотосессии 8" }
   ],
   "how": {
-    "before": { "src": "https://picsum.photos/seed/kartivio-before/960/1280", "alt": "Исходное фото пользователя" },
-    "after": { "src": "https://picsum.photos/seed/kartivio-after/960/1280", "alt": "Результат ИИ-фотосессии" }
+    "before": { "src": "/assets/landing/how/before.jpg", "alt": "Исходное фото пользователя" },
+    "after": { "src": "/assets/landing/how/after.jpg", "alt": "Результат ИИ-фотосессии" }
   }
 }
