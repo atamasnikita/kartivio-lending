@@ -57,7 +57,6 @@
         <nav class="nav" aria-label="Навигация по лендингу">
           <a href="/app/">Приложение</a>
           <a href="#how">Как это работает</a>
-          <a href="#problems">Проблемы</a>
           <a href="#pricing">Тарифы</a>
           <a href="#faq">Вопросы</a>
         </nav>
@@ -85,6 +84,7 @@
               >Запустить в Telegram</a
             >
           </div>
+          <p class="hero-free">На старте даем бесплатные кредиты: до 2 генераций без оплаты.</p>
           <p class="hero-note">Без VPN, на русском языке, с оплатой в рублях</p>
         </div>
         <div class="hero-rail-wrap" aria-label="Примеры изображений">
@@ -97,6 +97,37 @@
             <img src="https://picsum.photos/seed/kartivio-6/420/560" alt="Пример генерации 6" />
             <img src="https://picsum.photos/seed/kartivio-7/420/560" alt="Пример генерации 7" />
             <img src="https://picsum.photos/seed/kartivio-8/420/560" alt="Пример генерации 8" />
+          </div>
+        </div>
+      </section>
+
+      <section id="problems" class="section section-problems">
+        <div class="container">
+          <div class="section-head">
+            <h2>Какие проблемы решаем</h2>
+            <p>Основа сервиса — ИИ-фотосессии без студии, без VPN и без сложной подготовки.</p>
+          </div>
+          <div class="grid grid-4">
+            <article class="card problem-card">
+              <h3>Долгая и дорогая съемка</h3>
+              <p class="problem-copy">Проблема: студия, фотограф и команда съедают время и бюджет.</p>
+              <p class="solution-copy">Решение: запускаешь фотосессию в приложении и получаешь результат за минуты.</p>
+            </article>
+            <article class="card problem-card">
+              <h3>Нужен свежий контент регулярно</h3>
+              <p class="problem-copy">Проблема: для соцсетей и рекламы контент быстро устаревает.</p>
+              <p class="solution-copy">Решение: генерируешь новые образы под задачу без повторных съемок.</p>
+            </article>
+            <article class="card problem-card">
+              <h3>Сложно придумать идею кадра</h3>
+              <p class="problem-copy">Проблема: тяжело быстро собрать референсы и сформулировать стиль.</p>
+              <p class="solution-copy">Решение: берешь готовые шаблоны и дорабатываешь промпт под себя.</p>
+            </article>
+            <article class="card problem-card">
+              <h3>Сервисы без VPN не работают</h3>
+              <p class="problem-copy">Проблема: часть сервисов недоступна без обходных решений.</p>
+              <p class="solution-copy">Решение: Kartivio работает в Telegram и web-приложении без VPN.</p>
+            </article>
           </div>
         </div>
       </section>
@@ -157,38 +188,11 @@
         </div>
       </section>
 
-      <section id="problems" class="section section-surface">
-        <div class="container">
-          <div class="section-head">
-            <h2>Какие проблемы решаем</h2>
-            <p>Основа сервиса — ИИ-фотосессии без студии, без VPN и без сложной подготовки.</p>
-          </div>
-          <div class="grid grid-4">
-            <article class="card">
-              <h3>Долгая и дорогая съемка</h3>
-              <p>Не нужно искать студию, фотографа и собирать команду на съемочный день.</p>
-            </article>
-            <article class="card">
-              <h3>Нужен свежий контент регулярно</h3>
-              <p>Быстро получаешь новые образы для ленты, профиля и публикаций.</p>
-            </article>
-            <article class="card">
-              <h3>Сложно придумать идею кадра</h3>
-              <p>Используешь готовые шаблоны, потом дорабатываешь промпт под себя.</p>
-            </article>
-            <article class="card">
-              <h3>Сервисы без VPN не работают</h3>
-              <p>Kartivio работает в Telegram и web-приложении без VPN.</p>
-            </article>
-          </div>
-        </div>
-      </section>
-
       <section id="pricing" class="section">
         <div class="container">
           <div class="section-head">
             <h2>Пополнение кредитов</h2>
-            <p>Разовая покупка. Кредиты не сгорают.</p>
+            <p>Разовая покупка. Кредиты не сгорают. На старте даем бесплатные кредиты.</p>
           </div>
           <div class="grid grid-4">
             <article class="card price-card">
@@ -326,5 +330,20 @@
       </div>
     </footer>
     <script src="/landing-media.js"></script>
+    <script>
+      (function () {
+        const faq = document.querySelector(".faq");
+        if (!faq) return;
+        const items = Array.from(faq.querySelectorAll("details"));
+        for (const item of items) {
+          item.addEventListener("toggle", function () {
+            if (!item.open) return;
+            for (const other of items) {
+              if (other !== item) other.open = false;
+            }
+          });
+        }
+      })();
+    </script>
   </body>
 </html>
