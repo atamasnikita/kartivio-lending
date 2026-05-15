@@ -2,7 +2,7 @@
 <html lang="ru">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Kartivio AI App</title>
     <meta name="theme-color" content="#050507" />
     <meta
@@ -295,7 +295,7 @@
     <div id="templateModal" class="template-modal is-hidden" role="dialog" aria-modal="true" aria-labelledby="templateModalTitle">
       <article class="template-modal-card">
         <button id="templateModalClose" class="template-modal-close" type="button" aria-label="Закрыть">×</button>
-        <img id="templateModalImage" class="template-modal-image" src="" alt="Превью шаблона" loading="lazy" />
+        <img id="templateModalImage" class="template-modal-image" src="" alt="Превью шаблона" loading="eager" decoding="async" />
         <div class="template-modal-body">
           <strong id="templateModalTitle">Шаблон</strong>
           <span id="templateModalCategory">Категория</span>
@@ -312,6 +312,6 @@
     </div>
 
     <script src="https://accounts.google.com/gsi/client" async defer></script>
-    <script src="./app.js?v=20260514b"></script>
+    <script src="./app.js?v=20260515c"></script>
   </body>
 </html>

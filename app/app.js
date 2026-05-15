@@ -214,6 +214,9 @@ const screens = Array.from(document.querySelectorAll("[data-screen]"));
 let googleAuthPending = false;
 let googleIdentitySignature = "";
 let templateModalCloseTimer = null;
+let templateModalImageLoadToken = 0;
+let templateModalScrollTop = 0;
+let telegramViewportListenersAttached = false;
 
 function refreshIcons() {
   if (window.lucide && typeof window.lucide.createIcons === "function") {
@@ -227,6 +230,25 @@ function isTelegramMiniAppRuntime() {
 
 function isDevMode() {
   return new URLSearchParams(window.location.search).get("dev") === "1";
+}
+
+function lockTemplateModalScroll() {
+  templateModalScrollTop = window.scrollY || window.pageYOffset || document.documentElement.scrollTop || 0;
+  document.body.style.setProperty("--template-modal-lock-top", `-${templateModalScrollTop}px`);
+  document.documentElement.classList.add("template-modal-open");
+  document.body.classList.add("template-modal-open");
+}
+
+function unlockTemplateModalScroll() {
+  const wasLocked =
+    document.body.classList.contains("template-modal-open") ||
+    document.documentElement.classList.contains("template-modal-open");
+  document.documentElement.classList.remove("template-modal-open");
+  document.body.classList.remove("template-modal-open");
+  document.body.style.removeProperty("--template-modal-lock-top");
+  if (wasLocked) {
+    window.scrollTo(0, templateModalScrollTop);
+  }
 }
 
 function setAuthGateVisible(visible) {
@@ -1041,9 +1063,86 @@ function setEnvHint() {
     envHint.textContent = "Открыто в обычном браузере.";
     return;
   }
-  tg.ready();
-  tg.expand();
   envHint.textContent = "Открыто в Telegram Mini App.";
+}
+
+function applyTelegramSafeInsets() {
+  if (!tg) {
+    return;
+  }
+  const platform = String(tg.platform || "").trim().toLowerCase();
+  const controlsOffset = platform === "ios" ? 44 : 0;
+  const topInset = Number(
+    (tg.contentSafeAreaInset && tg.contentSafeAreaInset.top) ||
+      (tg.safeAreaInset && tg.safeAreaInset.top) ||
+      0
+  );
+  const bottomInset = Number(
+    (tg.contentSafeAreaInset && tg.contentSafeAreaInset.bottom) ||
+      (tg.safeAreaInset && tg.safeAreaInset.bottom) ||
+      0
+  );
+  document.documentElement.style.setProperty("--tg-safe-top", `${Math.max(0, topInset)}px`);
+  document.documentElement.style.setProperty("--tg-safe-bottom", `${Math.max(0, bottomInset)}px`);
+  document.documentElement.style.setProperty("--tg-controls-offset", `${controlsOffset}px`);
+}
+
+function isTelegramMobileClient() {
+  if (!tg) {
+    return false;
+  }
+  const platform = String(tg.platform || "").trim().toLowerCase();
+  if (platform === "ios" || platform === "android") {
+    return true;
+  }
+  const ua = String(navigator.userAgent || "").toLowerCase();
+  return /iphone|ipad|ipod|android|mobile/i.test(ua);
+}
+
+function initTelegramViewport() {
+  if (!tg) {
+    return;
+  }
+  try {
+    tg.ready();
+  } catch (_) {
+    // noop
+  }
+  try {
+    if (typeof tg.expand === "function") {
+      tg.expand();
+    }
+  } catch (_) {
+    // noop
+  }
+  if (isTelegramMobileClient()) {
+    try {
+      if (typeof tg.disableVerticalSwipes === "function") {
+        tg.disableVerticalSwipes();
+      }
+    } catch (_) {
+      // noop
+    }
+    try {
+      if (typeof tg.requestFullscreen === "function" && !tg.isFullscreen) {
+        tg.requestFullscreen();
+      }
+    } catch (_) {
+      // noop
+    }
+  }
+  applyTelegramSafeInsets();
+  if (telegramViewportListenersAttached || typeof tg.onEvent !== "function") {
+    return;
+  }
+  try {
+    tg.onEvent("viewportChanged", applyTelegramSafeInsets);
+    tg.onEvent("safeAreaChanged", applyTelegramSafeInsets);
+    tg.onEvent("contentSafeAreaChanged", applyTelegramSafeInsets);
+  } catch (_) {
+    // noop
+  }
+  telegramViewportListenersAttached = true;
 }
 
 function refreshAuthButtons() {
@@ -1467,6 +1566,7 @@ async function copyPromptToClipboard(prompt) {
 function closeTemplateModal() {
   state.activeTemplateModalId = "";
   state.activeTemplateModalItem = null;
+  templateModalImageLoadToken += 1;
   if (templateModalCloseTimer) {
     window.clearTimeout(templateModalCloseTimer);
     templateModalCloseTimer = null;
@@ -1488,18 +1588,42 @@ function closeTemplateModal() {
     templateModal.classList.add("is-hidden");
     templateModal.classList.remove("is-visible");
   }
-  document.body.classList.remove("template-modal-open");
+  unlockTemplateModalScroll();
   setTemplateModalNote("");
 }
 
-function openTemplateModal(item) {
+function openTemplateModal(item, initialPreviewUrl = "") {
   state.activeTemplateModalId = item.id;
   state.activeTemplateModalItem = { ...item };
   if (!templateModal) {
     return;
   }
-  const imageUrl = templateFullUrl(item) || "https://picsum.photos/seed/kartivio-template/1080/1440";
-  templateModalImage.src = imageUrl;
+  const previewUrl = String(initialPreviewUrl || "").trim() || templatePreviewUrl(item) || "https://picsum.photos/seed/kartivio-template/720/960";
+  const fullUrl = templateFullUrl(item) || previewUrl;
+  const currentToken = templateModalImageLoadToken + 1;
+  templateModalImageLoadToken = currentToken;
+  templateModalImage.classList.add("is-loading");
+  templateModalImage.src = previewUrl;
+  if (fullUrl === previewUrl) {
+    templateModalImage.classList.remove("is-loading");
+  } else {
+    const preloader = new Image();
+    preloader.decoding = "async";
+    preloader.onload = () => {
+      if (currentToken !== templateModalImageLoadToken) {
+        return;
+      }
+      templateModalImage.src = fullUrl;
+      templateModalImage.classList.remove("is-loading");
+    };
+    preloader.onerror = () => {
+      if (currentToken !== templateModalImageLoadToken) {
+        return;
+      }
+      templateModalImage.classList.remove("is-loading");
+    };
+    preloader.src = fullUrl;
+  }
   templateModalImage.alt = item.title || "Шаблон";
   templateModalTitle.textContent = item.title || "Шаблон";
   templateModalCategory.textContent = normalizeTemplateCategory(item.category);
@@ -1515,7 +1639,7 @@ function openTemplateModal(item) {
       templateModal.classList.add("is-visible");
     }
   });
-  document.body.classList.add("template-modal-open");
+  lockTemplateModalScroll();
 }
 
 function templateFilters() {
@@ -1615,11 +1739,17 @@ function renderTemplateCards() {
         <p>${escapeHtml(normalizeTemplateCategory(item.category))}</p>
       </div>
     `;
-    card.addEventListener("click", () => openTemplateModal(item));
+    card.addEventListener("click", () => {
+      const cardImage = card.querySelector("img");
+      const initialPreviewUrl = cardImage && typeof cardImage.currentSrc === "string" ? cardImage.currentSrc : imageUrl;
+      openTemplateModal(item, initialPreviewUrl);
+    });
     card.addEventListener("keydown", (event) => {
       if (event.key === "Enter" || event.key === " ") {
         event.preventDefault();
-        openTemplateModal(item);
+        const cardImage = card.querySelector("img");
+        const initialPreviewUrl = cardImage && typeof cardImage.currentSrc === "string" ? cardImage.currentSrc : imageUrl;
+        openTemplateModal(item, initialPreviewUrl);
       }
     });
     templatesGrid.appendChild(card);
@@ -2410,6 +2540,7 @@ function bindEvents() {
 async function bootstrap() {
   loadState();
   setDevPanelVisibility();
+  initTelegramViewport();
   setEnvHint();
   refreshAuthButtons();
   if (apiBaseInput) {
