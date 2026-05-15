@@ -331,8 +331,8 @@ a {
 
 .tone-body h3 {
   margin: 0;
-  font-size: clamp(24px, 1.25vw, 28px);
-  line-height: 1.15;
+  font-size: clamp(20px, 1.05vw, 22px);
+  line-height: 1.2;
   color: #edf2ff;
   letter-spacing: 0;
 }
@@ -392,8 +392,9 @@ a {
 }
 
 .tone-solution .tone-body {
-  min-height: 76px;
-  align-content: center;
+  min-height: 0;
+  align-content: start;
+  gap: 8px;
 }
 
 .tone-solution p {
