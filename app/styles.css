@@ -971,20 +971,38 @@ textarea {
 
 .template-modal-close {
   position: absolute;
-  top: calc(10px + var(--tg-controls-offset, 0px));
-  right: 10px;
-  width: 32px;
-  height: 32px;
-  border-radius: 999px;
-  border: 1px solid #2f3a52;
-  background: rgba(10, 14, 22, 0.85);
-  color: #eef1ff;
-  font-size: 22px;
+  top: 12px;
+  right: -16px;
+  width: 52px;
+  height: 52px;
+  border-radius: 999px 0 0 999px;
+  border: 1px solid rgba(57, 71, 102, 0.72);
+  border-right: 0;
+  background: rgba(11, 20, 34, 0.62);
+  backdrop-filter: blur(9px);
+  -webkit-backdrop-filter: blur(9px);
+  color: #f2f5ff;
+  font-size: 34px;
+  font-weight: 300;
   line-height: 1;
   display: grid;
   place-items: center;
   cursor: pointer;
-  z-index: 2;
+  padding: 0 10px 1px 0;
+  z-index: 3;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease;
+}
+
+.template-modal-close:hover {
+  background: rgba(17, 28, 46, 0.74);
+  border-color: rgba(88, 105, 142, 0.78);
+}
+
+.template-modal-close:active {
+  background: rgba(14, 24, 40, 0.85);
 }
 
 .template-modal-image {
@@ -1423,6 +1441,15 @@ textarea {
 
   .template-modal-image {
     max-height: 42vh;
+  }
+
+  .template-modal-close {
+    top: 10px;
+    right: -14px;
+    width: 48px;
+    height: 48px;
+    font-size: 30px;
+    padding-right: 9px;
   }
 
   .dropzone-preview-thumb {
