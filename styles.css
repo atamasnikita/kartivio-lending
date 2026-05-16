@@ -477,7 +477,7 @@ a {
 
 .how-stage {
   position: relative;
-  overflow: visible;
+  overflow: hidden;
 }
 
 .how-scene {
@@ -489,6 +489,10 @@ a {
 .how-scene.is-active {
   display: grid;
   animation: howSceneIn 240ms ease both;
+}
+
+.how-flow.is-measuring .how-scene.is-active {
+  animation: none !important;
 }
 
 .how-scene-title {
@@ -1121,7 +1125,7 @@ a {
   }
 
   .how-stage {
-    overflow: visible;
+    overflow: hidden;
   }
 
   .how-upload-layout {

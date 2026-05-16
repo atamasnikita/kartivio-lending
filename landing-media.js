@@ -176,6 +176,7 @@
 
     const stepButtons = Array.from(root.querySelectorAll(".how-step[data-how-step]"));
     const scenes = Array.from(root.querySelectorAll(".how-scene[data-how-scene]"));
+    const stageCard = root.querySelector(".how-stage");
     if (!stepButtons.length || !scenes.length) {
       return;
     }
@@ -183,6 +184,8 @@
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     let currentStep = Number(stepButtons.find((button) => button.classList.contains("is-active"))?.dataset.howStep || 1);
     let autoplayTimer = null;
+    let stageMeasureRaf = 0;
+    let resizeDebounceTimer = 0;
 
     function syncState(step) {
       currentStep = step;
@@ -202,6 +205,73 @@
           scene.setAttribute("hidden", "");
         }
       }
+    }
+
+    function measureSceneHeight(scene) {
+      const wasActive = scene.classList.contains("is-active");
+      const wasHidden = scene.hasAttribute("hidden");
+      const prevDisplay = scene.style.display;
+      const prevPosition = scene.style.position;
+      const prevInset = scene.style.inset;
+      const prevVisibility = scene.style.visibility;
+      const prevPointerEvents = scene.style.pointerEvents;
+      const prevZIndex = scene.style.zIndex;
+
+      scene.classList.add("is-active");
+      scene.removeAttribute("hidden");
+      scene.style.display = "grid";
+      scene.style.position = "absolute";
+      scene.style.inset = "0";
+      scene.style.visibility = "hidden";
+      scene.style.pointerEvents = "none";
+      scene.style.zIndex = "-1";
+
+      const measuredHeight = scene.offsetHeight;
+
+      if (!wasActive) {
+        scene.classList.remove("is-active");
+      }
+      if (wasHidden) {
+        scene.setAttribute("hidden", "");
+      }
+      scene.style.display = prevDisplay;
+      scene.style.position = prevPosition;
+      scene.style.inset = prevInset;
+      scene.style.visibility = prevVisibility;
+      scene.style.pointerEvents = prevPointerEvents;
+      scene.style.zIndex = prevZIndex;
+
+      return measuredHeight;
+    }
+
+    function recalculateStageMinHeight() {
+      if (!stageCard) {
+        return;
+      }
+      const previousStep = currentStep;
+      root.classList.add("is-measuring");
+      let maxHeight = 0;
+      for (const scene of scenes) {
+        maxHeight = Math.max(maxHeight, measureSceneHeight(scene));
+      }
+      syncState(previousStep);
+      root.classList.remove("is-measuring");
+      if (maxHeight > 0) {
+        stageCard.style.minHeight = `${Math.ceil(maxHeight)}px`;
+      }
+    }
+
+    function scheduleStageMeasure() {
+      if (!stageCard) {
+        return;
+      }
+      if (stageMeasureRaf) {
+        window.cancelAnimationFrame(stageMeasureRaf);
+      }
+      stageMeasureRaf = window.requestAnimationFrame(() => {
+        stageMeasureRaf = 0;
+        recalculateStageMinHeight();
+      });
     }
 
     function startAutoplay() {
@@ -226,6 +296,7 @@
           return;
         }
         syncState(step);
+        scheduleStageMeasure();
         startAutoplay();
       });
     }
@@ -241,7 +312,22 @@
       startAutoplay();
     });
 
+    const onResize = () => {
+      if (resizeDebounceTimer) {
+        window.clearTimeout(resizeDebounceTimer);
+      }
+      resizeDebounceTimer = window.setTimeout(() => {
+        scheduleStageMeasure();
+      }, 120);
+    };
+    window.addEventListener("resize", onResize, { passive: true });
+
+    for (const image of root.querySelectorAll("img")) {
+      image.addEventListener("load", scheduleStageMeasure);
+    }
+
     syncState(currentStep);
+    scheduleStageMeasure();
     startAutoplay();
   }
 
