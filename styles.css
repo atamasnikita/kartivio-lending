@@ -200,7 +200,7 @@ a {
 .hero-rail {
   display: flex;
   width: max-content;
-  gap: 14px;
+  gap: 16px;
   will-change: transform;
   animation: heroRailLoop var(--hero-loop-duration, 40s) linear infinite;
 }
@@ -210,11 +210,11 @@ a {
 }
 
 .hero-rail img {
-  width: clamp(170px, 16vw, 230px);
-  flex: 0 0 clamp(170px, 16vw, 230px);
-  height: 220px;
+  width: clamp(196px, 18.5vw, 278px);
+  flex: 0 0 clamp(196px, 18.5vw, 278px);
+  height: clamp(286px, 27vw, 372px);
   object-fit: cover;
-  border-radius: 18px;
+  border-radius: 20px;
   border: 1px solid #1d2437;
   display: block;
 }
@@ -1013,9 +1013,9 @@ a {
   }
 
   .hero-rail img {
-    width: 160px;
-    flex-basis: 160px;
-    height: 200px;
+    width: 188px;
+    flex-basis: 188px;
+    height: 260px;
   }
 
   .grid-3 {
@@ -1087,6 +1087,17 @@ a {
 
   .hero h1 {
     font-size: 42px;
+  }
+
+  .hero-rail {
+    gap: 13px;
+  }
+
+  .hero-rail img {
+    width: 176px;
+    flex-basis: 176px;
+    height: 242px;
+    border-radius: 16px;
   }
 
   .lead {
