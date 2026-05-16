@@ -142,6 +142,8 @@ const state = {
   linkedProviders: new Set(),
   telegramLinkToken: "",
   telegramLinkPollTimer: null,
+  telegramWebLoginToken: "",
+  telegramWebLoginPollTimer: null,
   sourceImageFiles: [],
   sourceImagePreviewUrls: [],
 };
@@ -1194,6 +1196,14 @@ function clearTelegramLinkPolling() {
   state.telegramLinkPollTimer = null;
 }
 
+function clearTelegramWebLoginPolling() {
+  if (!state.telegramWebLoginPollTimer) {
+    return;
+  }
+  window.clearTimeout(state.telegramWebLoginPollTimer);
+  state.telegramWebLoginPollTimer = null;
+}
+
 function renderIdentityActions() {
   const linkedTelegram = state.linkedProviders.has("telegram");
   if (identityTelegram) {
@@ -2129,6 +2139,76 @@ function openTelegramDeepLink(url) {
   window.open(url, "_blank", "noopener,noreferrer");
 }
 
+async function pollTelegramWebLoginStatus() {
+  if (!state.telegramWebLoginToken || state.accessToken) {
+    return;
+  }
+  try {
+    const payload = await apiFetch(
+      `/v1/auth/telegram/web/status?login_token=${encodeURIComponent(state.telegramWebLoginToken)}`,
+      { method: "GET" },
+    );
+    const status = String(payload.status || "").trim().toLowerCase();
+    if (status === "pending") {
+      setNote(payload.message || "Ожидаем подтверждение в Telegram.");
+      state.telegramWebLoginPollTimer = window.setTimeout(() => {
+        pollTelegramWebLoginStatus().catch(() => {});
+      }, 2000);
+      return;
+    }
+    if (status === "linked" && payload.access_token && payload.refresh_token) {
+      state.accessToken = payload.access_token;
+      state.refreshToken = payload.refresh_token;
+      state.lastAuthProvider = "telegram";
+      state.telegramWebLoginToken = "";
+      clearTelegramWebLoginPolling();
+      saveState();
+      setAuthGateVisible(false);
+      setNote(payload.message || "Вход через Telegram выполнен.");
+      await Promise.all([loadPrivateData(), loadHistory()]);
+      switchScreen("feed");
+      return;
+    }
+
+    state.telegramWebLoginToken = "";
+    clearTelegramWebLoginPolling();
+    setNote(payload.message || "Ссылка для входа истекла. Нажми кнопку еще раз.", true);
+  } catch (error) {
+    setNote(`Проблема проверки Telegram-входа: ${error.message}`, true);
+    state.telegramWebLoginPollTimer = window.setTimeout(() => {
+      pollTelegramWebLoginStatus().catch(() => {});
+    }, 3000);
+  }
+}
+
+async function startTelegramWebLogin() {
+  if (authButton) {
+    authButton.disabled = true;
+    authButton.textContent = "Готовлю ссылку...";
+  }
+  clearTelegramWebLoginPolling();
+  try {
+    const payload = await apiFetch("/v1/auth/telegram/web/start", { method: "POST" });
+    state.telegramWebLoginToken = String(payload.login_token || "").trim();
+    const deepLink = String(payload.deep_link_url || "").trim();
+    if (!state.telegramWebLoginToken || !deepLink) {
+      throw new Error("Не удалось создать ссылку входа.");
+    }
+    setNote(payload.message || "Открываю Telegram для подтверждения входа.");
+    openTelegramDeepLink(deepLink);
+    state.telegramWebLoginPollTimer = window.setTimeout(() => {
+      pollTelegramWebLoginStatus().catch(() => {});
+    }, 1500);
+  } catch (error) {
+    setNote(`Ошибка входа через Telegram: ${error.message}`, true);
+  } finally {
+    if (authButton) {
+      authButton.disabled = false;
+      authButton.textContent = "Войти через Telegram";
+    }
+  }
+}
+
 async function pollTelegramLinkStatus() {
   if (!state.accessToken || !state.telegramLinkToken) {
     return;
@@ -2228,10 +2308,7 @@ async function hydrateAuthorizedSession() {
 async function loginViaTelegram(options = {}) {
   const { silent = false, targetScreen = "feed" } = options;
   if (!tg || !tg.initData) {
-    openBotLink();
-    if (!silent) {
-      setNote("Открой Mini App из бота для входа через Telegram.");
-    }
+    await startTelegramWebLogin();
     return false;
   }
   if (authButton) {
@@ -2243,6 +2320,8 @@ async function loginViaTelegram(options = {}) {
       method: "POST",
       body: { init_data: tg.initData },
     });
+    state.telegramWebLoginToken = "";
+    clearTelegramWebLoginPolling();
     state.accessToken = payload.access_token;
     state.refreshToken = payload.refresh_token;
     state.lastAuthProvider = "telegram";
@@ -2280,6 +2359,8 @@ async function loginViaGoogleCredential(idToken) {
     method: "POST",
     body: { id_token: idToken },
   });
+  state.telegramWebLoginToken = "";
+  clearTelegramWebLoginPolling();
   state.accessToken = payload.access_token;
   state.refreshToken = payload.refresh_token;
   state.lastAuthProvider = "google";
