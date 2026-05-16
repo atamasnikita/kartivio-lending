@@ -119,6 +119,50 @@ a {
   padding: 8px 18px;
 }
 
+.topbar-auth-slot {
+  display: inline-flex;
+  align-items: center;
+}
+
+.topbar-auth-slot .is-hidden {
+  display: none !important;
+}
+
+.topbar-profile {
+  min-height: 42px;
+  padding: 6px 12px 6px 6px;
+  border: 1px solid #2b3244;
+  border-radius: 999px;
+  background: #101724;
+  color: #e8edfe;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.topbar-profile-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 1px solid #32405c;
+  background: #141d2b;
+  color: #f4f7ff;
+  font-size: 14px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+}
+
+.topbar-profile-name {
+  max-width: 150px;
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .hero {
   position: relative;
   overflow: clip;
@@ -1079,6 +1123,23 @@ a {
     font-size: 16px;
     line-height: 1.08;
     white-space: nowrap;
+  }
+
+  .topbar-profile {
+    min-height: 38px;
+    padding: 5px 10px 5px 5px;
+    gap: 8px;
+  }
+
+  .topbar-profile-avatar {
+    width: 26px;
+    height: 26px;
+    font-size: 13px;
+  }
+
+  .topbar-profile-name {
+    max-width: 88px;
+    font-size: 14px;
   }
 
   .hero-free {

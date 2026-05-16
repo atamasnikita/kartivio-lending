@@ -10,7 +10,7 @@
     />
     <meta name="theme-color" content="#050507" />
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=20260516-1" />
+    <link rel="stylesheet" href="./styles.css?v=20260516-2" />
   </head>
   <body>
     <!-- Yandex.Metrika counter -->
@@ -60,9 +60,13 @@
           <a href="#pricing">Тарифы</a>
           <a href="#faq">Вопросы</a>
         </nav>
-        <a class="btn btn-primary btn-sm" href="/app/"
-          >Открыть приложение</a
-        >
+        <div class="topbar-auth-slot">
+          <a id="topbarOpenAppCta" class="btn btn-primary btn-sm" href="/app/">Открыть приложение</a>
+          <a id="topbarProfileLink" class="topbar-profile is-hidden" href="/app/" aria-label="Открыть профиль">
+            <span id="topbarProfileAvatar" class="topbar-profile-avatar">K</span>
+            <span id="topbarProfileName" class="topbar-profile-name">Профиль</span>
+          </a>
+        </div>
       </div>
     </header>
 
@@ -506,7 +510,7 @@
         </div>
       </div>
     </footer>
-    <script src="/landing-media.js?v=20260516-1"></script>
+    <script src="/landing-media.js?v=20260516-2"></script>
     <script>
       (function () {
         const faq = document.querySelector(".faq");
