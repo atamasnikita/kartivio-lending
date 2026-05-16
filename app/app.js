@@ -228,8 +228,18 @@ function isTelegramMiniAppRuntime() {
   return Boolean(tg && tg.initData);
 }
 
-function isDevMode() {
-  return new URLSearchParams(window.location.search).get("dev") === "1";
+function isLocalRuntime() {
+  const host = String(window.location.hostname || "").trim().toLowerCase();
+  return host === "localhost" || host === "127.0.0.1";
+}
+
+function isNgrokRuntime() {
+  const host = String(window.location.hostname || "").trim().toLowerCase();
+  return host.endsWith(".ngrok-free.dev");
+}
+
+function canOverrideApiBase() {
+  return isLocalRuntime() || isNgrokRuntime();
 }
 
 function lockTemplateModalScroll() {
@@ -264,12 +274,11 @@ function setDevPanelVisibility() {
   if (!devPanel) {
     return;
   }
-  devPanel.classList.toggle("is-hidden", !isDevMode());
+  devPanel.classList.toggle("is-hidden", !canOverrideApiBase());
 }
 
 function pickDefaultApiBase() {
-  const host = window.location.hostname || "";
-  if (host === "localhost" || host === "127.0.0.1") {
+  if (isLocalRuntime()) {
     return DEFAULT_LOCAL_API_BASE;
   }
   return DEFAULT_PROD_API_BASE;
@@ -277,7 +286,7 @@ function pickDefaultApiBase() {
 
 function googleClientIdFromMeta() {
   const queryClientId = String(new URLSearchParams(window.location.search).get("google_client_id") || "").trim();
-  if (queryClientId) {
+  if (queryClientId && canOverrideApiBase()) {
     return queryClientId;
   }
   const tag = document.querySelector(`meta[name="${GOOGLE_CLIENT_ID_META_NAME}"]`);
@@ -587,16 +596,25 @@ function renderGenerationChips() {
 }
 
 function saveState() {
-  localStorage.setItem(STORAGE_KEYS.apiBase, state.apiBase);
+  if (canOverrideApiBase()) {
+    localStorage.setItem(STORAGE_KEYS.apiBase, state.apiBase);
+  } else {
+    localStorage.removeItem(STORAGE_KEYS.apiBase);
+  }
   localStorage.setItem(STORAGE_KEYS.accessToken, state.accessToken);
   localStorage.setItem(STORAGE_KEYS.refreshToken, state.refreshToken);
   localStorage.setItem(STORAGE_KEYS.lastAuthProvider, state.lastAuthProvider);
 }
 
 function loadState() {
-  const queryApiBase = trimApiBase(new URLSearchParams(window.location.search).get("api"));
-  const storedApiBase = trimApiBase(localStorage.getItem(STORAGE_KEYS.apiBase));
+  const queryApiBase = canOverrideApiBase()
+    ? trimApiBase(new URLSearchParams(window.location.search).get("api"))
+    : "";
+  const storedApiBase = canOverrideApiBase() ? trimApiBase(localStorage.getItem(STORAGE_KEYS.apiBase)) : "";
   state.apiBase = queryApiBase || storedApiBase || pickDefaultApiBase();
+  if (!canOverrideApiBase()) {
+    localStorage.removeItem(STORAGE_KEYS.apiBase);
+  }
   state.accessToken = localStorage.getItem(STORAGE_KEYS.accessToken) || "";
   state.refreshToken = localStorage.getItem(STORAGE_KEYS.refreshToken) || "";
   state.lastAuthProvider = String(localStorage.getItem(STORAGE_KEYS.lastAuthProvider) || "").trim().toLowerCase();
@@ -1284,12 +1302,11 @@ async function apiMultipart(path, formData, { auth = false, idempotencyKey } = {
 }
 
 async function resolveApiBase() {
-  const candidates = uniqueApiBases([
-    state.apiBase,
-    DEFAULT_PROD_API_BASE,
-    DEFAULT_NGROK_API_BASE,
-    window.location.origin,
-  ]);
+  const baseCandidates = [state.apiBase, DEFAULT_PROD_API_BASE, window.location.origin];
+  if (canOverrideApiBase()) {
+    baseCandidates.push(DEFAULT_NGROK_API_BASE);
+  }
+  const candidates = uniqueApiBases(baseCandidates);
 
   for (const candidate of candidates) {
     try {
@@ -2394,6 +2411,10 @@ function loginViaGoogle() {
 function bindEvents() {
   if (apiBaseInput) {
     apiBaseInput.addEventListener("change", () => {
+      if (!canOverrideApiBase()) {
+        apiBaseInput.value = state.apiBase;
+        return;
+      }
       state.apiBase = trimApiBase(apiBaseInput.value);
       saveState();
       refreshAuthButtons();
