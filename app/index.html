@@ -10,7 +10,7 @@
       content="547797863553-g3jsqvf2p31p0ffu029f1p25kjjdn2bn.apps.googleusercontent.com"
     />
     <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=20260515f" />
+    <link rel="stylesheet" href="./styles.css?v=20260516a" />
     <script src="https://telegram.org/js/telegram-web-app.js?62"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
   </head>
@@ -61,6 +61,7 @@
         <div class="auth-actions">
           <button id="googleAuthButton" class="primary-action auth-primary" type="button">Войти через Google</button>
           <button id="authButton" class="soft-btn auth-btn" type="button">Войти через Telegram</button>
+          <button id="authCheckButton" class="soft-btn auth-btn is-hidden" type="button">Я подтвердил вход в Telegram</button>
         </div>
         <div id="googleSigninWrap" class="google-signin-wrap is-hidden" aria-hidden="true">
           <div id="googleSigninButton"></div>
@@ -266,6 +267,7 @@
             <i data-lucide="message-circle"></i>
             <span>Открыть бота</span>
           </a>
+          <button id="logoutButton" class="soft-btn" type="button">Выйти</button>
         </section>
       </main>
 
@@ -312,6 +314,6 @@
     </div>
 
     <script src="https://accounts.google.com/gsi/client" async defer></script>
-    <script src="./app.js?v=20260516a"></script>
+    <script src="./app.js?v=20260516d"></script>
   </body>
 </html>

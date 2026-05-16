@@ -3,6 +3,7 @@ const STORAGE_KEYS = {
   accessToken: "kartivio.access_token",
   refreshToken: "kartivio.refresh_token",
   lastAuthProvider: "kartivio.last_auth_provider",
+  telegramWebLoginToken: "kartivio.telegram_web_login_token",
 };
 
 const DEFAULT_PROD_API_BASE = "https://api.kartivio-ai.ru";
@@ -156,6 +157,7 @@ const authGate = document.getElementById("authGate");
 const devPanel = document.getElementById("devPanel");
 const apiBaseInput = document.getElementById("apiBaseInput");
 const authButton = document.getElementById("authButton");
+const authCheckButton = document.getElementById("authCheckButton");
 const googleAuthButton = document.getElementById("googleAuthButton");
 const googleSigninWrap = document.getElementById("googleSigninWrap");
 const googleSigninButton = document.getElementById("googleSigninButton");
@@ -170,6 +172,7 @@ const identityGoogle = document.getElementById("identityGoogle");
 const identityTelegram = document.getElementById("identityTelegram");
 const linkTelegramButton = document.getElementById("linkTelegramButton");
 const telegramLinkNote = document.getElementById("telegramLinkNote");
+const logoutButton = document.getElementById("logoutButton");
 const plansGrid = document.getElementById("plansGrid");
 const plansActionButton = document.getElementById("plansActionButton");
 const plansNote = document.getElementById("plansNote");
@@ -270,6 +273,20 @@ function setAuthGateVisible(visible) {
   if (appShell) {
     appShell.classList.toggle("is-hidden", visible);
   }
+  renderAuthGateActions();
+}
+
+function hasPendingTelegramWebLogin() {
+  return Boolean(state.telegramWebLoginToken) && !state.accessToken;
+}
+
+function renderAuthGateActions() {
+  if (!authCheckButton) {
+    return;
+  }
+  const pending = hasPendingTelegramWebLogin();
+  authCheckButton.classList.toggle("is-hidden", !pending);
+  authCheckButton.disabled = !pending;
 }
 
 function setDevPanelVisibility() {
@@ -606,6 +623,11 @@ function saveState() {
   localStorage.setItem(STORAGE_KEYS.accessToken, state.accessToken);
   localStorage.setItem(STORAGE_KEYS.refreshToken, state.refreshToken);
   localStorage.setItem(STORAGE_KEYS.lastAuthProvider, state.lastAuthProvider);
+  if (state.telegramWebLoginToken && !state.accessToken) {
+    localStorage.setItem(STORAGE_KEYS.telegramWebLoginToken, state.telegramWebLoginToken);
+  } else {
+    localStorage.removeItem(STORAGE_KEYS.telegramWebLoginToken);
+  }
 }
 
 function loadState() {
@@ -620,6 +642,11 @@ function loadState() {
   state.accessToken = localStorage.getItem(STORAGE_KEYS.accessToken) || "";
   state.refreshToken = localStorage.getItem(STORAGE_KEYS.refreshToken) || "";
   state.lastAuthProvider = String(localStorage.getItem(STORAGE_KEYS.lastAuthProvider) || "").trim().toLowerCase();
+  state.telegramWebLoginToken = String(localStorage.getItem(STORAGE_KEYS.telegramWebLoginToken) || "").trim();
+  if (state.accessToken) {
+    state.telegramWebLoginToken = "";
+    localStorage.removeItem(STORAGE_KEYS.telegramWebLoginToken);
+  }
 }
 
 function escapeHtml(raw) {
@@ -1204,6 +1231,21 @@ function clearTelegramWebLoginPolling() {
   state.telegramWebLoginPollTimer = null;
 }
 
+async function logoutSession() {
+  clearTelegramLinkPolling();
+  clearTelegramWebLoginPolling();
+  state.accessToken = "";
+  state.refreshToken = "";
+  state.lastAuthProvider = "";
+  state.telegramLinkToken = "";
+  state.telegramWebLoginToken = "";
+  saveState();
+  setAuthGateVisible(true);
+  switchScreen("feed");
+  await Promise.allSettled([loadPrivateData(), loadHistory()]);
+  setNote("Сессия завершена. Войди снова через Google или Telegram.");
+}
+
 function renderIdentityActions() {
   const linkedTelegram = state.linkedProviders.has("telegram");
   if (identityTelegram) {
@@ -1356,6 +1398,8 @@ async function refreshSession() {
   } catch (_e) {
     state.accessToken = "";
     state.refreshToken = "";
+    state.lastAuthProvider = "";
+    state.telegramWebLoginToken = "";
     saveState();
     return false;
   }
@@ -2120,27 +2164,36 @@ async function handleCreate() {
 }
 
 function openBotLink() {
-  if (tg && typeof tg.openLink === "function") {
+  if (isTelegramMiniAppRuntime() && tg && typeof tg.openLink === "function") {
     tg.openLink(TELEGRAM_BOT_URL);
     return;
   }
   window.open(TELEGRAM_BOT_URL, "_blank", "noopener,noreferrer");
 }
 
-function openTelegramDeepLink(url) {
-  if (tg && typeof tg.openTelegramLink === "function") {
+function openTelegramDeepLink(url, popupHandle = null) {
+  if (popupHandle && !popupHandle.closed) {
+    try {
+      popupHandle.location.replace(url);
+      return true;
+    } catch (_e) {
+      // fallback to standard path below
+    }
+  }
+  if (isTelegramMiniAppRuntime() && tg && typeof tg.openTelegramLink === "function") {
     tg.openTelegramLink(url);
-    return;
+    return true;
   }
-  if (tg && typeof tg.openLink === "function") {
+  if (isTelegramMiniAppRuntime() && tg && typeof tg.openLink === "function") {
     tg.openLink(url);
-    return;
+    return true;
   }
-  window.open(url, "_blank", "noopener,noreferrer");
+  return Boolean(window.open(url, "_blank"));
 }
 
 async function pollTelegramWebLoginStatus() {
   if (!state.telegramWebLoginToken || state.accessToken) {
+    renderAuthGateActions();
     return;
   }
   try {
@@ -2163,6 +2216,7 @@ async function pollTelegramWebLoginStatus() {
       state.telegramWebLoginToken = "";
       clearTelegramWebLoginPolling();
       saveState();
+      renderAuthGateActions();
       setAuthGateVisible(false);
       setNote(payload.message || "Вход через Telegram выполнен.");
       await Promise.all([loadPrivateData(), loadHistory()]);
@@ -2172,6 +2226,8 @@ async function pollTelegramWebLoginStatus() {
 
     state.telegramWebLoginToken = "";
     clearTelegramWebLoginPolling();
+    saveState();
+    renderAuthGateActions();
     setNote(payload.message || "Ссылка для входа истекла. Нажми кнопку еще раз.", true);
   } catch (error) {
     setNote(`Проблема проверки Telegram-входа: ${error.message}`, true);
@@ -2181,7 +2237,23 @@ async function pollTelegramWebLoginStatus() {
   }
 }
 
-async function startTelegramWebLogin() {
+function resumePendingTelegramWebLogin({ announce = false } = {}) {
+  if (!hasPendingTelegramWebLogin()) {
+    renderAuthGateActions();
+    return;
+  }
+  renderAuthGateActions();
+  clearTelegramWebLoginPolling();
+  if (announce) {
+    setNote("Проверяю подтверждение входа в Telegram...");
+  }
+  state.telegramWebLoginPollTimer = window.setTimeout(() => {
+    pollTelegramWebLoginStatus().catch(() => {});
+  }, 120);
+}
+
+async function startTelegramWebLogin(options = {}) {
+  const { popupHandle = null } = options;
   if (authButton) {
     authButton.disabled = true;
     authButton.textContent = "Готовлю ссылку...";
@@ -2194,12 +2266,30 @@ async function startTelegramWebLogin() {
     if (!state.telegramWebLoginToken || !deepLink) {
       throw new Error("Не удалось создать ссылку входа.");
     }
-    setNote(payload.message || "Открываю Telegram для подтверждения входа.");
-    openTelegramDeepLink(deepLink);
-    state.telegramWebLoginPollTimer = window.setTimeout(() => {
-      pollTelegramWebLoginStatus().catch(() => {});
-    }, 1500);
+    saveState();
+    renderAuthGateActions();
+    const openedInNewContext = openTelegramDeepLink(deepLink, popupHandle);
+    if (openedInNewContext) {
+      setNote(payload.message || "Открой Telegram и нажми Start. После возврата вход продолжится автоматически.");
+    } else {
+      setNote("Браузер заблокировал новую вкладку. Разреши pop-up и нажми «Войти через Telegram» снова.", true);
+      if (popupHandle && !popupHandle.closed) {
+        try {
+          popupHandle.close();
+        } catch (_e) {
+          // noop
+        }
+      }
+    }
+    resumePendingTelegramWebLogin({ announce: false });
   } catch (error) {
+    if (popupHandle && !popupHandle.closed) {
+      try {
+        popupHandle.close();
+      } catch (_e) {
+        // noop
+      }
+    }
     setNote(`Ошибка входа через Telegram: ${error.message}`, true);
   } finally {
     if (authButton) {
@@ -2300,15 +2390,17 @@ async function hydrateAuthorizedSession() {
   } catch (_error) {
     state.accessToken = "";
     state.refreshToken = "";
+    state.lastAuthProvider = "";
+    state.telegramWebLoginToken = "";
     saveState();
     return false;
   }
 }
 
 async function loginViaTelegram(options = {}) {
-  const { silent = false, targetScreen = "feed" } = options;
+  const { silent = false, targetScreen = "feed", popupHandle = null } = options;
   if (!tg || !tg.initData) {
-    await startTelegramWebLogin();
+    await startTelegramWebLogin({ popupHandle });
     return false;
   }
   if (authButton) {
@@ -2504,11 +2596,27 @@ function bindEvents() {
 
   if (authButton) {
     authButton.addEventListener("click", () => {
-      loginViaTelegram({ silent: false, targetScreen: "feed" });
+      let popupHandle = null;
+      if (!isTelegramMiniAppRuntime()) {
+        popupHandle = window.open("about:blank", "_blank");
+      }
+      loginViaTelegram({ silent: false, targetScreen: "feed", popupHandle });
+    });
+  }
+  if (authCheckButton) {
+    authCheckButton.addEventListener("click", () => {
+      resumePendingTelegramWebLogin({ announce: true });
     });
   }
   if (googleAuthButton) {
     googleAuthButton.addEventListener("click", loginViaGoogle);
+  }
+  if (logoutButton) {
+    logoutButton.addEventListener("click", () => {
+      logoutSession().catch((error) => {
+        setNote(`Не удалось завершить сессию: ${error.message}`, true);
+      });
+    });
   }
   if (linkTelegramButton) {
     linkTelegramButton.addEventListener("click", () => {
@@ -2620,6 +2728,21 @@ function bindEvents() {
   window.addEventListener("beforeunload", () => {
     revokeSourceImagePreview();
   });
+  window.addEventListener("focus", () => {
+    unlockTemplateModalScroll();
+    resumePendingTelegramWebLogin();
+  });
+  window.addEventListener("pageshow", () => {
+    unlockTemplateModalScroll();
+    resumePendingTelegramWebLogin();
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState !== "visible") {
+      return;
+    }
+    unlockTemplateModalScroll();
+    resumePendingTelegramWebLogin();
+  });
   document.addEventListener("click", (event) => {
     if (!sourceTipsPanel || !sourceTipsButton) {
       return;
@@ -2640,6 +2763,7 @@ function bindEvents() {
 }
 
 async function bootstrap() {
+  unlockTemplateModalScroll();
   loadState();
   setDevPanelVisibility();
   initTelegramViewport();
@@ -2656,6 +2780,7 @@ async function bootstrap() {
   refreshIcons();
   renderIdentityActions();
   setAuthGateVisible(!state.accessToken);
+  renderAuthGateActions();
 
   try {
     await resolveApiBase();
@@ -2683,10 +2808,12 @@ async function bootstrap() {
   } else {
     state.accessToken = "";
     state.refreshToken = "";
+    state.lastAuthProvider = "";
     saveState();
     await loadPrivateData();
     await loadHistory();
     setAuthGateVisible(true);
+    resumePendingTelegramWebLogin();
   }
 
   const autoGoogle = new URLSearchParams(window.location.search).get("google_auto");
