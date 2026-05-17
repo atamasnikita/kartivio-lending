@@ -166,55 +166,47 @@ a {
 .hero {
   position: relative;
   overflow: clip;
-  padding-top: 78px;
+  padding-top: 64px;
+  padding-bottom: 24px;
 }
 
 .hero-glow {
   position: absolute;
-  top: -130px;
+  top: -120px;
   left: 50%;
   transform: translateX(-50%);
-  width: min(940px, 88vw);
-  height: 700px;
+  width: min(760px, 82vw);
+  height: 560px;
   pointer-events: none;
-  background:
-    radial-gradient(42% 52% at 50% 26%, rgba(25, 199, 181, 0.2), rgba(25, 199, 181, 0) 72%),
-    radial-gradient(54% 64% at 50% 46%, rgba(10, 39, 52, 0.34), rgba(10, 39, 52, 0) 70%);
+  background: radial-gradient(44% 56% at 50% 28%, rgba(25, 199, 181, 0.17), rgba(25, 199, 181, 0) 74%);
+  opacity: 0.78;
 }
 
 .hero-inner {
   position: relative;
   z-index: 2;
   text-align: center;
-  max-width: 980px;
-}
-
-.eyebrow {
-  margin: 0;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  font-size: 16px;
-  color: #4fd8ca;
+  max-width: 1020px;
 }
 
 .hero h1 {
-  margin: 24px auto 0;
-  max-width: 980px;
-  font-size: 92px;
+  margin: 0 auto;
+  max-width: 1040px;
+  font-size: clamp(56px, 8.2vw, 118px);
   line-height: 0.98;
   font-weight: 700;
 }
 
 .lead {
-  margin: 30px auto 0;
+  margin: 28px auto 0;
   max-width: 760px;
   color: var(--muted);
   line-height: 1.5;
-  font-size: 34px;
+  font-size: clamp(20px, 3vw, 34px);
 }
 
 .hero-actions {
-  margin-top: 42px;
+  margin-top: 34px;
   display: flex;
   justify-content: center;
   gap: 14px;
