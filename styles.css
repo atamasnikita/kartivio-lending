@@ -172,14 +172,15 @@ a {
 
 .hero-glow {
   position: absolute;
-  top: -120px;
+  top: -130px;
   left: 50%;
   transform: translateX(-50%);
-  width: min(760px, 82vw);
-  height: 560px;
+  width: min(940px, 88vw);
+  height: 700px;
   pointer-events: none;
-  background: radial-gradient(44% 56% at 50% 28%, rgba(25, 199, 181, 0.17), rgba(25, 199, 181, 0) 74%);
-  opacity: 0.78;
+  background:
+    radial-gradient(42% 52% at 50% 26%, rgba(25, 199, 181, 0.2), rgba(25, 199, 181, 0) 72%),
+    radial-gradient(54% 64% at 50% 46%, rgba(10, 39, 52, 0.34), rgba(10, 39, 52, 0) 70%);
 }
 
 .hero-inner {
@@ -192,7 +193,7 @@ a {
 .hero h1 {
   margin: 0 auto;
   max-width: 1040px;
-  font-size: clamp(56px, 8.2vw, 118px);
+  font-size: clamp(48px, 7.2vw, 96px);
   line-height: 0.98;
   font-weight: 700;
 }
