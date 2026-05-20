@@ -122,6 +122,7 @@ const state = {
   apiBase: "",
   accessToken: "",
   refreshToken: "",
+  isCookieSession: false,
   lastAuthProvider: "",
   selectedImageModel: DEFAULT_IMAGE_MODEL,
   selectedResolution: DEFAULT_RESOLUTION,
@@ -233,6 +234,14 @@ function isTelegramMiniAppRuntime() {
   return Boolean(tg && tg.initData);
 }
 
+function prefersCookieAuth() {
+  return !isTelegramMiniAppRuntime();
+}
+
+function hasActiveSession() {
+  return Boolean(state.accessToken || state.isCookieSession);
+}
+
 function isLocalRuntime() {
   const host = String(window.location.hostname || "").trim().toLowerCase();
   return host === "localhost" || host === "127.0.0.1";
@@ -277,7 +286,7 @@ function setAuthGateVisible(visible) {
 }
 
 function hasPendingTelegramWebLogin() {
-  return Boolean(state.telegramWebLoginToken) && !state.accessToken;
+  return Boolean(state.telegramWebLoginToken) && !hasActiveSession();
 }
 
 function renderAuthGateActions() {
@@ -620,10 +629,15 @@ function saveState() {
   } else {
     localStorage.removeItem(STORAGE_KEYS.apiBase);
   }
-  localStorage.setItem(STORAGE_KEYS.accessToken, state.accessToken);
-  localStorage.setItem(STORAGE_KEYS.refreshToken, state.refreshToken);
+  if (prefersCookieAuth()) {
+    localStorage.removeItem(STORAGE_KEYS.accessToken);
+    localStorage.removeItem(STORAGE_KEYS.refreshToken);
+  } else {
+    localStorage.setItem(STORAGE_KEYS.accessToken, state.accessToken);
+    localStorage.setItem(STORAGE_KEYS.refreshToken, state.refreshToken);
+  }
   localStorage.setItem(STORAGE_KEYS.lastAuthProvider, state.lastAuthProvider);
-  if (state.telegramWebLoginToken && !state.accessToken) {
+  if (state.telegramWebLoginToken && !hasActiveSession()) {
     localStorage.setItem(STORAGE_KEYS.telegramWebLoginToken, state.telegramWebLoginToken);
   } else {
     localStorage.removeItem(STORAGE_KEYS.telegramWebLoginToken);
@@ -639,11 +653,19 @@ function loadState() {
   if (!canOverrideApiBase()) {
     localStorage.removeItem(STORAGE_KEYS.apiBase);
   }
-  state.accessToken = localStorage.getItem(STORAGE_KEYS.accessToken) || "";
-  state.refreshToken = localStorage.getItem(STORAGE_KEYS.refreshToken) || "";
+  if (prefersCookieAuth()) {
+    state.accessToken = "";
+    state.refreshToken = "";
+    localStorage.removeItem(STORAGE_KEYS.accessToken);
+    localStorage.removeItem(STORAGE_KEYS.refreshToken);
+  } else {
+    state.accessToken = localStorage.getItem(STORAGE_KEYS.accessToken) || "";
+    state.refreshToken = localStorage.getItem(STORAGE_KEYS.refreshToken) || "";
+  }
+  state.isCookieSession = false;
   state.lastAuthProvider = String(localStorage.getItem(STORAGE_KEYS.lastAuthProvider) || "").trim().toLowerCase();
   state.telegramWebLoginToken = String(localStorage.getItem(STORAGE_KEYS.telegramWebLoginToken) || "").trim();
-  if (state.accessToken) {
+  if (hasActiveSession()) {
     state.telegramWebLoginToken = "";
     localStorage.removeItem(STORAGE_KEYS.telegramWebLoginToken);
   }
@@ -1232,10 +1254,20 @@ function clearTelegramWebLoginPolling() {
 }
 
 async function logoutSession() {
+  try {
+    const body = state.refreshToken ? { refresh_token: state.refreshToken } : undefined;
+    await apiFetch("/v1/auth/logout", {
+      method: "POST",
+      body,
+    });
+  } catch (_e) {
+    // noop: local cleanup below is still required
+  }
   clearTelegramLinkPolling();
   clearTelegramWebLoginPolling();
   state.accessToken = "";
   state.refreshToken = "";
+  state.isCookieSession = false;
   state.lastAuthProvider = "";
   state.telegramLinkToken = "";
   state.telegramWebLoginToken = "";
@@ -1256,7 +1288,7 @@ function renderIdentityActions() {
   }
 
   if (linkTelegramButton) {
-    linkTelegramButton.disabled = linkedTelegram || !state.accessToken;
+    linkTelegramButton.disabled = linkedTelegram || !hasActiveSession();
     linkTelegramButton.textContent = linkedTelegram ? "Telegram привязан" : "Привязать Telegram";
   }
 
@@ -1306,6 +1338,19 @@ function extractErrorMessage(payload, fallback) {
   return fallback;
 }
 
+function isUnauthorizedError(error) {
+  const status = Number(error && error.status);
+  if (status === 401) {
+    return true;
+  }
+  const code = String((error && error.code) || "").trim().toLowerCase();
+  if (code.includes("unauthorized") || code.includes("token")) {
+    return true;
+  }
+  const message = String((error && error.message) || "");
+  return /401|unauthorized|token/i.test(message);
+}
+
 async function apiFetch(path, { method = "GET", body, auth = false, idempotencyKey } = {}) {
   const headers = headersForApiBase(state.apiBase);
   if (body !== undefined) {
@@ -1320,13 +1365,20 @@ async function apiFetch(path, { method = "GET", body, auth = false, idempotencyK
 
   const response = await fetch(`${state.apiBase}${path}`, {
     method,
+    credentials: "include",
     headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   const payload = await parseJsonResponse(response);
   if (!response.ok) {
     const message = extractErrorMessage(payload, `HTTP ${response.status}`);
-    throw new Error(message);
+    const error = new Error(message);
+    error.status = response.status;
+    error.code =
+      (payload && typeof payload.code === "string" && payload.code) ||
+      (payload && payload.detail && typeof payload.detail.code === "string" && payload.detail.code) ||
+      "";
+    throw error;
   }
   return payload;
 }
@@ -1342,13 +1394,20 @@ async function apiMultipart(path, formData, { auth = false, idempotencyKey } = {
 
   const response = await fetch(`${state.apiBase}${path}`, {
     method: "POST",
+    credentials: "include",
     headers,
     body: formData,
   });
   const payload = await parseJsonResponse(response);
   if (!response.ok) {
     const message = extractErrorMessage(payload, `HTTP ${response.status}`);
-    throw new Error(message);
+    const error = new Error(message);
+    error.status = response.status;
+    error.code =
+      (payload && typeof payload.code === "string" && payload.code) ||
+      (payload && payload.detail && typeof payload.detail.code === "string" && payload.detail.code) ||
+      "";
+    throw error;
   }
   return payload;
 }
@@ -1383,21 +1442,30 @@ async function resolveApiBase() {
 }
 
 async function refreshSession() {
-  if (!state.refreshToken) {
+  if (!state.refreshToken && !prefersCookieAuth()) {
     return false;
   }
   try {
+    const body = state.refreshToken ? { refresh_token: state.refreshToken } : undefined;
     const payload = await apiFetch("/v1/auth/refresh", {
       method: "POST",
-      body: { refresh_token: state.refreshToken },
+      body,
     });
-    state.accessToken = payload.access_token;
-    state.refreshToken = payload.refresh_token;
+    if (prefersCookieAuth()) {
+      state.accessToken = "";
+      state.refreshToken = "";
+      state.isCookieSession = true;
+    } else {
+      state.accessToken = payload.access_token;
+      state.refreshToken = payload.refresh_token;
+      state.isCookieSession = false;
+    }
     saveState();
     return true;
   } catch (_e) {
     state.accessToken = "";
     state.refreshToken = "";
+    state.isCookieSession = false;
     state.lastAuthProvider = "";
     state.telegramWebLoginToken = "";
     saveState();
@@ -1409,7 +1477,7 @@ async function authorizedFetch(path, options = {}) {
   try {
     return await apiFetch(path, { ...options, auth: true });
   } catch (error) {
-    if (!/401|unauthorized|token/i.test(String(error && error.message))) {
+    if (!isUnauthorizedError(error)) {
       throw error;
     }
     const refreshed = await refreshSession();
@@ -1425,7 +1493,7 @@ async function authorizedMultipart(path, formData, options = {}) {
   try {
     return await apiMultipart(path, formData, { ...options, auth: true });
   } catch (error) {
-    if (!/401|unauthorized|token/i.test(String(error && error.message))) {
+    if (!isUnauthorizedError(error)) {
       throw error;
     }
     const refreshed = await refreshSession();
@@ -1478,7 +1546,7 @@ function openCheckout(url) {
 }
 
 async function buyPackage(code) {
-  if (!state.accessToken) {
+  if (!hasActiveSession()) {
     setPlansNote("Сначала войди в аккаунт.", true);
     setAuthGateVisible(true);
     return;
@@ -1989,8 +2057,8 @@ function renderHistory(payload) {
   }
 }
 
-async function loadHistory() {
-  if (!state.accessToken) {
+async function loadHistory({ forceServerCheck = false } = {}) {
+  if (!hasActiveSession() && !forceServerCheck) {
     historyList.innerHTML = '<article class="history-item"><div class="history-body">Войди, чтобы увидеть историю.</div></article>';
     return;
   }
@@ -2028,10 +2096,11 @@ async function loadIdentities() {
   renderIdentityActions();
 }
 
-async function loadPrivateData() {
-  if (!state.accessToken) {
+async function loadPrivateData({ forceServerCheck = false } = {}) {
+  if (!hasActiveSession() && !forceServerCheck) {
     clearTelegramLinkPolling();
     state.telegramLinkToken = "";
+    state.isCookieSession = false;
     state.linkedProviders = new Set();
     userName.textContent = "—";
     userTgId.textContent = "—";
@@ -2045,12 +2114,17 @@ async function loadPrivateData() {
     authorizedGetWithRetry("/v1/me", 1),
     authorizedGetWithRetry("/v1/wallet?limit=1", 1),
   ]);
+  if (prefersCookieAuth()) {
+    state.isCookieSession = true;
+  } else {
+    state.isCookieSession = false;
+  }
   await loadIdentities();
   renderUser(me, wallet);
 }
 
 function ensureAuthorizedForCreate() {
-  if (!state.accessToken) {
+  if (!hasActiveSession()) {
     setAuthGateVisible(true);
     throw new Error("Сначала войди в аккаунт.");
   }
@@ -2192,7 +2266,7 @@ function openTelegramDeepLink(url, popupHandle = null) {
 }
 
 async function pollTelegramWebLoginStatus() {
-  if (!state.telegramWebLoginToken || state.accessToken) {
+  if (!state.telegramWebLoginToken || hasActiveSession()) {
     renderAuthGateActions();
     return;
   }
@@ -2209,9 +2283,18 @@ async function pollTelegramWebLoginStatus() {
       }, 2000);
       return;
     }
-    if (status === "linked" && payload.access_token && payload.refresh_token) {
-      state.accessToken = payload.access_token;
-      state.refreshToken = payload.refresh_token;
+    if (status === "linked") {
+      if (prefersCookieAuth()) {
+        state.accessToken = "";
+        state.refreshToken = "";
+        state.isCookieSession = true;
+      } else if (payload.access_token && payload.refresh_token) {
+        state.accessToken = payload.access_token;
+        state.refreshToken = payload.refresh_token;
+        state.isCookieSession = false;
+      } else {
+        throw new Error("Не удалось получить токены входа.");
+      }
       state.lastAuthProvider = "telegram";
       state.telegramWebLoginToken = "";
       clearTelegramWebLoginPolling();
@@ -2300,7 +2383,7 @@ async function startTelegramWebLogin(options = {}) {
 }
 
 async function pollTelegramLinkStatus() {
-  if (!state.accessToken || !state.telegramLinkToken) {
+  if (!hasActiveSession() || !state.telegramLinkToken) {
     return;
   }
   try {
@@ -2341,7 +2424,7 @@ async function pollTelegramLinkStatus() {
 }
 
 async function startTelegramLink() {
-  if (!state.accessToken) {
+  if (!hasActiveSession()) {
     setAuthGateVisible(true);
     return;
   }
@@ -2381,15 +2464,22 @@ async function startTelegramLink() {
 }
 
 async function hydrateAuthorizedSession() {
-  if (!state.accessToken) {
+  if (!hasActiveSession() && !prefersCookieAuth()) {
     return false;
   }
   try {
-    await Promise.all([loadPrivateData(), loadHistory()]);
+    await Promise.all([
+      loadPrivateData({ forceServerCheck: prefersCookieAuth() }),
+      loadHistory({ forceServerCheck: prefersCookieAuth() }),
+    ]);
+    if (prefersCookieAuth()) {
+      state.isCookieSession = true;
+    }
     return true;
   } catch (_error) {
     state.accessToken = "";
     state.refreshToken = "";
+    state.isCookieSession = false;
     state.lastAuthProvider = "";
     state.telegramWebLoginToken = "";
     saveState();
@@ -2414,8 +2504,15 @@ async function loginViaTelegram(options = {}) {
     });
     state.telegramWebLoginToken = "";
     clearTelegramWebLoginPolling();
-    state.accessToken = payload.access_token;
-    state.refreshToken = payload.refresh_token;
+    if (prefersCookieAuth()) {
+      state.accessToken = "";
+      state.refreshToken = "";
+      state.isCookieSession = true;
+    } else {
+      state.accessToken = payload.access_token;
+      state.refreshToken = payload.refresh_token;
+      state.isCookieSession = false;
+    }
     state.lastAuthProvider = "telegram";
     saveState();
     setAuthGateVisible(false);
@@ -2453,8 +2550,15 @@ async function loginViaGoogleCredential(idToken) {
   });
   state.telegramWebLoginToken = "";
   clearTelegramWebLoginPolling();
-  state.accessToken = payload.access_token;
-  state.refreshToken = payload.refresh_token;
+  if (prefersCookieAuth()) {
+    state.accessToken = "";
+    state.refreshToken = "";
+    state.isCookieSession = true;
+  } else {
+    state.accessToken = payload.access_token;
+    state.refreshToken = payload.refresh_token;
+    state.isCookieSession = false;
+  }
   state.lastAuthProvider = "google";
   saveState();
   setAuthGateVisible(false);
@@ -2779,7 +2883,7 @@ async function bootstrap() {
   refreshGenerationCostNote();
   refreshIcons();
   renderIdentityActions();
-  setAuthGateVisible(!state.accessToken);
+  setAuthGateVisible(!hasActiveSession());
   renderAuthGateActions();
 
   try {
@@ -2791,7 +2895,7 @@ async function bootstrap() {
   }
 
   let authorized = false;
-  if (state.accessToken) {
+  if (state.accessToken || prefersCookieAuth()) {
     authorized = await hydrateAuthorizedSession();
   }
 
@@ -2808,6 +2912,7 @@ async function bootstrap() {
   } else {
     state.accessToken = "";
     state.refreshToken = "";
+    state.isCookieSession = false;
     state.lastAuthProvider = "";
     saveState();
     await loadPrivateData();
@@ -2817,7 +2922,7 @@ async function bootstrap() {
   }
 
   const autoGoogle = new URLSearchParams(window.location.search).get("google_auto");
-  if (autoGoogle === "1" && !isTelegramMiniAppRuntime() && !state.accessToken) {
+  if (autoGoogle === "1" && !isTelegramMiniAppRuntime() && !hasActiveSession()) {
     window.setTimeout(() => {
       loginViaGoogle();
     }, 150);

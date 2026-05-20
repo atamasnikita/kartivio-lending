@@ -83,6 +83,7 @@
     const method = options.method || "GET";
     const response = await fetch(`${apiBase}${path}`, {
       method,
+      credentials: "include",
       headers: apiHeaders(apiBase, {
         accessToken: options.accessToken || "",
         json: Boolean(options.json),
@@ -147,13 +148,31 @@
   }
 
   async function resolveLandingUser() {
+    const apiBase = pickLandingApiBase();
+    let meResponse = await fetchJson(apiBase, "/v1/me");
+    if (meResponse.ok && meResponse.payload) {
+      return meResponse.payload;
+    }
+
+    if (meResponse.status === 401) {
+      const refreshByCookie = await fetchJson(apiBase, "/v1/auth/refresh", {
+        method: "POST",
+      });
+      if (refreshByCookie.ok) {
+        meResponse = await fetchJson(apiBase, "/v1/me");
+        if (meResponse.ok && meResponse.payload) {
+          return meResponse.payload;
+        }
+      }
+    }
+
+    // Fallback для старых сессий, где токены лежат в localStorage.
     const accessToken = String(localStorage.getItem(AUTH_STORAGE_KEYS.accessToken) || "").trim();
     if (!accessToken) {
       return null;
     }
 
-    const apiBase = pickLandingApiBase();
-    let meResponse = await fetchJson(apiBase, "/v1/me", { accessToken });
+    meResponse = await fetchJson(apiBase, "/v1/me", { accessToken });
     if (meResponse.ok && meResponse.payload) {
       return meResponse.payload;
     }
