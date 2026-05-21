@@ -118,6 +118,109 @@ const STATUS_LABELS = {
   cancelled: "Отменено",
 };
 
+const API_ERROR_MESSAGES = Object.freeze({
+  unauthorized: "Нужно войти в аккаунт.",
+  forbidden: "Недостаточно прав для этого действия.",
+  invalid_token: "Сессия устарела. Войди снова.",
+  token_expired: "Сессия устарела. Войди снова.",
+  token_revoked: "Сессия завершена. Войди снова.",
+  refresh_token_reused: "Сессия завершена. Войди снова.",
+  refresh_rotation_required: "Сессия завершена. Войди снова.",
+  missing_refresh_token: "Сессия завершена. Войди снова.",
+  invalid_token_payload: "Ошибка сессии. Войди снова.",
+  auth_rate_limit_exceeded: "Слишком много попыток входа. Подожди немного и попробуй снова.",
+  rate_limit_unavailable: "Сервис временно недоступен. Попробуй еще раз.",
+  hour_limit_exceeded: "Лимит генераций на этот час исчерпан.",
+  queue_unavailable: "Сервис генерации перегружен. Попробуй чуть позже.",
+  insufficient_credits: "Недостаточно кредитов для генерации.",
+  concurrent_jobs_limit_exceeded: "Слишком много задач в работе. Дождись завершения текущих.",
+  prompt_too_long: "Промпт слишком длинный.",
+  unsupported_image_model: "Выбрана неподдерживаемая модель.",
+  unsupported_output_size: "Это сочетание размера и соотношения пока недоступно.",
+  source_image_required: "Добавь хотя бы одно фото для редактирования.",
+  too_many_source_images: "Можно загрузить не более 3 фото.",
+  unsupported_source_image_type: "Поддерживаются только PNG, JPG и WEBP.",
+  source_image_too_large: "Одно из фото слишком большое. Используй файл до 10 MB.",
+  source_image_not_found: "Не удалось найти загруженное фото. Попробуй загрузить заново.",
+  payment_not_found: "Платеж не найден.",
+  unknown_package: "Пакет не найден. Выбери один из доступных.",
+  unsupported_payment_kind: "Этот тип оплаты сейчас недоступен.",
+  yookassa_not_configured: "Оплата временно недоступна.",
+  yookassa_create_failed: "Не удалось создать платеж. Попробуй еще раз.",
+  yookassa_get_failed: "Не удалось проверить статус платежа. Попробуй еще раз.",
+  webhook_rate_limit_exceeded: "Слишком много запросов. Попробуй позже.",
+  invalid_webhook: "Некорректные данные запроса.",
+  google_auth_not_configured: "Вход через Google временно недоступен.",
+  google_verify_unavailable: "Сервис входа через Google временно недоступен.",
+  google_verify_bad_response: "Сервис входа через Google временно недоступен.",
+  google_invalid_token: "Не удалось подтвердить вход через Google.",
+  google_invalid_issuer: "Не удалось подтвердить вход через Google.",
+  google_invalid_audience: "Не удалось подтвердить вход через Google.",
+  google_invalid_token_payload: "Не удалось подтвердить вход через Google.",
+  google_token_expired: "Срок действия входа через Google истек. Повтори попытку.",
+  google_id_token_required: "Не получен токен Google. Повтори вход.",
+  google_email_not_verified: "Подтверди email в Google-аккаунте и попробуй снова.",
+  google_csrf_invalid: "Сессия входа устарела. Запусти вход через Google заново.",
+  telegram_auth_not_configured: "Вход через Telegram временно недоступен.",
+  telegram_init_data_missing: "Открой приложение через кнопку Web App в боте.",
+  telegram_init_data_invalid: "Сессия Telegram недействительна. Открой приложение заново из бота.",
+  telegram_init_data_missing_hash: "Сессия Telegram недействительна. Открой приложение заново из бота.",
+  telegram_init_data_bad_hash: "Сессия Telegram недействительна. Открой приложение заново из бота.",
+  telegram_init_data_missing_auth_date: "Сессия Telegram недействительна. Открой приложение заново из бота.",
+  telegram_init_data_invalid_auth_date: "Сессия Telegram недействительна. Открой приложение заново из бота.",
+  telegram_init_data_expired: "Сессия Telegram истекла. Открой приложение заново из бота.",
+  telegram_init_data_missing_user: "Не удалось определить пользователя Telegram.",
+  telegram_init_data_missing_user_id: "Не удалось определить пользователя Telegram.",
+  telegram_init_data_invalid_user: "Не удалось определить пользователя Telegram.",
+  telegram_init_data_invalid_user_id: "Не удалось определить пользователя Telegram.",
+  telegram_link_unavailable: "Привязка Telegram временно недоступна.",
+  telegram_link_token_create_failed: "Не удалось создать ссылку привязки. Попробуй еще раз.",
+  telegram_link_token_invalid: "Ссылка привязки недействительна. Создай новую.",
+  telegram_link_not_found: "Ссылка привязки не найдена или истекла.",
+  telegram_web_login_unavailable: "Вход через Telegram временно недоступен.",
+  telegram_web_login_token_create_failed: "Не удалось создать ссылку входа. Попробуй еще раз.",
+  telegram_web_login_token_invalid: "Ссылка входа недействительна. Запусти вход заново.",
+  telegram_web_login_failed: "Не удалось завершить вход через Telegram. Попробуй еще раз.",
+  openai_org_verification_required: "GPT Image 2 временно недоступна: не завершена верификация OpenAI.",
+  openai_not_configured: "Модель GPT Image 2 временно недоступна.",
+  openai_timeout: "Генерация заняла слишком много времени. Попробуй еще раз.",
+  openai_invalid_size: "Этот размер пока недоступен для GPT Image 2.",
+  openai_generation_failed: "Ошибка генерации в GPT Image 2. Попробуй снова.",
+  openai_edit_failed: "Ошибка редактирования в GPT Image 2. Попробуй снова.",
+  openai_empty_result: "Не удалось получить результат от GPT Image 2. Попробуй снова.",
+  openai_missing_b64: "Не удалось получить изображение от GPT Image 2. Попробуй снова.",
+  gemini_not_configured: "Модель Nano Banana временно недоступна.",
+  gemini_invalid_api_key: "Модель Nano Banana временно недоступна.",
+  gemini_rate_limited: "Сервис генерации перегружен. Попробуй чуть позже.",
+  gemini_overloaded: "Сервис генерации перегружен. Попробуй чуть позже.",
+  gemini_model_not_found: "Выбранная модель временно недоступна.",
+  gemini_permission_denied: "Нет доступа к выбранной модели.",
+  gemini_invalid_request: "Некорректный запрос генерации. Проверь настройки.",
+  gemini_generation_failed: "Ошибка генерации в Nano Banana. Попробуй снова.",
+  gemini_empty_result: "Не удалось получить изображение от Nano Banana. Попробуй снова.",
+  gemini_invalid_image_data: "Не удалось обработать результат генерации. Попробуй снова.",
+  provider_unexpected_error: "Сервис генерации временно недоступен. Попробуй снова.",
+});
+
+const JOB_ERROR_MESSAGES = Object.freeze({
+  queue_unavailable: "Очередь генерации временно недоступна. Кредиты возвращены.",
+  provider_unexpected_error: "Ошибка генерации на стороне провайдера. Кредиты возвращены.",
+  insufficient_credits: "Недостаточно кредитов.",
+  concurrent_jobs_limit_exceeded: "Слишком много задач в работе.",
+  openai_org_verification_required: "GPT Image 2 недоступна: требуется верификация OpenAI.",
+  openai_timeout: "Генерация заняла слишком много времени. Кредиты возвращены.",
+  openai_invalid_size: "Выбранный размер не поддерживается для GPT Image 2.",
+  openai_generation_failed: "Ошибка генерации в GPT Image 2. Кредиты возвращены.",
+  openai_edit_failed: "Ошибка редактирования в GPT Image 2. Кредиты возвращены.",
+  gemini_rate_limited: "Сервис Nano Banana перегружен. Кредиты возвращены.",
+  gemini_overloaded: "Сервис Nano Banana перегружен. Кредиты возвращены.",
+  gemini_generation_failed: "Ошибка генерации в Nano Banana. Кредиты возвращены.",
+  gemini_invalid_request: "Некорректные параметры генерации.",
+  gemini_empty_result: "Провайдер не вернул изображение. Кредиты возвращены.",
+  gemini_invalid_image_data: "Провайдер вернул поврежденный результат. Кредиты возвращены.",
+  source_image_not_found: "Референс-фото недоступно. Загрузите его снова.",
+});
+
 const state = {
   apiBase: "",
   accessToken: "",
@@ -772,7 +875,7 @@ function extensionFromContentType(contentType) {
 async function resolveDisplayImage(rawUrl) {
   const url = normalizeImageUrl(rawUrl);
   if (!url) {
-    throw new Error("Пустой URL изображения.");
+    throw new Error("Ссылка на изображение не найдена.");
   }
   if (!isNgrokUrl(url)) {
     return { src: url, contentType: "", isBlob: false };
@@ -788,7 +891,7 @@ async function resolveDisplayImage(rawUrl) {
     headers: headersForApiBase(url),
   });
   if (!response.ok) {
-    throw new Error(`Изображение недоступно (HTTP ${response.status}).`);
+    throw new Error("Изображение временно недоступно.");
   }
   const blob = await response.blob();
   const objectUrl = URL.createObjectURL(blob);
@@ -800,7 +903,7 @@ async function resolveDisplayImage(rawUrl) {
 async function openImage(rawUrl) {
   const targetUrl = normalizeImageUrl(rawUrl);
   if (!targetUrl) {
-    throw new Error("Пустой URL изображения.");
+    throw new Error("Ссылка на изображение не найдена.");
   }
   if (tg && typeof tg.openLink === "function") {
     tg.openLink(targetUrl);
@@ -812,7 +915,7 @@ async function openImage(rawUrl) {
 async function downloadImage(rawUrl, fallbackBase = "kartivio-image") {
   const targetUrl = normalizeImageUrl(rawUrl);
   if (!targetUrl) {
-    throw new Error("Пустой URL изображения.");
+    throw new Error("Ссылка на изображение не найдена.");
   }
 
   const response = await fetch(targetUrl, {
@@ -820,7 +923,7 @@ async function downloadImage(rawUrl, fallbackBase = "kartivio-image") {
     headers: headersForApiBase(targetUrl),
   });
   if (!response.ok) {
-    throw new Error(`Изображение недоступно (HTTP ${response.status}).`);
+    throw new Error("Изображение временно недоступно.");
   }
 
   const blob = await response.blob();
@@ -853,7 +956,7 @@ function switchScreen(nextScreen) {
   }
   if (target === "history") {
     loadHistory().catch((error) => {
-      setCreateNote(`История не загрузилась: ${error.message}`, true);
+      setCreateNote(userFacingErrorMessage(error, "Не удалось загрузить историю."), true);
     });
   }
 }
@@ -1338,6 +1441,75 @@ function extractErrorMessage(payload, fallback) {
   return fallback;
 }
 
+function normalizeErrorCode(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function fallbackMessageByStatus(status, fallback = "Не удалось выполнить запрос. Попробуй еще раз.") {
+  const code = Number(status || 0);
+  if (code === 401) {
+    return "Нужно войти в аккаунт.";
+  }
+  if (code === 403) {
+    return "Недостаточно прав для этого действия.";
+  }
+  if (code === 404) {
+    return "Данные не найдены.";
+  }
+  if (code === 413) {
+    return "Файл слишком большой.";
+  }
+  if (code === 422) {
+    return "Проверь введенные данные и попробуй снова.";
+  }
+  if (code === 429) {
+    return "Слишком много запросов. Подожди немного и попробуй снова.";
+  }
+  if (code >= 500) {
+    return "Сервис временно недоступен. Попробуй еще раз.";
+  }
+  return fallback;
+}
+
+function userFacingErrorMessage(error, fallback = "Произошла ошибка. Попробуй еще раз.") {
+  const code = normalizeErrorCode(error && error.code);
+  if (code && API_ERROR_MESSAGES[code]) {
+    return API_ERROR_MESSAGES[code];
+  }
+
+  const status = Number(error && error.status);
+  if (status) {
+    return fallbackMessageByStatus(status, fallback);
+  }
+
+  const raw = String((error && (error.rawMessage || error.message)) || "").trim();
+  if (!raw) {
+    return fallback;
+  }
+
+  if (/failed to fetch|networkerror|load failed|fetch failed/i.test(raw)) {
+    return "Нет соединения с сервером. Проверь интернет и попробуй снова.";
+  }
+  if (/timeout|timed out/i.test(raw)) {
+    return "Операция заняла слишком много времени. Попробуй еще раз.";
+  }
+  if (/http\s*5\d\d/i.test(raw)) {
+    return "Сервис временно недоступен. Попробуй еще раз.";
+  }
+  if (/http\s*4\d\d/i.test(raw)) {
+    return fallback;
+  }
+  return fallback;
+}
+
+function generationErrorMessage(errorCode) {
+  const key = normalizeErrorCode(errorCode);
+  if (key && JOB_ERROR_MESSAGES[key]) {
+    return JOB_ERROR_MESSAGES[key];
+  }
+  return "Генерация не удалась. Кредиты возвращены.";
+}
+
 function isUnauthorizedError(error) {
   const status = Number(error && error.status);
   if (status === 401) {
@@ -1371,13 +1543,19 @@ async function apiFetch(path, { method = "GET", body, auth = false, idempotencyK
   });
   const payload = await parseJsonResponse(response);
   if (!response.ok) {
-    const message = extractErrorMessage(payload, `HTTP ${response.status}`);
-    const error = new Error(message);
-    error.status = response.status;
-    error.code =
+    const rawMessage = extractErrorMessage(payload, `HTTP ${response.status}`);
+    const errorCode =
       (payload && typeof payload.code === "string" && payload.code) ||
       (payload && payload.detail && typeof payload.detail.code === "string" && payload.detail.code) ||
       "";
+    const message = userFacingErrorMessage(
+      { code: errorCode, status: response.status, rawMessage },
+      fallbackMessageByStatus(response.status)
+    );
+    const error = new Error(message);
+    error.status = response.status;
+    error.code = errorCode;
+    error.rawMessage = rawMessage;
     throw error;
   }
   return payload;
@@ -1400,13 +1578,19 @@ async function apiMultipart(path, formData, { auth = false, idempotencyKey } = {
   });
   const payload = await parseJsonResponse(response);
   if (!response.ok) {
-    const message = extractErrorMessage(payload, `HTTP ${response.status}`);
-    const error = new Error(message);
-    error.status = response.status;
-    error.code =
+    const rawMessage = extractErrorMessage(payload, `HTTP ${response.status}`);
+    const errorCode =
       (payload && typeof payload.code === "string" && payload.code) ||
       (payload && payload.detail && typeof payload.detail.code === "string" && payload.detail.code) ||
       "";
+    const message = userFacingErrorMessage(
+      { code: errorCode, status: response.status, rawMessage },
+      fallbackMessageByStatus(response.status)
+    );
+    const error = new Error(message);
+    error.status = response.status;
+    error.code = errorCode;
+    error.rawMessage = rawMessage;
     throw error;
   }
   return payload;
@@ -1565,7 +1749,7 @@ async function buyPackage(code) {
       setPlansNote("Платеж создан, но ссылка оплаты не пришла.", true);
     }
   } catch (error) {
-    setPlansNote(`Ошибка создания платежа: ${error.message}`, true);
+    setPlansNote(userFacingErrorMessage(error, "Не удалось создать платеж."), true);
   }
 }
 
@@ -1938,12 +2122,12 @@ async function renderActiveImage(job, renderToken) {
     const downloadBtn = activeResult.querySelector('[data-action="download"]');
     openBtn.addEventListener("click", () => {
       openImage(job.result_image_url).catch((error) => {
-        setCreateNote(`Не удалось открыть изображение: ${error.message}`, true);
+        setCreateNote(userFacingErrorMessage(error, "Не удалось открыть изображение."), true);
       });
     });
     downloadBtn.addEventListener("click", () => {
       downloadImage(job.result_image_url, `kartivio-${job.id}`).catch((error) => {
-        setCreateNote(`Не удалось скачать изображение: ${error.message}`, true);
+        setCreateNote(userFacingErrorMessage(error, "Не удалось скачать изображение."), true);
       });
     });
   } catch (error) {
@@ -1951,7 +2135,7 @@ async function renderActiveImage(job, renderToken) {
       return;
     }
     activeResult.className = "active-result empty-result";
-    activeResult.textContent = `Изображение недоступно: ${error.message}`;
+    activeResult.textContent = userFacingErrorMessage(error, "Изображение временно недоступно.");
   }
 }
 
@@ -1971,7 +2155,8 @@ function renderActiveJob(job) {
   }
   state.activeImageRenderToken += 1;
   activeResult.classList.add("empty-result");
-  activeResult.textContent = job.status === "failed" ? `Ошибка: ${job.error_code || "unknown"}` : "Задача выполняется.";
+  activeResult.textContent =
+    job.status === "failed" ? generationErrorMessage(job.error_code) : "Задача выполняется.";
 }
 
 function historyThumb(job) {
@@ -2022,7 +2207,7 @@ function renderHistory(payload) {
         return;
       }
       openImage(job.result_image_url).catch((error) => {
-        setCreateNote(`Не удалось открыть изображение: ${error.message}`, true);
+        setCreateNote(userFacingErrorMessage(error, "Не удалось открыть изображение."), true);
       });
     });
     item.querySelector('[data-action="download-image"]').addEventListener("click", () => {
@@ -2030,7 +2215,7 @@ function renderHistory(payload) {
         return;
       }
       downloadImage(job.result_image_url, `kartivio-${job.id}`).catch((error) => {
-        setCreateNote(`Не удалось скачать изображение: ${error.message}`, true);
+        setCreateNote(userFacingErrorMessage(error, "Не удалось скачать изображение."), true);
       });
     });
     historyList.appendChild(item);
@@ -2176,7 +2361,7 @@ async function pollActiveJob(jobId) {
     }
     await Promise.allSettled([loadPrivateData(), loadHistory()]);
   } catch (error) {
-    setCreateNote(`Не удалось обновить задачу: ${error.message}`, true);
+    setCreateNote(userFacingErrorMessage(error, "Не удалось обновить статус задачи."), true);
   }
 }
 
@@ -2226,11 +2411,11 @@ async function handleCreate() {
 
     state.activeJobId = job.id;
     renderActiveJob(job);
-    setCreateNote(`Задача создана: ${job.status}.`);
+    setCreateNote(`Задача создана: ${jobStatusLabel(job.status)}.`);
     await Promise.allSettled([loadPrivateData(), loadHistory()]);
     await pollActiveJob(job.id);
   } catch (error) {
-    setCreateNote(error.message, true);
+    setCreateNote(userFacingErrorMessage(error, "Не удалось запустить генерацию."), true);
   } finally {
     createButton.disabled = false;
     setCreateButtonIdleLabel();
@@ -2313,7 +2498,7 @@ async function pollTelegramWebLoginStatus() {
     renderAuthGateActions();
     setNote(payload.message || "Ссылка для входа истекла. Нажми кнопку еще раз.", true);
   } catch (error) {
-    setNote(`Проблема проверки Telegram-входа: ${error.message}`, true);
+    setNote(userFacingErrorMessage(error, "Не удалось проверить вход через Telegram."), true);
     state.telegramWebLoginPollTimer = window.setTimeout(() => {
       pollTelegramWebLoginStatus().catch(() => {});
     }, 3000);
@@ -2373,7 +2558,7 @@ async function startTelegramWebLogin(options = {}) {
         // noop
       }
     }
-    setNote(`Ошибка входа через Telegram: ${error.message}`, true);
+    setNote(userFacingErrorMessage(error, "Не удалось начать вход через Telegram."), true);
   } finally {
     if (authButton) {
       authButton.disabled = false;
@@ -2416,7 +2601,7 @@ async function pollTelegramLinkStatus() {
     state.telegramLinkToken = "";
     clearTelegramLinkPolling();
   } catch (error) {
-    setTelegramLinkNote(`Не удалось проверить привязку: ${error.message}`, true);
+    setTelegramLinkNote(userFacingErrorMessage(error, "Не удалось проверить привязку Telegram."), true);
     state.telegramLinkPollTimer = window.setTimeout(() => {
       pollTelegramLinkStatus().catch(() => {});
     }, 3000);
@@ -2457,7 +2642,7 @@ async function startTelegramLink() {
       pollTelegramLinkStatus().catch(() => {});
     }, 1500);
   } catch (error) {
-    setTelegramLinkNote(`Ошибка старта привязки: ${error.message}`, true);
+    setTelegramLinkNote(userFacingErrorMessage(error, "Не удалось начать привязку Telegram."), true);
   } finally {
     renderIdentityActions();
   }
@@ -2524,7 +2709,7 @@ async function loginViaTelegram(options = {}) {
     return true;
   } catch (error) {
     if (!silent) {
-      setNote(`Ошибка авторизации: ${error.message}`, true);
+      setNote(userFacingErrorMessage(error, "Не удалось выполнить вход."), true);
     }
     return false;
   } finally {
@@ -2718,20 +2903,20 @@ function bindEvents() {
   if (logoutButton) {
     logoutButton.addEventListener("click", () => {
       logoutSession().catch((error) => {
-        setNote(`Не удалось завершить сессию: ${error.message}`, true);
+        setNote(userFacingErrorMessage(error, "Не удалось завершить сессию."), true);
       });
     });
   }
   if (linkTelegramButton) {
     linkTelegramButton.addEventListener("click", () => {
       startTelegramLink().catch((error) => {
-        setTelegramLinkNote(`Ошибка: ${error.message}`, true);
+        setTelegramLinkNote(userFacingErrorMessage(error, "Не удалось начать привязку Telegram."), true);
       });
     });
   }
   createButton.addEventListener("click", handleCreate);
   refreshHistoryButton.addEventListener("click", () => loadHistory().catch((error) => {
-    setCreateNote(`История не загрузилась: ${error.message}`, true);
+    setCreateNote(userFacingErrorMessage(error, "Не удалось загрузить историю."), true);
   }));
   clearTemplateButton.addEventListener("click", () => {
     clearSelectedTemplate({ clearPrompt: true });
@@ -2764,7 +2949,7 @@ function bindEvents() {
         await copyPromptToClipboard(item.prompt);
         setTemplateModalNote("Промпт скопирован.");
       } catch (error) {
-        setTemplateModalNote(`Не удалось скопировать: ${error.message}`, true);
+        setTemplateModalNote(userFacingErrorMessage(error, "Не удалось скопировать промпт."), true);
       }
     });
   }
@@ -2891,7 +3076,7 @@ async function bootstrap() {
     refreshAuthButtons();
     await loadPublicData();
   } catch (error) {
-    setNote(`Не удалось загрузить публичные данные: ${error.message}`, true);
+    setNote(userFacingErrorMessage(error, "Не удалось загрузить данные приложения."), true);
   }
 
   let authorized = false;
