@@ -8,7 +8,6 @@ const STORAGE_KEYS = {
 
 const DEFAULT_PROD_API_BASE = "https://api.kartivio-ai.ru";
 const DEFAULT_LOCAL_API_BASE = "http://127.0.0.1:8093";
-const DEFAULT_NGROK_API_BASE = "https://sweptback-semivolcanic-reagan.ngrok-free.dev";
 const GOOGLE_CLIENT_ID_META_NAME = "kartivio-google-client-id";
 const MAX_SOURCE_IMAGES = 3;
 const TEMPLATE_SKELETON_RATIOS = ["1 / 1", "4 / 5", "3 / 4", "5 / 4", "2 / 3", "3 / 2"];
@@ -1598,9 +1597,6 @@ async function apiMultipart(path, formData, { auth = false, idempotencyKey } = {
 
 async function resolveApiBase() {
   const baseCandidates = [state.apiBase, DEFAULT_PROD_API_BASE, window.location.origin];
-  if (canOverrideApiBase()) {
-    baseCandidates.push(DEFAULT_NGROK_API_BASE);
-  }
   const candidates = uniqueApiBases(baseCandidates);
 
   for (const candidate of candidates) {
