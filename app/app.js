@@ -262,7 +262,7 @@ const state = {
   historyRequestToken: 0,
 };
 
-const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+let tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
 const TELEGRAM_BOT_URL = "https://t.me/kartivio_ai_bot";
 const HISTORY_CACHE_TTL_MS = 15_000;
 
@@ -334,15 +334,83 @@ let templateModalCloseTimer = null;
 let templateModalImageLoadToken = 0;
 let templateModalScrollTop = 0;
 let telegramViewportListenersAttached = false;
+let lucideRetryTimer = 0;
 
 function refreshIcons() {
   if (window.lucide && typeof window.lucide.createIcons === "function") {
+    if (lucideRetryTimer) {
+      window.clearTimeout(lucideRetryTimer);
+      lucideRetryTimer = 0;
+    }
     window.lucide.createIcons();
+    return;
+  }
+  if (!lucideRetryTimer) {
+    lucideRetryTimer = window.setTimeout(() => {
+      lucideRetryTimer = 0;
+      refreshIcons();
+    }, 800);
   }
 }
 
+function refreshTelegramWebAppHandle() {
+  tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+  return tg;
+}
+
+function isTelegramContextHint() {
+  const search = window.location.search || "";
+  const hash = window.location.hash || "";
+  return (
+    Boolean(window.TelegramWebviewProxy) ||
+    Boolean(window.TelegramGameProxy) ||
+    search.includes("tgWebApp") ||
+    hash.includes("tgWebApp")
+  );
+}
+
+function ensureTelegramSdkLoaded(timeoutMs = 5000) {
+  if (refreshTelegramWebAppHandle()) {
+    return Promise.resolve(true);
+  }
+  if (!isTelegramContextHint()) {
+    return Promise.resolve(false);
+  }
+  return new Promise((resolve) => {
+    let settled = false;
+    let timeoutId = 0;
+    const finish = (loaded) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      if (timeoutId) {
+        window.clearTimeout(timeoutId);
+      }
+      resolve(Boolean(loaded));
+    };
+
+    let script = document.querySelector('script[data-telegram-sdk="true"]');
+    if (!script) {
+      script = document.createElement("script");
+      script.src = "https://telegram.org/js/telegram-web-app.js?62";
+      script.async = true;
+      script.dataset.telegramSdk = "true";
+      document.head.append(script);
+    }
+
+    script.addEventListener(
+      "load",
+      () => finish(Boolean(refreshTelegramWebAppHandle())),
+      { once: true },
+    );
+    script.addEventListener("error", () => finish(false), { once: true });
+    timeoutId = window.setTimeout(() => finish(Boolean(refreshTelegramWebAppHandle())), timeoutMs);
+  });
+}
+
 function isTelegramMiniAppRuntime() {
-  return Boolean(tg && tg.initData);
+  return Boolean(refreshTelegramWebAppHandle() && tg && tg.initData);
 }
 
 function prefersCookieAuth() {
@@ -3136,6 +3204,7 @@ async function bootstrap() {
   unlockTemplateModalScroll();
   loadState();
   setDevPanelVisibility();
+  await ensureTelegramSdkLoaded();
   initTelegramViewport();
   setEnvHint();
   refreshAuthButtons();
