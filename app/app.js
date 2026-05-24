@@ -2748,17 +2748,40 @@ async function loginViaGoogleCredential(idToken) {
   switchScreen("feed");
 }
 
-function ensureGoogleIdentityInitialized(clientId) {
+function ensureGoogleIdentityInitialized(clientId, { redirectFlow = false } = {}) {
   const loginUri = googleRedirectLoginUri();
-  const signature = `${clientId}|redirect|${loginUri}`;
+  const signature = redirectFlow ? `${clientId}|redirect|${loginUri}` : `${clientId}|popup`;
   if (googleIdentitySignature === signature) {
     return;
   }
-  window.google.accounts.id.initialize({
-    client_id: clientId,
-    ux_mode: "redirect",
-    login_uri: loginUri,
-  });
+  if (redirectFlow) {
+    window.google.accounts.id.initialize({
+      client_id: clientId,
+      ux_mode: "redirect",
+      login_uri: loginUri,
+    });
+  } else {
+    window.google.accounts.id.initialize({
+      client_id: clientId,
+      callback: async (response) => {
+        const credential = String(response?.credential || "").trim();
+        if (!credential) {
+          setGoogleAuthButtonIdle();
+          setNote("Google не вернул данные для входа. Попробуй еще раз.", true);
+          return;
+        }
+        try {
+          await loginViaGoogleCredential(credential);
+        } catch (error) {
+          setNote(userFacingMessage(error, "Не удалось войти через Google."), true);
+        } finally {
+          setGoogleAuthButtonIdle();
+        }
+      },
+      auto_select: false,
+      cancel_on_tap_outside: true,
+    });
+  }
   googleIdentitySignature = signature;
 }
 
@@ -2779,7 +2802,7 @@ function renderGoogleSigninButtonIfPossible({ redirectFlow = false, show = false
     googleSigninWrap.classList.add("is-hidden");
     return false;
   }
-  ensureGoogleIdentityInitialized(clientId);
+  ensureGoogleIdentityInitialized(clientId, { redirectFlow });
   const stateToken = encodeGoogleButtonState({ return_to: currentReturnToUrl() });
   googleSigninButton.innerHTML = "";
   window.google.accounts.id.renderButton(googleSigninButton, {
@@ -2843,7 +2866,7 @@ function loginViaGoogle() {
   }
 
   googleAuthPending = true;
-  const rendered = renderGoogleSigninButtonIfPossible({ redirectFlow: true, show: false });
+  const rendered = renderGoogleSigninButtonIfPossible({ redirectFlow: false, show: false });
   if (!rendered) {
     setGoogleAuthButtonIdle();
     if (!hasGoogleSdk()) {
@@ -2854,11 +2877,11 @@ function loginViaGoogle() {
     return;
   }
   const opened = triggerRenderedGoogleButtonClick();
-  googleAuthPending = false;
   if (opened) {
     setNote("Открываю Google...");
     return;
   }
+  googleAuthPending = false;
   if (googleSigninWrap) {
     googleSigninWrap.classList.remove("is-hidden");
     googleSigninWrap.scrollIntoView({ behavior: "smooth", block: "nearest" });
