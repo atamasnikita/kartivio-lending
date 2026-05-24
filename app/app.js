@@ -250,10 +250,15 @@ const state = {
   telegramWebLoginPollTimer: null,
   sourceImageFiles: [],
   sourceImagePreviewUrls: [],
+  historyItems: null,
+  historyLoadedAt: 0,
+  historyLoadPromise: null,
+  historyRequestToken: 0,
 };
 
 const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
 const TELEGRAM_BOT_URL = "https://t.me/kartivio_ai_bot";
+const HISTORY_CACHE_TTL_MS = 15_000;
 
 const appShell = document.getElementById("appShell");
 const authGate = document.getElementById("authGate");
@@ -960,6 +965,11 @@ function switchScreen(nextScreen) {
   }
 }
 
+function resetHistoryCache() {
+  state.historyItems = null;
+  state.historyLoadedAt = 0;
+}
+
 function sourceImageFiles() {
   return Array.isArray(state.sourceImageFiles) ? state.sourceImageFiles : [];
 }
@@ -1373,6 +1383,7 @@ async function logoutSession() {
   state.lastAuthProvider = "";
   state.telegramLinkToken = "";
   state.telegramWebLoginToken = "";
+  resetHistoryCache();
   saveState();
   setAuthGateVisible(true);
   switchScreen("feed");
@@ -2240,11 +2251,41 @@ function renderHistory(payload) {
 
 async function loadHistory({ forceServerCheck = false } = {}) {
   if (!hasActiveSession() && !forceServerCheck) {
+    resetHistoryCache();
     historyList.innerHTML = '<article class="history-item"><div class="history-body">Войди, чтобы увидеть историю.</div></article>';
     return;
   }
-  const payload = await authorizedGetWithRetry("/v1/generations?limit=20", 1);
-  renderHistory(payload);
+  const now = Date.now();
+  if (Array.isArray(state.historyItems)) {
+    renderHistory({ items: state.historyItems });
+    if (!forceServerCheck && now - state.historyLoadedAt < HISTORY_CACHE_TTL_MS) {
+      return;
+    }
+  } else if (!state.historyLoadPromise) {
+    historyList.innerHTML =
+      '<article class="history-item"><div class="history-body">Загружаю историю…</div></article>';
+  }
+
+  if (state.historyLoadPromise) {
+    return state.historyLoadPromise;
+  }
+
+  const requestToken = ++state.historyRequestToken;
+  const requestPromise = authorizedGetWithRetry("/v1/generations?limit=20", 1)
+    .then((payload) => {
+      state.historyItems = Array.isArray(payload && payload.items) ? payload.items : [];
+      state.historyLoadedAt = Date.now();
+      if (requestToken === state.historyRequestToken) {
+        renderHistory({ items: state.historyItems });
+      }
+    })
+    .finally(() => {
+      if (state.historyLoadPromise === requestPromise) {
+        state.historyLoadPromise = null;
+      }
+    });
+  state.historyLoadPromise = requestPromise;
+  return requestPromise;
 }
 
 async function loadPublicData() {
@@ -2355,7 +2396,7 @@ async function pollActiveJob(jobId) {
       state.activePollTimer = window.setTimeout(() => pollActiveJob(jobId), 2500);
       return;
     }
-    await Promise.allSettled([loadPrivateData(), loadHistory()]);
+    await Promise.allSettled([loadPrivateData(), loadHistory({ forceServerCheck: true })]);
   } catch (error) {
     setCreateNote(userFacingErrorMessage(error, "Не удалось обновить статус задачи."), true);
   }
@@ -2408,7 +2449,7 @@ async function handleCreate() {
     state.activeJobId = job.id;
     renderActiveJob(job);
     setCreateNote(`Задача создана: ${jobStatusLabel(job.status)}.`);
-    await Promise.allSettled([loadPrivateData(), loadHistory()]);
+    await Promise.allSettled([loadPrivateData(), loadHistory({ forceServerCheck: true })]);
     await pollActiveJob(job.id);
   } catch (error) {
     setCreateNote(userFacingErrorMessage(error, "Не удалось запустить генерацию."), true);
@@ -2483,7 +2524,7 @@ async function pollTelegramWebLoginStatus() {
       renderAuthGateActions();
       setAuthGateVisible(false);
       setNote(payload.message || "Вход через Telegram выполнен.");
-      await Promise.all([loadPrivateData(), loadHistory()]);
+      await Promise.all([loadPrivateData(), loadHistory({ forceServerCheck: true })]);
       switchScreen("feed");
       return;
     }
@@ -2585,6 +2626,7 @@ async function pollTelegramLinkStatus() {
       state.telegramLinkToken = "";
       clearTelegramLinkPolling();
       await loadPrivateData();
+      await loadHistory({ forceServerCheck: true });
       return;
     }
     if (status === "conflict") {
@@ -2651,7 +2693,7 @@ async function hydrateAuthorizedSession() {
   try {
     await Promise.all([
       loadPrivateData({ forceServerCheck: prefersCookieAuth() }),
-      loadHistory({ forceServerCheck: prefersCookieAuth() }),
+      loadHistory({ forceServerCheck: true }),
     ]);
     if (prefersCookieAuth()) {
       state.isCookieSession = true;
@@ -2700,7 +2742,7 @@ async function loginViaTelegram(options = {}) {
     if (!silent) {
       setNote("Авторизация успешна.");
     }
-    await Promise.all([loadPrivateData(), loadHistory()]);
+    await Promise.all([loadPrivateData(), loadHistory({ forceServerCheck: true })]);
     switchScreen(targetScreen);
     return true;
   } catch (error) {
@@ -2744,7 +2786,7 @@ async function loginViaGoogleCredential(idToken) {
   saveState();
   setAuthGateVisible(false);
   setNote("Авторизация через Google успешна.");
-  await Promise.all([loadPrivateData(), loadHistory()]);
+  await Promise.all([loadPrivateData(), loadHistory({ forceServerCheck: true })]);
   switchScreen("feed");
 }
 
