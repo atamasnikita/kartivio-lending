@@ -366,6 +366,11 @@ function isMobileBrowser() {
   return /iphone|ipad|ipod|android|mobile/i.test(ua);
 }
 
+function isYandexMobileBrowser() {
+  const ua = String(navigator.userAgent || "").toLowerCase();
+  return isMobileBrowser() && ua.includes("yabrowser");
+}
+
 function canOverrideApiBase() {
   return isLocalRuntime() || isNgrokRuntime();
 }
@@ -2997,6 +3002,10 @@ async function loginViaGoogle() {
     await ensureGoogleSdkLoaded();
   } catch (_error) {
     setGoogleAuthButtonIdle();
+    if (isYandexMobileBrowser()) {
+      setNote("Яндекс Браузер на мобилке нестабилен для входа через Google. Открой приложение в Safari или Chrome.", true);
+      return;
+    }
     setNote("Google SDK не загрузился. Проверь соединение и обнови страницу.", true);
     return;
   }
@@ -3004,6 +3013,10 @@ async function loginViaGoogle() {
   if (!rendered) {
     setGoogleAuthButtonIdle();
     if (!hasGoogleSdk()) {
+      if (isYandexMobileBrowser()) {
+        setNote("Яндекс Браузер на мобилке нестабилен для входа через Google. Открой приложение в Safari или Chrome.", true);
+        return;
+      }
       setNote("Google SDK не загрузился. Проверь соединение и обнови страницу.", true);
       return;
     }
