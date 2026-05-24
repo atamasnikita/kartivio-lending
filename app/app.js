@@ -268,6 +268,8 @@ const HISTORY_CACHE_TTL_MS = 15_000;
 
 const bootSplash = document.getElementById("bootSplash");
 const appShell = document.getElementById("appShell");
+const appMain = document.querySelector(".app-main");
+const bottomNav = document.querySelector(".bottom-nav");
 const authGate = document.getElementById("authGate");
 const devPanel = document.getElementById("devPanel");
 const apiBaseInput = document.getElementById("apiBaseInput");
@@ -335,6 +337,8 @@ let templateModalImageLoadToken = 0;
 let templateModalScrollTop = 0;
 let telegramViewportListenersAttached = false;
 let lucideRetryTimer = 0;
+let mobileWebNavListenerAttached = false;
+let lastAppMainScrollTop = 0;
 
 function refreshIcons() {
   if (window.lucide && typeof window.lucide.createIcons === "function") {
@@ -411,6 +415,55 @@ function ensureTelegramSdkLoaded(timeoutMs = 5000) {
 
 function isTelegramMiniAppRuntime() {
   return Boolean(refreshTelegramWebAppHandle() && tg && tg.initData);
+}
+
+function isMobileBrowser() {
+  const ua = String(navigator.userAgent || "").toLowerCase();
+  return /iphone|ipad|ipod|android|mobile/i.test(ua);
+}
+
+function syncRuntimeClasses() {
+  const telegramRuntime = isTelegramMiniAppRuntime();
+  const mobileBrowser = isMobileBrowser();
+  document.documentElement.classList.toggle("is-telegram-runtime", telegramRuntime);
+  document.body.classList.toggle("is-telegram-runtime", telegramRuntime);
+  document.documentElement.classList.toggle("is-web-runtime", !telegramRuntime);
+  document.body.classList.toggle("is-web-runtime", !telegramRuntime);
+  document.documentElement.classList.toggle("is-mobile-browser", mobileBrowser);
+  document.body.classList.toggle("is-mobile-browser", mobileBrowser);
+}
+
+function setBottomNavHidden(hidden) {
+  const nextHidden = Boolean(hidden);
+  document.documentElement.classList.toggle("nav-hidden", nextHidden);
+  document.body.classList.toggle("nav-hidden", nextHidden);
+}
+
+function initMobileWebBottomNavBehavior() {
+  if (!appMain || !bottomNav || mobileWebNavListenerAttached) {
+    return;
+  }
+  mobileWebNavListenerAttached = true;
+  lastAppMainScrollTop = Number(appMain.scrollTop || 0);
+  appMain.addEventListener(
+    "scroll",
+    () => {
+      if (isTelegramMiniAppRuntime() || !isMobileBrowser()) {
+        setBottomNavHidden(false);
+        lastAppMainScrollTop = Number(appMain.scrollTop || 0);
+        return;
+      }
+      const currentScrollTop = Number(appMain.scrollTop || 0);
+      const delta = currentScrollTop - lastAppMainScrollTop;
+      if (currentScrollTop <= 24 || delta <= -8) {
+        setBottomNavHidden(false);
+      } else if (delta >= 8) {
+        setBottomNavHidden(true);
+      }
+      lastAppMainScrollTop = currentScrollTop;
+    },
+    { passive: true },
+  );
 }
 
 function prefersCookieAuth() {
@@ -3205,7 +3258,9 @@ async function bootstrap() {
   loadState();
   setDevPanelVisibility();
   await ensureTelegramSdkLoaded();
+  syncRuntimeClasses();
   initTelegramViewport();
+  initMobileWebBottomNavBehavior();
   setEnvHint();
   refreshAuthButtons();
   if (apiBaseInput) {

@@ -266,6 +266,11 @@ textarea {
   -webkit-overflow-scrolling: touch;
 }
 
+html.is-web-runtime.is-mobile-browser .app-main,
+body.is-web-runtime.is-mobile-browser .app-main {
+  padding-bottom: calc(190px + max(env(safe-area-inset-bottom), var(--tg-safe-bottom, 0px)));
+}
+
 .screen {
   display: none;
   gap: 12px;
@@ -1436,6 +1441,10 @@ textarea {
   width: min(760px, 100%);
   z-index: 14;
   overflow: hidden;
+  opacity: 1;
+  transition:
+    transform 0.28s ease,
+    opacity 0.2s ease;
 }
 
 .bottom-nav::before {
@@ -1498,6 +1507,13 @@ textarea {
 
 .nav-btn-center span {
   display: none;
+}
+
+html.is-web-runtime.is-mobile-browser.nav-hidden .bottom-nav,
+body.is-web-runtime.is-mobile-browser.nav-hidden .bottom-nav {
+  transform: translate(-50%, calc(100% + 20px));
+  opacity: 0;
+  pointer-events: none;
 }
 
 @media (max-width: 520px) {
