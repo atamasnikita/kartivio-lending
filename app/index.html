@@ -10,7 +10,7 @@
       content="547797863553-g3jsqvf2p31p0ffu029f1p25kjjdn2bn.apps.googleusercontent.com"
     />
     <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=20260516a" />
+    <link rel="stylesheet" href="./styles.css?v=20260524a" />
     <script src="https://telegram.org/js/telegram-web-app.js?62"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
   </head>
@@ -50,7 +50,15 @@
     <noscript><div><img src="https://mc.yandex.ru/watch/109102691" style="position:absolute; left:-9999px;" alt="" /></div></noscript>
     <!-- /Yandex.Metrika counter -->
 
-    <section id="authGate" class="auth-gate">
+    <section id="bootSplash" class="boot-splash" aria-live="polite">
+      <div class="boot-splash-card">
+        <div class="boot-splash-logo">K</div>
+        <strong>Kartivio</strong>
+        <p>Подключаем сессию…</p>
+      </div>
+    </section>
+
+    <section id="authGate" class="auth-gate is-hidden">
       <div class="auth-gate-card">
         <div class="auth-brand-row">
           <div class="auth-logo">K</div>
@@ -81,7 +89,7 @@
       </div>
     </section>
 
-    <div id="appShell" class="app-shell">
+    <div id="appShell" class="app-shell is-hidden">
       <header class="app-header">
         <button class="avatar-chip" id="profileAvatar" type="button" data-nav-target="profile">K</button>
         <div class="brand-title" id="brandName">Kartivio</div>
@@ -313,7 +321,7 @@
       </article>
     </div>
 
-    <script src="https://accounts.google.com/gsi/client" async defer></script>
-    <script src="./app.js?v=20260520a"></script>
+    <script src="https://accounts.google.com/gsi/client" async defer data-google-sdk="true"></script>
+    <script src="./app.js?v=20260524a"></script>
   </body>
 </html>

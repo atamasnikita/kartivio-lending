@@ -260,6 +260,7 @@ const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : 
 const TELEGRAM_BOT_URL = "https://t.me/kartivio_ai_bot";
 const HISTORY_CACHE_TTL_MS = 15_000;
 
+const bootSplash = document.getElementById("bootSplash");
 const appShell = document.getElementById("appShell");
 const authGate = document.getElementById("authGate");
 const devPanel = document.getElementById("devPanel");
@@ -326,6 +327,7 @@ const jumpButtons = Array.from(document.querySelectorAll("[data-nav-target]"));
 const screens = Array.from(document.querySelectorAll("[data-screen]"));
 let googleAuthPending = false;
 let googleIdentitySignature = "";
+let googleSdkLoadPromise = null;
 let templateModalCloseTimer = null;
 let templateModalImageLoadToken = 0;
 let templateModalScrollTop = 0;
@@ -359,6 +361,11 @@ function isNgrokRuntime() {
   return host.endsWith(".ngrok-free.dev");
 }
 
+function isMobileBrowser() {
+  const ua = String(navigator.userAgent || "").toLowerCase();
+  return /iphone|ipad|ipod|android|mobile/i.test(ua);
+}
+
 function canOverrideApiBase() {
   return isLocalRuntime() || isNgrokRuntime();
 }
@@ -390,6 +397,13 @@ function setAuthGateVisible(visible) {
     appShell.classList.toggle("is-hidden", visible);
   }
   renderAuthGateActions();
+}
+
+function setBootPending(pending) {
+  if (!bootSplash) {
+    return;
+  }
+  bootSplash.classList.toggle("is-hidden", !pending);
 }
 
 function hasPendingTelegramWebLogin() {
@@ -439,6 +453,76 @@ function googleAuthLaunchUrl() {
 
 function hasGoogleSdk() {
   return Boolean(window.google && window.google.accounts && window.google.accounts.id);
+}
+
+function ensureGoogleSdkLoaded(timeoutMs = 8000) {
+  if (hasGoogleSdk()) {
+    return Promise.resolve();
+  }
+  if (googleSdkLoadPromise) {
+    return googleSdkLoadPromise;
+  }
+
+  googleSdkLoadPromise = new Promise((resolve, reject) => {
+    let settled = false;
+    let timeoutId = 0;
+    let pollId = 0;
+
+    const cleanup = () => {
+      if (timeoutId) {
+        window.clearTimeout(timeoutId);
+      }
+      if (pollId) {
+        window.clearInterval(pollId);
+      }
+    };
+
+    const finish = (error = null) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      cleanup();
+      googleSdkLoadPromise = null;
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve();
+    };
+
+    const pollForSdk = () => {
+      if (hasGoogleSdk()) {
+        finish();
+      }
+    };
+
+    let script = document.querySelector('script[data-google-sdk="true"]');
+    if (!script) {
+      script = document.createElement("script");
+      script.src = "https://accounts.google.com/gsi/client";
+      script.async = true;
+      script.defer = true;
+      script.dataset.googleSdk = "true";
+      document.head.append(script);
+    }
+
+    script.addEventListener("load", pollForSdk, { once: true });
+    script.addEventListener(
+      "error",
+      () => finish(new Error("google_sdk_load_failed")),
+      { once: true },
+    );
+
+    pollId = window.setInterval(pollForSdk, 120);
+    timeoutId = window.setTimeout(() => {
+      finish(new Error("google_sdk_timeout"));
+    }, timeoutMs);
+
+    pollForSdk();
+  });
+
+  return googleSdkLoadPromise;
 }
 
 function currentReturnToUrl() {
@@ -2884,7 +2968,7 @@ function triggerRenderedGoogleButtonClick() {
   }
 }
 
-function loginViaGoogle() {
+async function loginViaGoogle() {
   if (!googleAuthButton) {
     return;
   }
@@ -2908,11 +2992,19 @@ function loginViaGoogle() {
   }
 
   googleAuthPending = true;
-  const rendered = renderGoogleSigninButtonIfPossible({ redirectFlow: false, show: false });
+  googleAuthButton.disabled = true;
+  try {
+    await ensureGoogleSdkLoaded();
+  } catch (_error) {
+    setGoogleAuthButtonIdle();
+    setNote("Google SDK не загрузился. Проверь соединение и обнови страницу.", true);
+    return;
+  }
+  const rendered = renderGoogleSigninButtonIfPossible({ redirectFlow: isMobileBrowser(), show: false });
   if (!rendered) {
     setGoogleAuthButtonIdle();
     if (!hasGoogleSdk()) {
-      setNote("Google SDK не загрузился. Обнови страницу.", true);
+      setNote("Google SDK не загрузился. Проверь соединение и обнови страницу.", true);
       return;
     }
     setNote("Google login недоступен для этого окружения.", true);
@@ -3113,6 +3205,7 @@ function bindEvents() {
 }
 
 async function bootstrap() {
+  setBootPending(true);
   unlockTemplateModalScroll();
   loadState();
   setDevPanelVisibility();
@@ -3129,7 +3222,6 @@ async function bootstrap() {
   refreshGenerationCostNote();
   refreshIcons();
   renderIdentityActions();
-  setAuthGateVisible(!hasActiveSession());
   renderAuthGateActions();
 
   try {
@@ -3163,23 +3255,27 @@ async function bootstrap() {
     saveState();
     await loadPrivateData();
     await loadHistory();
-    setAuthGateVisible(true);
     resumePendingTelegramWebLogin();
   }
 
   const autoGoogle = new URLSearchParams(window.location.search).get("google_auto");
   if (autoGoogle === "1" && !isTelegramMiniAppRuntime() && !hasActiveSession()) {
+    setAuthGateVisible(true);
+    setBootPending(false);
     window.setTimeout(() => {
-      loginViaGoogle();
+      loginViaGoogle().catch(() => {});
     }, 150);
+    return;
   }
 
   if (authorized) {
     switchScreen("feed");
   } else {
+    setAuthGateVisible(true);
     setNote("Войди через Google или Telegram, чтобы начать.");
     switchScreen("feed");
   }
+  setBootPending(false);
 }
 
 bootstrap();
