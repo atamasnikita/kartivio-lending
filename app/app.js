@@ -9,6 +9,12 @@ const STORAGE_KEYS = {
 const DEFAULT_PROD_API_BASE = "https://api.kartivio-ai.ru";
 const DEFAULT_LOCAL_API_BASE = "http://127.0.0.1:8093";
 const GOOGLE_CLIENT_ID_META_NAME = "kartivio-google-client-id";
+const GOOGLE_OIDC_AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v2/auth";
+const GOOGLE_OIDC_STORAGE_KEYS = {
+  state: "kartivio.google_oidc_state",
+  nonce: "kartivio.google_oidc_nonce",
+  returnTo: "kartivio.google_oidc_return_to",
+};
 const MAX_SOURCE_IMAGES = 3;
 const TEMPLATE_SKELETON_RATIOS = ["1 / 1", "4 / 5", "3 / 4", "5 / 4", "2 / 3", "3 / 2"];
 const TEMPLATE_MODAL_ANIMATION_MS = 260;
@@ -268,8 +274,6 @@ const apiBaseInput = document.getElementById("apiBaseInput");
 const authButton = document.getElementById("authButton");
 const authCheckButton = document.getElementById("authCheckButton");
 const googleAuthButton = document.getElementById("googleAuthButton");
-const googleSigninWrap = document.getElementById("googleSigninWrap");
-const googleSigninButton = document.getElementById("googleSigninButton");
 const envHint = document.getElementById("envHint");
 const authNote = document.getElementById("authNote");
 const userName = document.getElementById("userName");
@@ -326,8 +330,6 @@ const navButtons = Array.from(document.querySelectorAll("[data-nav]"));
 const jumpButtons = Array.from(document.querySelectorAll("[data-nav-target]"));
 const screens = Array.from(document.querySelectorAll("[data-screen]"));
 let googleAuthPending = false;
-let googleIdentitySignature = "";
-let googleSdkLoadPromise = null;
 let templateModalCloseTimer = null;
 let templateModalImageLoadToken = 0;
 let templateModalScrollTop = 0;
@@ -359,16 +361,6 @@ function isLocalRuntime() {
 function isNgrokRuntime() {
   const host = String(window.location.hostname || "").trim().toLowerCase();
   return host.endsWith(".ngrok-free.dev");
-}
-
-function isMobileBrowser() {
-  const ua = String(navigator.userAgent || "").toLowerCase();
-  return /iphone|ipad|ipod|android|mobile/i.test(ua);
-}
-
-function isYandexMobileBrowser() {
-  const ua = String(navigator.userAgent || "").toLowerCase();
-  return isMobileBrowser() && ua.includes("yabrowser");
 }
 
 function canOverrideApiBase() {
@@ -456,98 +448,149 @@ function googleAuthLaunchUrl() {
   return url.toString();
 }
 
-function hasGoogleSdk() {
-  return Boolean(window.google && window.google.accounts && window.google.accounts.id);
-}
-
-function ensureGoogleSdkLoaded(timeoutMs = 8000) {
-  if (hasGoogleSdk()) {
-    return Promise.resolve();
-  }
-  if (googleSdkLoadPromise) {
-    return googleSdkLoadPromise;
-  }
-
-  googleSdkLoadPromise = new Promise((resolve, reject) => {
-    let settled = false;
-    let timeoutId = 0;
-    let pollId = 0;
-
-    const cleanup = () => {
-      if (timeoutId) {
-        window.clearTimeout(timeoutId);
-      }
-      if (pollId) {
-        window.clearInterval(pollId);
-      }
-    };
-
-    const finish = (error = null) => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      cleanup();
-      googleSdkLoadPromise = null;
-      if (error) {
-        reject(error);
-        return;
-      }
-      resolve();
-    };
-
-    const pollForSdk = () => {
-      if (hasGoogleSdk()) {
-        finish();
-      }
-    };
-
-    let script = document.querySelector('script[data-google-sdk="true"]');
-    if (!script) {
-      script = document.createElement("script");
-      script.src = "https://accounts.google.com/gsi/client";
-      script.async = true;
-      script.defer = true;
-      script.dataset.googleSdk = "true";
-      document.head.append(script);
-    }
-
-    script.addEventListener("load", pollForSdk, { once: true });
-    script.addEventListener(
-      "error",
-      () => finish(new Error("google_sdk_load_failed")),
-      { once: true },
-    );
-
-    pollId = window.setInterval(pollForSdk, 120);
-    timeoutId = window.setTimeout(() => {
-      finish(new Error("google_sdk_timeout"));
-    }, timeoutMs);
-
-    pollForSdk();
-  });
-
-  return googleSdkLoadPromise;
-}
-
 function currentReturnToUrl() {
   const url = new URL(window.location.href);
   url.searchParams.delete("google_auto");
+  url.hash = "";
   return url.toString();
 }
 
-function googleRedirectLoginUri() {
-  return `${trimApiBase(state.apiBase)}/v1/auth/google/redirect`;
+function googleRedirectUri() {
+  const url = new URL(window.location.href);
+  url.search = "";
+  url.hash = "";
+  return url.toString();
 }
 
-function encodeGoogleButtonState(payload) {
-  const raw = JSON.stringify(payload);
-  const bytes = new TextEncoder().encode(raw);
+function readSessionValue(key) {
+  try {
+    return String(window.sessionStorage.getItem(key) || "").trim();
+  } catch (_error) {
+    return "";
+  }
+}
+
+function writeSessionValue(key, value) {
+  try {
+    window.sessionStorage.setItem(key, String(value || ""));
+  } catch (_error) {
+    // noop
+  }
+}
+
+function clearGoogleOidcSession() {
+  try {
+    window.sessionStorage.removeItem(GOOGLE_OIDC_STORAGE_KEYS.state);
+    window.sessionStorage.removeItem(GOOGLE_OIDC_STORAGE_KEYS.nonce);
+    window.sessionStorage.removeItem(GOOGLE_OIDC_STORAGE_KEYS.returnTo);
+  } catch (_error) {
+    // noop
+  }
+}
+
+function randomBase64Url(byteLength = 24) {
+  const bytes = new Uint8Array(byteLength);
+  window.crypto.getRandomValues(bytes);
   let binary = "";
   for (const byte of bytes) {
     binary += String.fromCharCode(byte);
   }
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function decodeJwtPayload(token) {
+  const raw = String(token || "").trim();
+  const parts = raw.split(".");
+  if (parts.length < 2) {
+    return null;
+  }
+  try {
+    const padded = parts[1].replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(parts[1].length / 4) * 4, "=");
+    const json = atob(padded);
+    return JSON.parse(json);
+  } catch (_error) {
+    return null;
+  }
+}
+
+function googleOidcAuthorizeUrl() {
+  const clientId = googleClientIdFromMeta();
+  if (!clientId) {
+    return "";
+  }
+  const stateToken = randomBase64Url(24);
+  const nonceToken = randomBase64Url(24);
+  writeSessionValue(GOOGLE_OIDC_STORAGE_KEYS.state, stateToken);
+  writeSessionValue(GOOGLE_OIDC_STORAGE_KEYS.nonce, nonceToken);
+  writeSessionValue(GOOGLE_OIDC_STORAGE_KEYS.returnTo, currentReturnToUrl());
+
+  const url = new URL(GOOGLE_OIDC_AUTHORIZE_URL);
+  url.searchParams.set("client_id", clientId);
+  url.searchParams.set("redirect_uri", googleRedirectUri());
+  url.searchParams.set("response_type", "id_token");
+  url.searchParams.set("scope", "openid email profile");
+  url.searchParams.set("state", stateToken);
+  url.searchParams.set("nonce", nonceToken);
+  url.searchParams.set("prompt", "select_account");
+  return url.toString();
+}
+
+function stripGoogleCallbackArtifacts() {
+  const url = new URL(window.location.href);
+  url.hash = "";
+  url.searchParams.delete("google_auto");
+  window.history.replaceState({}, document.title, url.toString());
+}
+
+async function consumeGoogleOidcCallback() {
+  const hash = String(window.location.hash || "").replace(/^#/, "").trim();
+  if (!hash) {
+    return false;
+  }
+  const params = new URLSearchParams(hash);
+  const returnedState = String(params.get("state") || "").trim();
+  const idToken = String(params.get("id_token") || "").trim();
+  const oauthError = String(params.get("error") || "").trim();
+  const oauthErrorDescription = String(params.get("error_description") || "").trim();
+  const expectedState = readSessionValue(GOOGLE_OIDC_STORAGE_KEYS.state);
+  const expectedNonce = readSessionValue(GOOGLE_OIDC_STORAGE_KEYS.nonce);
+  const returnTo = readSessionValue(GOOGLE_OIDC_STORAGE_KEYS.returnTo) || currentReturnToUrl();
+
+  if (!returnedState || !expectedState || returnedState !== expectedState) {
+    if (oauthError || idToken) {
+      stripGoogleCallbackArtifacts();
+      clearGoogleOidcSession();
+      setNote("Сессия входа через Google устарела. Запусти вход заново.", true);
+      return true;
+    }
+    return false;
+  }
+
+  stripGoogleCallbackArtifacts();
+  clearGoogleOidcSession();
+
+  if (oauthError) {
+    const description = oauthErrorDescription ? decodeURIComponent(oauthErrorDescription.replace(/\+/g, " ")) : "";
+    setNote(description || "Не удалось завершить вход через Google.", true);
+    return true;
+  }
+  if (!idToken) {
+    setNote("Google не вернул данные для входа. Повтори попытку.", true);
+    return true;
+  }
+
+  const tokenPayload = decodeJwtPayload(idToken);
+  if (!tokenPayload || String(tokenPayload.nonce || "").trim() !== expectedNonce) {
+    setNote("Не удалось подтвердить сессию Google. Повтори попытку.", true);
+    return true;
+  }
+
+  await loginViaGoogleCredential(idToken);
+  const url = new URL(returnTo);
+  url.hash = "";
+  url.searchParams.delete("google_auto");
+  window.history.replaceState({}, document.title, url.toString());
+  return true;
 }
 
 function trimApiBase(raw) {
@@ -1419,15 +1462,8 @@ function refreshAuthButtons() {
   if (!googleAuthButton) {
     return;
   }
-  if (isTelegramMiniAppRuntime()) {
-    googleAuthButton.textContent = "Войти через Google в браузере";
-  } else {
-    googleAuthButton.textContent = "Войти через Google";
-  }
+  googleAuthButton.textContent = "Войти через Google";
   googleAuthButton.classList.remove("is-hidden");
-  if (googleSigninWrap) {
-    googleSigninWrap.classList.add("is-hidden");
-  }
 }
 
 function setTelegramLinkNote(message, isError = false) {
@@ -2879,100 +2915,6 @@ async function loginViaGoogleCredential(idToken) {
   switchScreen("feed");
 }
 
-function ensureGoogleIdentityInitialized(clientId, { redirectFlow = false } = {}) {
-  const loginUri = googleRedirectLoginUri();
-  const signature = redirectFlow ? `${clientId}|redirect|${loginUri}` : `${clientId}|popup`;
-  if (googleIdentitySignature === signature) {
-    return;
-  }
-  if (redirectFlow) {
-    window.google.accounts.id.initialize({
-      client_id: clientId,
-      ux_mode: "redirect",
-      login_uri: loginUri,
-    });
-  } else {
-    window.google.accounts.id.initialize({
-      client_id: clientId,
-      callback: async (response) => {
-        const credential = String(response?.credential || "").trim();
-        if (!credential) {
-          setGoogleAuthButtonIdle();
-          setNote("Google не вернул данные для входа. Попробуй еще раз.", true);
-          return;
-        }
-        try {
-          await loginViaGoogleCredential(credential);
-        } catch (error) {
-          setNote(userFacingMessage(error, "Не удалось войти через Google."), true);
-        } finally {
-          setGoogleAuthButtonIdle();
-        }
-      },
-      auto_select: false,
-      cancel_on_tap_outside: true,
-    });
-  }
-  googleIdentitySignature = signature;
-}
-
-function renderGoogleSigninButtonIfPossible({ redirectFlow = false, show = false } = {}) {
-  if (!googleSigninWrap || !googleSigninButton) {
-    return false;
-  }
-  if (isTelegramMiniAppRuntime()) {
-    googleSigninWrap.classList.add("is-hidden");
-    return false;
-  }
-  const clientId = googleClientIdFromMeta();
-  if (!clientId || !hasGoogleSdk()) {
-    googleSigninWrap.classList.add("is-hidden");
-    return false;
-  }
-  if (!state.apiBase) {
-    googleSigninWrap.classList.add("is-hidden");
-    return false;
-  }
-  ensureGoogleIdentityInitialized(clientId, { redirectFlow });
-  const stateToken = encodeGoogleButtonState({ return_to: currentReturnToUrl() });
-  googleSigninButton.innerHTML = "";
-  window.google.accounts.id.renderButton(googleSigninButton, {
-    type: "standard",
-    theme: redirectFlow ? "filled_blue" : "outline",
-    size: "large",
-    text: "signin_with",
-    shape: "rectangular",
-    logo_alignment: "left",
-    width: "380",
-    state: stateToken,
-  });
-  googleSigninWrap.classList.toggle("is-hidden", !show);
-  return true;
-}
-
-function triggerRenderedGoogleButtonClick() {
-  if (!googleSigninButton) {
-    return false;
-  }
-  const clickable =
-    googleSigninButton.querySelector('div[role="button"]') ||
-    googleSigninButton.querySelector('iframe[title*="Google"]') ||
-    googleSigninButton.querySelector("iframe");
-  if (!clickable) {
-    return false;
-  }
-  try {
-    if (typeof clickable.click === "function") {
-      clickable.click();
-    } else {
-      clickable.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window }));
-    }
-    return true;
-  } catch (_error) {
-    return false;
-  }
-}
-
 async function loginViaGoogle() {
   if (!googleAuthButton) {
     return;
@@ -2998,42 +2940,14 @@ async function loginViaGoogle() {
 
   googleAuthPending = true;
   googleAuthButton.disabled = true;
-  try {
-    await ensureGoogleSdkLoaded();
-  } catch (_error) {
+  const url = googleOidcAuthorizeUrl();
+  if (!url) {
     setGoogleAuthButtonIdle();
-    if (isYandexMobileBrowser()) {
-      setNote("Яндекс Браузер на мобилке нестабилен для входа через Google. Открой приложение в Safari или Chrome.", true);
-      return;
-    }
-    setNote("Google SDK не загрузился. Проверь соединение и обнови страницу.", true);
-    return;
-  }
-  const rendered = renderGoogleSigninButtonIfPossible({ redirectFlow: isMobileBrowser(), show: false });
-  if (!rendered) {
-    setGoogleAuthButtonIdle();
-    if (!hasGoogleSdk()) {
-      if (isYandexMobileBrowser()) {
-        setNote("Яндекс Браузер на мобилке нестабилен для входа через Google. Открой приложение в Safari или Chrome.", true);
-        return;
-      }
-      setNote("Google SDK не загрузился. Проверь соединение и обнови страницу.", true);
-      return;
-    }
     setNote("Google login недоступен для этого окружения.", true);
     return;
   }
-  const opened = triggerRenderedGoogleButtonClick();
-  if (opened) {
-    setNote("Открываю Google...");
-    return;
-  }
-  googleAuthPending = false;
-  if (googleSigninWrap) {
-    googleSigninWrap.classList.remove("is-hidden");
-    googleSigninWrap.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  }
-  setNote("Нажми кнопку Google ниже.");
+  setNote("Открываю Google...");
+  window.location.assign(url);
 }
 
 function bindEvents() {
@@ -3243,6 +3157,23 @@ async function bootstrap() {
     await loadPublicData();
   } catch (error) {
     setNote(userFacingErrorMessage(error, "Не удалось загрузить данные приложения."), true);
+  }
+
+  try {
+    const consumedGoogleCallback = await consumeGoogleOidcCallback();
+    if (consumedGoogleCallback && hasActiveSession()) {
+      setAuthGateVisible(false);
+      setBootPending(false);
+      return;
+    }
+  } catch (error) {
+    state.accessToken = "";
+    state.refreshToken = "";
+    state.isCookieSession = false;
+    state.lastAuthProvider = "";
+    clearGoogleOidcSession();
+    saveState();
+    setNote(userFacingErrorMessage(error, "Не удалось выполнить вход через Google."), true);
   }
 
   let authorized = false;
