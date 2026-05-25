@@ -2396,26 +2396,29 @@ async function renderActiveImage(job, renderToken) {
     if (renderToken !== state.activeImageRenderToken) {
       return;
     }
+    const canDownload = !isTelegramMiniAppRuntime();
     activeResult.className = "active-result active-result-has-image";
     activeResult.innerHTML = `
       <img src="${escapeHtml(rendered.src)}" alt="Результат генерации" />
       <div class="image-actions">
         <button class="soft-btn btn-compact" data-action="open" type="button">Открыть</button>
-        <button class="soft-btn btn-compact" data-action="download" type="button">Скачать</button>
+        ${canDownload ? '<button class="soft-btn btn-compact" data-action="download" type="button">Скачать</button>' : ""}
       </div>
     `;
     const openBtn = activeResult.querySelector('[data-action="open"]');
-    const downloadBtn = activeResult.querySelector('[data-action="download"]');
     openBtn.addEventListener("click", () => {
       openImage(job.result_image_url).catch((error) => {
         setCreateNote(userFacingErrorMessage(error, "Не удалось открыть изображение."), true);
       });
     });
-    downloadBtn.addEventListener("click", () => {
-      downloadGenerationImage(job.id, `kartivio-${job.id}`).catch((error) => {
-        setCreateNote(userFacingErrorMessage(error, "Не удалось скачать изображение."), true);
+    const downloadBtn = activeResult.querySelector('[data-action="download"]');
+    if (downloadBtn) {
+      downloadBtn.addEventListener("click", () => {
+        downloadGenerationImage(job.id, `kartivio-${job.id}`).catch((error) => {
+          setCreateNote(userFacingErrorMessage(error, "Не удалось скачать изображение."), true);
+        });
       });
-    });
+    }
   } catch (error) {
     if (renderToken !== state.activeImageRenderToken) {
       return;
@@ -2454,6 +2457,7 @@ function historyThumb(job) {
 
 function renderHistory(payload) {
   const items = Array.isArray(payload && payload.items) ? payload.items : [];
+  const canDownload = !isTelegramMiniAppRuntime();
   historyList.innerHTML = "";
   if (!items.length) {
     historyList.innerHTML = '<article class="history-item"><div class="history-body">История пока пустая.</div></article>';
@@ -2475,7 +2479,7 @@ function renderHistory(payload) {
         <div class="history-actions">
           <button class="soft-btn btn-compact" data-action="use-prompt" type="button">Вставить промпт</button>
           <button class="soft-btn btn-compact" data-action="open-image" type="button" ${job.result_image_url ? "" : "disabled"}>Открыть</button>
-          <button class="soft-btn btn-compact" data-action="download-image" type="button" ${job.result_image_url ? "" : "disabled"}>Скачать</button>
+          ${canDownload ? `<button class="soft-btn btn-compact" data-action="download-image" type="button" ${job.result_image_url ? "" : "disabled"}>Скачать</button>` : ""}
         </div>
       </div>
     `;
@@ -2496,14 +2500,17 @@ function renderHistory(payload) {
         setCreateNote(userFacingErrorMessage(error, "Не удалось открыть изображение."), true);
       });
     });
-    item.querySelector('[data-action="download-image"]').addEventListener("click", () => {
-      if (!job.result_image_url) {
-        return;
-      }
-      downloadGenerationImage(job.id, `kartivio-${job.id}`).catch((error) => {
-        setCreateNote(userFacingErrorMessage(error, "Не удалось скачать изображение."), true);
+    const downloadButton = item.querySelector('[data-action="download-image"]');
+    if (downloadButton) {
+      downloadButton.addEventListener("click", () => {
+        if (!job.result_image_url) {
+          return;
+        }
+        downloadGenerationImage(job.id, `kartivio-${job.id}`).catch((error) => {
+          setCreateNote(userFacingErrorMessage(error, "Не удалось скачать изображение."), true);
+        });
       });
-    });
+    }
     historyList.appendChild(item);
 
     if (job.result_image_url) {
