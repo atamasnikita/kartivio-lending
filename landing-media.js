@@ -284,7 +284,8 @@
       const fallback = HERO_FALLBACK[idx % HERO_FALLBACK.length];
       image.src = item.src;
       image.alt = item.alt;
-      image.loading = "lazy";
+      image.loading = !isClone && idx < 2 ? "eager" : "lazy";
+      image.fetchPriority = !isClone && idx < 2 ? "high" : "auto";
       image.decoding = "async";
       if (isClone) {
         image.setAttribute("aria-hidden", "true");
@@ -564,7 +565,7 @@
 
   async function loadManifest() {
     try {
-      const response = await fetch(MANIFEST_URL, { cache: "no-store" });
+      const response = await fetch(MANIFEST_URL);
       if (!response.ok) {
         return null;
       }
@@ -581,7 +582,8 @@
     const howAfterImage = document.getElementById("howAfterImage");
     const howAfterPlaceholder = document.getElementById("howAfterPlaceholder");
 
-    const [manifest] = await Promise.all([loadManifest(), initTopbarAuth()]);
+    const manifest = await loadManifest();
+    initTopbarAuth().catch(() => {});
 
     renderHero(heroRail, manifest && manifest.hero);
     window.addEventListener("resize", () => recalculateHeroLoop(heroRail));

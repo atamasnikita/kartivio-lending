@@ -1075,17 +1075,6 @@ function isNgrokUrl(rawUrl) {
   }
 }
 
-function extensionFromUrl(rawUrl) {
-  try {
-    const parsed = new URL(String(rawUrl || ""));
-    const part = parsed.pathname.split("/").pop() || "";
-    const match = part.match(/\.([a-zA-Z0-9]+)$/);
-    return match ? match[1].toLowerCase() : "";
-  } catch (_e) {
-    return "";
-  }
-}
-
 function normalizeImageUrl(rawUrl) {
   const value = String(rawUrl || "").trim();
   if (!value) {
@@ -1169,23 +1158,67 @@ async function openImage(rawUrl) {
   window.open(targetUrl, "_blank", "noopener,noreferrer");
 }
 
-async function downloadImage(rawUrl, fallbackBase = "kartivio-image") {
-  const targetUrl = normalizeImageUrl(rawUrl);
-  if (!targetUrl) {
-    throw new Error("Ссылка на изображение не найдена.");
+async function apiFetchBlob(path, { auth = false } = {}) {
+  const headers = headersForApiBase(state.apiBase);
+  if (auth && state.accessToken) {
+    headers.Authorization = `Bearer ${state.accessToken}`;
   }
 
-  const response = await fetch(targetUrl, {
+  const response = await fetch(`${state.apiBase}${path}`, {
     method: "GET",
-    headers: headersForApiBase(targetUrl),
+    credentials: "include",
+    headers,
   });
+
   if (!response.ok) {
-    throw new Error("Изображение временно недоступно.");
+    const payload = await parseJsonResponse(response);
+    const rawMessage = extractErrorMessage(payload, `HTTP ${response.status}`);
+    const errorCode =
+      (payload && typeof payload.code === "string" && payload.code) ||
+      (payload && payload.detail && typeof payload.detail.code === "string" && payload.detail.code) ||
+      "";
+    const message = userFacingErrorMessage(
+      { code: errorCode, status: response.status, rawMessage },
+      fallbackMessageByStatus(response.status)
+    );
+    const error = new Error(message);
+    error.status = response.status;
+    error.code = errorCode;
+    error.rawMessage = rawMessage;
+    throw error;
   }
 
-  const blob = await response.blob();
+  return {
+    blob: await response.blob(),
+    contentType: response.headers.get("content-type") || "",
+  };
+}
+
+async function authorizedBlobFetch(path) {
+  try {
+    return await apiFetchBlob(path, { auth: true });
+  } catch (error) {
+    if (!isUnauthorizedError(error)) {
+      throw error;
+    }
+    const refreshed = await refreshSession();
+    if (!refreshed) {
+      setAuthGateVisible(true);
+      throw error;
+    }
+    return apiFetchBlob(path, { auth: true });
+  }
+}
+
+async function downloadGenerationImage(jobId, fallbackBase = "kartivio-image") {
+  const normalizedJobId = String(jobId || "").trim();
+  if (!normalizedJobId) {
+    throw new Error("Идентификатор генерации не найден.");
+  }
+
+  const { blob, contentType } = await authorizedBlobFetch(`/v1/generations/${normalizedJobId}/download`);
   const objectUrl = URL.createObjectURL(blob);
-  const ext = extensionFromUrl(targetUrl) || extensionFromContentType(blob.type) || "png";
+  const ext = extensionFromContentType(contentType || blob.type) || "png";
   const filename = `${fallbackBase}-${Date.now()}.${ext}`;
 
   const link = document.createElement("a");
@@ -2379,7 +2412,7 @@ async function renderActiveImage(job, renderToken) {
       });
     });
     downloadBtn.addEventListener("click", () => {
-      downloadImage(job.result_image_url, `kartivio-${job.id}`).catch((error) => {
+      downloadGenerationImage(job.id, `kartivio-${job.id}`).catch((error) => {
         setCreateNote(userFacingErrorMessage(error, "Не удалось скачать изображение."), true);
       });
     });
@@ -2467,7 +2500,7 @@ function renderHistory(payload) {
       if (!job.result_image_url) {
         return;
       }
-      downloadImage(job.result_image_url, `kartivio-${job.id}`).catch((error) => {
+      downloadGenerationImage(job.id, `kartivio-${job.id}`).catch((error) => {
         setCreateNote(userFacingErrorMessage(error, "Не удалось скачать изображение."), true);
       });
     });

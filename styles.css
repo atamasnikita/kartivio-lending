@@ -232,6 +232,7 @@ a {
   margin-top: 72px;
   padding-bottom: 12px;
   overflow: hidden;
+  min-height: clamp(286px, 27vw, 372px);
 }
 
 .hero-rail {
