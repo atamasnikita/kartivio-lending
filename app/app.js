@@ -16,6 +16,7 @@ const GOOGLE_OIDC_STORAGE_KEYS = {
   returnTo: "kartivio.google_oidc_return_to",
 };
 const MAX_SOURCE_IMAGES = 3;
+const PROMPT_MAX_LENGTH = 3000;
 const TEMPLATE_SKELETON_RATIOS = ["1 / 1", "4 / 5", "3 / 4", "5 / 4", "2 / 3", "3 / 2"];
 const TEMPLATE_MODAL_ANIMATION_MS = 260;
 
@@ -2466,7 +2467,7 @@ async function renderActiveImage(job, renderToken) {
     activeResult.className = "active-result active-result-has-image";
     activeResult.innerHTML = `
       <img src="${escapeHtml(rendered.src)}" alt="Результат генерации" />
-      <div class="image-actions">
+      <div class="image-actions${canDownload ? "" : " image-actions-single"}">
         <button class="soft-btn btn-compact" data-action="open" type="button">Открыть</button>
         ${canDownload ? '<button class="soft-btn btn-compact" data-action="download" type="button">Скачать</button>' : ""}
       </div>
@@ -2766,6 +2767,9 @@ async function handleCreate() {
     ensureAuthorizedForCreate();
     if (!prompt) {
       throw new Error("Добавь промпт.");
+    }
+    if (prompt.length > PROMPT_MAX_LENGTH) {
+      throw new Error(`Промпт слишком длинный. Максимум ${PROMPT_MAX_LENGTH} символов.`);
     }
     if (!outputSize) {
       throw new Error("Недоступная комбинация разрешения и соотношения.");
@@ -3369,6 +3373,7 @@ async function bootstrap() {
   setBootPending(true);
   unlockTemplateModalScroll();
   loadState();
+  promptInput.maxLength = PROMPT_MAX_LENGTH;
   setDevPanelVisibility();
   await ensureTelegramSdkLoaded();
   syncRuntimeClasses();

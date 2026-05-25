@@ -1269,6 +1269,15 @@ body.is-web-runtime.is-mobile-browser .app-main {
   border-top: 1px solid #242c3d;
 }
 
+.image-actions-single {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.image-actions-single .btn-compact {
+  width: min(220px, 100%);
+}
+
 .history-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
