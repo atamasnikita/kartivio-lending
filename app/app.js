@@ -324,7 +324,9 @@ const templateModalClose = document.getElementById("templateModalClose");
 const templateModalImage = document.getElementById("templateModalImage");
 const templateModalTitle = document.getElementById("templateModalTitle");
 const templateModalCategory = document.getElementById("templateModalCategory");
+const templateModalPromptScroll = document.getElementById("templateModalPromptScroll");
 const templateModalPrompt = document.getElementById("templateModalPrompt");
+const templatePromptToggle = document.getElementById("templatePromptToggle");
 const templateCopyPromptButton = document.getElementById("templateCopyPromptButton");
 const templateUseButton = document.getElementById("templateUseButton");
 const templateModalNote = document.getElementById("templateModalNote");
@@ -339,6 +341,7 @@ let telegramViewportListenersAttached = false;
 let lucideRetryTimer = 0;
 let mobileWebNavListenerAttached = false;
 let lastAppMainScrollTop = 0;
+let templatePromptExpanded = false;
 
 function refreshIcons() {
   if (window.lucide && typeof window.lucide.createIcons === "function") {
@@ -2167,6 +2170,44 @@ function setTemplateModalNote(message, isError = false) {
   templateModalNote.style.color = isError ? "#ff8f8f" : "#8f98b0";
 }
 
+function setTemplatePromptExpanded(expanded) {
+  if (!templateModalPromptScroll || !templatePromptToggle) {
+    return;
+  }
+  templatePromptExpanded = Boolean(expanded);
+  templateModalPromptScroll.classList.toggle("is-collapsed", !templatePromptExpanded);
+  templateModalPromptScroll.classList.toggle("is-expanded", templatePromptExpanded);
+  templatePromptToggle.setAttribute("aria-expanded", templatePromptExpanded ? "true" : "false");
+  const label = templatePromptToggle.querySelector("span");
+  if (label) {
+    label.textContent = templatePromptExpanded ? "Свернуть промпт" : "Развернуть промпт";
+  }
+}
+
+function syncTemplatePromptToggle(forceCollapse = false) {
+  if (!templateModalPromptScroll || !templatePromptToggle || !templateModalPrompt) {
+    return;
+  }
+
+  const collapsedLimit = isMobileBrowser() ? 124 : 168;
+  const canExpand = templateModalPromptScroll.scrollHeight > collapsedLimit + 12;
+  templatePromptToggle.classList.toggle("is-hidden", !canExpand);
+
+  if (!canExpand) {
+    setTemplatePromptExpanded(true);
+    templateModalPromptScroll.scrollTop = 0;
+    return;
+  }
+
+  if (forceCollapse) {
+    setTemplatePromptExpanded(false);
+    templateModalPromptScroll.scrollTop = 0;
+    return;
+  }
+
+  setTemplatePromptExpanded(templatePromptExpanded);
+}
+
 async function copyPromptToClipboard(prompt) {
   const value = String(prompt || "").trim();
   if (!value) {
@@ -2193,6 +2234,9 @@ async function copyPromptToClipboard(prompt) {
 function closeTemplateModal() {
   state.activeTemplateModalId = "";
   state.activeTemplateModalItem = null;
+  if (templateModalPromptScroll) {
+    templateModalPromptScroll.scrollTop = 0;
+  }
   templateModalImageLoadToken += 1;
   if (templateModalCloseTimer) {
     window.clearTimeout(templateModalCloseTimer);
@@ -2255,6 +2299,7 @@ function openTemplateModal(item, initialPreviewUrl = "") {
   templateModalTitle.textContent = item.title || "Шаблон";
   templateModalCategory.textContent = normalizeTemplateCategory(item.category);
   templateModalPrompt.textContent = item.prompt || "";
+  setTemplatePromptExpanded(false);
   setTemplateModalNote("");
   if (templateModalCloseTimer) {
     window.clearTimeout(templateModalCloseTimer);
@@ -2264,6 +2309,9 @@ function openTemplateModal(item, initialPreviewUrl = "") {
   window.requestAnimationFrame(() => {
     if (templateModal) {
       templateModal.classList.add("is-visible");
+      window.requestAnimationFrame(() => {
+        syncTemplatePromptToggle(true);
+      });
     }
   });
   lockTemplateModalScroll();
@@ -3210,6 +3258,13 @@ function bindEvents() {
       } catch (error) {
         setTemplateModalNote(userFacingErrorMessage(error, "Не удалось скопировать промпт."), true);
       }
+    });
+  }
+  if (templatePromptToggle) {
+    templatePromptToggle.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      setTemplatePromptExpanded(!templatePromptExpanded);
     });
   }
   if (templateModalClose) {

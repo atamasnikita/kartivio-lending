@@ -10,7 +10,7 @@
       content="547797863553-g3jsqvf2p31p0ffu029f1p25kjjdn2bn.apps.googleusercontent.com"
     />
     <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=20260525c" />
+    <link rel="stylesheet" href="./styles.css?v=20260525d" />
     <script src="https://unpkg.com/lucide@latest" async></script>
   </head>
   <body>
@@ -305,8 +305,19 @@
         <div class="template-modal-body">
           <strong id="templateModalTitle">Шаблон</strong>
           <span id="templateModalCategory">Категория</span>
-          <div class="template-modal-prompt-scroll">
-            <p id="templateModalPrompt" class="template-modal-prompt"></p>
+          <div class="template-modal-prompt-section">
+            <div id="templateModalPromptScroll" class="template-modal-prompt-scroll is-collapsed">
+              <p id="templateModalPrompt" class="template-modal-prompt"></p>
+            </div>
+            <button
+              id="templatePromptToggle"
+              class="template-prompt-toggle is-hidden"
+              type="button"
+              aria-expanded="false"
+              aria-controls="templateModalPromptScroll"
+            >
+              <span>Развернуть промпт</span>
+            </button>
           </div>
           <div class="template-modal-actions">
             <button id="templateCopyPromptButton" class="soft-btn" type="button">Скопировать промпт</button>
@@ -317,6 +328,6 @@
       </article>
     </div>
 
-    <script src="./app.js?v=20260525c" defer></script>
+    <script src="./app.js?v=20260525d" defer></script>
   </body>
 </html>
