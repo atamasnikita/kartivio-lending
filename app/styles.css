@@ -40,6 +40,14 @@ body {
   font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
+html.is-web-runtime.is-mobile-browser,
+body.is-web-runtime.is-mobile-browser {
+  height: auto;
+  min-height: 100%;
+  overflow-y: auto;
+  overscroll-behavior-y: auto;
+}
+
 html.template-modal-open,
 body.template-modal-open {
   overflow: hidden;
@@ -67,6 +75,14 @@ textarea {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   overflow: hidden;
+}
+
+html.is-web-runtime.is-mobile-browser .app-shell,
+body.is-web-runtime.is-mobile-browser .app-shell {
+  min-height: 100svh;
+  height: auto;
+  display: block;
+  overflow: visible;
 }
 
 .app-shell.is-hidden {
@@ -269,6 +285,10 @@ textarea {
 html.is-web-runtime.is-mobile-browser .app-main,
 body.is-web-runtime.is-mobile-browser .app-main {
   padding-bottom: calc(190px + max(env(safe-area-inset-bottom), var(--tg-safe-bottom, 0px)));
+  min-height: auto;
+  overflow: visible;
+  overscroll-behavior-y: auto;
+  -webkit-overflow-scrolling: auto;
 }
 
 .screen {

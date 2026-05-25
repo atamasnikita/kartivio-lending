@@ -439,28 +439,46 @@ function setBottomNavHidden(hidden) {
   document.body.classList.toggle("nav-hidden", nextHidden);
 }
 
+function getPrimaryScrollTop() {
+  if (!isTelegramMiniAppRuntime() && isMobileBrowser()) {
+    return Number(window.scrollY || window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop || 0);
+  }
+  return Number(appMain?.scrollTop || 0);
+}
+
+function handleBottomNavAutoHide() {
+  if (isTelegramMiniAppRuntime() || !isMobileBrowser()) {
+    setBottomNavHidden(false);
+    lastAppMainScrollTop = getPrimaryScrollTop();
+    return;
+  }
+
+  const currentScrollTop = getPrimaryScrollTop();
+  const delta = currentScrollTop - lastAppMainScrollTop;
+
+  if (currentScrollTop <= 24 || delta <= -8) {
+    setBottomNavHidden(false);
+  } else if (delta >= 8) {
+    setBottomNavHidden(true);
+  }
+
+  lastAppMainScrollTop = currentScrollTop;
+}
+
 function initMobileWebBottomNavBehavior() {
-  if (!appMain || !bottomNav || mobileWebNavListenerAttached) {
+  if (!bottomNav || mobileWebNavListenerAttached) {
     return;
   }
   mobileWebNavListenerAttached = true;
-  lastAppMainScrollTop = Number(appMain.scrollTop || 0);
-  appMain.addEventListener(
-    "scroll",
+  lastAppMainScrollTop = getPrimaryScrollTop();
+  if (appMain) {
+    appMain.addEventListener("scroll", handleBottomNavAutoHide, { passive: true });
+  }
+  window.addEventListener("scroll", handleBottomNavAutoHide, { passive: true });
+  window.addEventListener(
+    "resize",
     () => {
-      if (isTelegramMiniAppRuntime() || !isMobileBrowser()) {
-        setBottomNavHidden(false);
-        lastAppMainScrollTop = Number(appMain.scrollTop || 0);
-        return;
-      }
-      const currentScrollTop = Number(appMain.scrollTop || 0);
-      const delta = currentScrollTop - lastAppMainScrollTop;
-      if (currentScrollTop <= 24 || delta <= -8) {
-        setBottomNavHidden(false);
-      } else if (delta >= 8) {
-        setBottomNavHidden(true);
-      }
-      lastAppMainScrollTop = currentScrollTop;
+      lastAppMainScrollTop = getPrimaryScrollTop();
     },
     { passive: true },
   );
