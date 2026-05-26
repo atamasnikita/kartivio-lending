@@ -10,7 +10,7 @@
       content="547797863553-g3jsqvf2p31p0ffu029f1p25kjjdn2bn.apps.googleusercontent.com"
     />
     <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=20260526a" />
+    <link rel="stylesheet" href="./styles.css?v=20260526d" />
     <script src="https://unpkg.com/lucide@latest" async></script>
   </head>
   <body>
@@ -140,11 +140,11 @@
             </button>
           </section>
 
-          <div id="uploadDropzone" class="upload-dropzone" role="button" tabindex="0" aria-label="Добавить фото для редактирования">
+          <div id="uploadDropzone" class="upload-dropzone" role="button" tabindex="0" aria-label="Добавить свои фото для фотосессии">
             <span id="dropzoneEmptyState" class="dropzone-empty">
               <span class="dropzone-icon"><i data-lucide="image-plus"></i></span>
-              <span class="dropzone-title" id="dropzoneTitle">Добавить фото</span>
-              <span class="dropzone-subtitle">До 3 фото, до 10 MB каждое, PNG/JPG/WEBP</span>
+              <span class="dropzone-title" id="dropzoneTitle">Добавьте свои фото</span>
+              <span class="dropzone-subtitle">Для фотосессии с вашим лицом · до 3 фото, до 10 MB каждое, PNG/JPG/WEBP</span>
             </span>
             <div id="sourceImagePreviewGrid" class="dropzone-preview-grid is-hidden" aria-label="Превью референсов"></div>
             <button
@@ -163,20 +163,21 @@
             <div class="inline-actions">
               <button id="uploadPhotoButton" class="soft-btn soft-btn-icon" type="button">
                 <i data-lucide="paperclip"></i>
-                <span>Добавить фото</span>
+                <span>Добавить свои фото</span>
               </button>
               <button id="sourceTipsButton" class="icon-btn help-icon-btn" type="button" aria-label="Рекомендации по фото">
                 <i data-lucide="circle-help"></i>
               </button>
-              <span id="sourceImageMeta" class="muted-inline">Файл не выбран</span>
+              <span id="sourceImageMeta" class="muted-inline">Без своих фото получится обычная генерация, не фотосессия с вашим лицом.</span>
             </div>
             <div id="sourceTipsPanel" class="tips-panel is-hidden" role="note">
-              <strong>Рекомендации по референсам</strong>
+              <strong>Рекомендации по своим фото</strong>
               <ul>
                 <li>Лучше 2-3 фото одного человека: фронт, 3/4 и профиль.</li>
                 <li>Без фильтров, масок и сильного ретуша.</li>
                 <li>Лицо крупно, резкость нормальная, без пересвета.</li>
                 <li>Не смешивай фото разных людей.</li>
+                <li>Без своих фото получится обычная генерация, не фотосессия с вашим лицом.</li>
               </ul>
             </div>
             <p class="storage-note">
@@ -332,6 +333,6 @@
       </article>
     </div>
 
-    <script src="./app.js?v=20260526c" defer></script>
+    <script src="./app.js?v=20260526d" defer></script>
   </body>
 </html>

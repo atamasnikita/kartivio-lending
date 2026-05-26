@@ -1270,12 +1270,11 @@ body.is-web-runtime.is-mobile-browser .app-main {
 }
 
 .image-actions-single {
-  display: flex;
-  justify-content: flex-end;
+  grid-template-columns: 1fr;
 }
 
 .image-actions-single .btn-compact {
-  width: min(220px, 100%);
+  width: 100%;
 }
 
 .history-grid {

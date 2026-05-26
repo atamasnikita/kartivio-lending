@@ -1402,8 +1402,8 @@ function renderSelectedSourceImage() {
   const hasFiles = files.length > 0;
 
   if (!files.length) {
-    dropzoneTitle.textContent = "Добавить фото";
-    sourceImageMeta.textContent = "Файл не выбран";
+    dropzoneTitle.textContent = "Добавьте свои фото";
+    sourceImageMeta.textContent = "Без своих фото получится обычная генерация, не фотосессия с вашим лицом.";
     uploadDropzone.classList.remove("has-image");
     if (dropzoneEmptyState) {
       dropzoneEmptyState.classList.remove("is-hidden");
@@ -2476,7 +2476,7 @@ async function renderActiveImage(job, renderToken) {
     activeResult.innerHTML = `
       <img src="${escapeHtml(rendered.src)}" alt="Результат генерации" />
       <div class="image-actions${canDownload ? "" : " image-actions-single"}">
-        <button class="soft-btn btn-compact" data-action="open" type="button">Открыть</button>
+        <button class="soft-btn btn-compact" data-action="open" type="button">Открыть изображение</button>
         ${canDownload ? '<button class="soft-btn btn-compact" data-action="download" type="button">Скачать</button>' : ""}
       </div>
     `;
