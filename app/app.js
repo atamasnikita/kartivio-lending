@@ -29,7 +29,7 @@ const MODEL_COSTS = {
 const IMAGE_MODEL_LABELS = {
   "gemini-3.1-flash-image-preview": "Nano Banana 2",
   "gemini-3-pro-image-preview": "Nano Banana Pro",
-  "gpt-image-2": "GPT Image 2",
+  "gpt-image-2": "Архив",
 };
 
 const RESOLUTION_ORDER = ["auto", "1K", "2K", "4K"];
@@ -111,7 +111,7 @@ const MODEL_OUTPUT_MATRIX = {
   "gpt-image-2": GPT_OUTPUT_MATRIX,
 };
 
-const MODEL_ORDER = ["gemini-3.1-flash-image-preview", "gemini-3-pro-image-preview", "gpt-image-2"];
+const MODEL_ORDER = ["gemini-3.1-flash-image-preview", "gemini-3-pro-image-preview"];
 const DEFAULT_IMAGE_MODEL = "gemini-3.1-flash-image-preview";
 const DEFAULT_RESOLUTION = "1K";
 const DEFAULT_RATIO = "1:1";
@@ -187,14 +187,14 @@ const API_ERROR_MESSAGES = Object.freeze({
   telegram_web_login_token_create_failed: "Не удалось создать ссылку входа. Попробуй еще раз.",
   telegram_web_login_token_invalid: "Ссылка входа недействительна. Запусти вход заново.",
   telegram_web_login_failed: "Не удалось завершить вход через Telegram. Попробуй еще раз.",
-  openai_org_verification_required: "GPT Image 2 временно недоступна: не завершена верификация OpenAI.",
-  openai_not_configured: "Модель GPT Image 2 временно недоступна.",
+  openai_org_verification_required: "Модель временно недоступна.",
+  openai_not_configured: "Модель временно недоступна.",
   openai_timeout: "Генерация заняла слишком много времени. Попробуй еще раз.",
-  openai_invalid_size: "Этот размер пока недоступен для GPT Image 2.",
-  openai_generation_failed: "Ошибка генерации в GPT Image 2. Попробуй снова.",
-  openai_edit_failed: "Ошибка редактирования в GPT Image 2. Попробуй снова.",
-  openai_empty_result: "Не удалось получить результат от GPT Image 2. Попробуй снова.",
-  openai_missing_b64: "Не удалось получить изображение от GPT Image 2. Попробуй снова.",
+  openai_invalid_size: "Этот размер пока недоступен для выбранной модели.",
+  openai_generation_failed: "Ошибка генерации в модели. Попробуй снова.",
+  openai_edit_failed: "Ошибка редактирования в модели. Попробуй снова.",
+  openai_empty_result: "Не удалось получить результат от модели. Попробуй снова.",
+  openai_missing_b64: "Не удалось получить изображение от модели. Попробуй снова.",
   gemini_not_configured: "Модель Nano Banana временно недоступна.",
   gemini_invalid_api_key: "Модель Nano Banana временно недоступна.",
   gemini_rate_limited: "Сервис генерации перегружен. Попробуй чуть позже.",
@@ -213,11 +213,11 @@ const JOB_ERROR_MESSAGES = Object.freeze({
   provider_unexpected_error: "Ошибка генерации на стороне провайдера. Кредиты возвращены.",
   insufficient_credits: "Недостаточно кредитов.",
   concurrent_jobs_limit_exceeded: "Слишком много задач в работе.",
-  openai_org_verification_required: "GPT Image 2 недоступна: требуется верификация OpenAI.",
+  openai_org_verification_required: "Модель временно недоступна.",
   openai_timeout: "Генерация заняла слишком много времени. Кредиты возвращены.",
-  openai_invalid_size: "Выбранный размер не поддерживается для GPT Image 2.",
-  openai_generation_failed: "Ошибка генерации в GPT Image 2. Кредиты возвращены.",
-  openai_edit_failed: "Ошибка редактирования в GPT Image 2. Кредиты возвращены.",
+  openai_invalid_size: "Выбранный размер не поддерживается для этой модели.",
+  openai_generation_failed: "Ошибка генерации в модели. Кредиты возвращены.",
+  openai_edit_failed: "Ошибка редактирования в модели. Кредиты возвращены.",
   gemini_rate_limited: "Сервис Nano Banana перегружен. Кредиты возвращены.",
   gemini_overloaded: "Сервис Nano Banana перегружен. Кредиты возвращены.",
   gemini_generation_failed: "Ошибка генерации в Nano Banana. Кредиты возвращены.",
@@ -2101,7 +2101,6 @@ function renderPlans(payload) {
     const credits = Number(item.credits || 0);
     const nb2Count = Math.floor(credits / (MODEL_COSTS["gemini-3.1-flash-image-preview"] || 1));
     const nbproCount = Math.floor(credits / (MODEL_COSTS["gemini-3-pro-image-preview"] || 1));
-    const gptCount = Math.floor(credits / (MODEL_COSTS["gpt-image-2"] || 1));
     const card = document.createElement("article");
     card.className = "plan-card";
     card.dataset.code = item.code;
@@ -2111,7 +2110,7 @@ function renderPlans(payload) {
         <span class="chip">${escapeHtml(formatCredits(item.credits))}</span>
       </div>
       <div class="plan-price">${escapeHtml(item.price_rub)} ₽</div>
-      <div class="plan-meta">~${nb2Count} Nano Banana 2 · ~${nbproCount} Nano Banana Pro · ~${gptCount} GPT Image 2</div>
+      <div class="plan-meta">~${nb2Count} Nano Banana 2 · ~${nbproCount} Nano Banana Pro</div>
     `;
     card.addEventListener("click", () => selectTopup(item.code));
     plansGrid.appendChild(card);
