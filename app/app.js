@@ -9,11 +9,18 @@ const STORAGE_KEYS = {
 const DEFAULT_PROD_API_BASE = "https://api.kartivio-ai.ru";
 const DEFAULT_LOCAL_API_BASE = "http://127.0.0.1:8093";
 const GOOGLE_CLIENT_ID_META_NAME = "kartivio-google-client-id";
+const YANDEX_CLIENT_ID_META_NAME = "kartivio-yandex-client-id";
 const GOOGLE_OIDC_AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v2/auth";
+const YANDEX_OAUTH_AUTHORIZE_URL = "https://oauth.yandex.com/authorize";
 const GOOGLE_OIDC_STORAGE_KEYS = {
   state: "kartivio.google_oidc_state",
   nonce: "kartivio.google_oidc_nonce",
   returnTo: "kartivio.google_oidc_return_to",
+};
+const YANDEX_OAUTH_STORAGE_KEYS = {
+  state: "kartivio.yandex_oauth_state",
+  verifier: "kartivio.yandex_oauth_verifier",
+  returnTo: "kartivio.yandex_oauth_return_to",
 };
 const MAX_SOURCE_IMAGES = 3;
 const PROMPT_MAX_LENGTH = 3000;
@@ -167,6 +174,16 @@ const API_ERROR_MESSAGES = Object.freeze({
   google_id_token_required: "Не получен токен Google. Повтори вход.",
   google_email_not_verified: "Подтверди email в Google-аккаунте и попробуй снова.",
   google_csrf_invalid: "Сессия входа устарела. Запусти вход через Google заново.",
+  yandex_auth_not_configured: "Вход через Яндекс временно недоступен.",
+  yandex_verify_unavailable: "Сервис входа через Яндекс временно недоступен.",
+  yandex_verify_bad_response: "Сервис входа через Яндекс временно недоступен.",
+  yandex_invalid_code: "Не удалось подтвердить вход через Яндекс.",
+  yandex_invalid_token_response: "Не удалось подтвердить вход через Яндекс.",
+  yandex_invalid_userinfo: "Не удалось получить профиль Яндекса.",
+  yandex_invalid_subject: "Не удалось определить пользователя Яндекса.",
+  yandex_oauth_failed: "Не удалось завершить вход через Яндекс.",
+  yandex_code_required: "Не получен код входа Яндекса. Повтори попытку.",
+  yandex_code_verifier_required: "Сессия входа через Яндекс устарела. Запусти вход заново.",
   telegram_auth_not_configured: "Вход через Telegram временно недоступен.",
   telegram_init_data_missing: "Открой приложение через кнопку Web App в боте.",
   telegram_init_data_invalid: "Сессия Telegram недействительна. Открой приложение заново из бота.",
@@ -280,6 +297,7 @@ const apiBaseInput = document.getElementById("apiBaseInput");
 const authButton = document.getElementById("authButton");
 const authCheckButton = document.getElementById("authCheckButton");
 const googleAuthButton = document.getElementById("googleAuthButton");
+const yandexAuthButton = document.getElementById("yandexAuthButton");
 const envHint = document.getElementById("envHint");
 const authNote = document.getElementById("authNote");
 const userName = document.getElementById("userName");
@@ -288,6 +306,7 @@ const creditsValue = document.getElementById("creditsValue");
 const creditsBadge = document.getElementById("creditsBadge");
 const profileAvatar = document.getElementById("profileAvatar");
 const identityGoogle = document.getElementById("identityGoogle");
+const identityYandex = document.getElementById("identityYandex");
 const identityTelegram = document.getElementById("identityTelegram");
 const linkTelegramButton = document.getElementById("linkTelegramButton");
 const telegramLinkNote = document.getElementById("telegramLinkNote");
@@ -341,6 +360,7 @@ const navButtons = Array.from(document.querySelectorAll("[data-nav]"));
 const jumpButtons = Array.from(document.querySelectorAll("[data-nav-target]"));
 const screens = Array.from(document.querySelectorAll("[data-screen]"));
 let googleAuthPending = false;
+let yandexAuthPending = false;
 let templateModalCloseTimer = null;
 let templateModalImageLoadToken = 0;
 let templateModalScrollTop = 0;
@@ -597,14 +617,21 @@ function googleAuthLaunchUrl() {
   return url.toString();
 }
 
+function yandexAuthLaunchUrl() {
+  const url = new URL(window.location.href);
+  url.searchParams.set("yandex_auto", "1");
+  return url.toString();
+}
+
 function currentReturnToUrl() {
   const url = new URL(window.location.href);
   url.searchParams.delete("google_auto");
+  url.searchParams.delete("yandex_auto");
   url.hash = "";
   return url.toString();
 }
 
-function googleRedirectUri() {
+function oauthRedirectUri() {
   const url = new URL(window.location.href);
   url.search = "";
   url.hash = "";
@@ -632,6 +659,16 @@ function clearGoogleOidcSession() {
     window.sessionStorage.removeItem(GOOGLE_OIDC_STORAGE_KEYS.state);
     window.sessionStorage.removeItem(GOOGLE_OIDC_STORAGE_KEYS.nonce);
     window.sessionStorage.removeItem(GOOGLE_OIDC_STORAGE_KEYS.returnTo);
+  } catch (_error) {
+    // noop
+  }
+}
+
+function clearYandexOauthSession() {
+  try {
+    window.sessionStorage.removeItem(YANDEX_OAUTH_STORAGE_KEYS.state);
+    window.sessionStorage.removeItem(YANDEX_OAUTH_STORAGE_KEYS.verifier);
+    window.sessionStorage.removeItem(YANDEX_OAUTH_STORAGE_KEYS.returnTo);
   } catch (_error) {
     // noop
   }
@@ -675,7 +712,7 @@ function googleOidcAuthorizeUrl() {
 
   const url = new URL(GOOGLE_OIDC_AUTHORIZE_URL);
   url.searchParams.set("client_id", clientId);
-  url.searchParams.set("redirect_uri", googleRedirectUri());
+  url.searchParams.set("redirect_uri", oauthRedirectUri());
   url.searchParams.set("response_type", "id_token");
   url.searchParams.set("scope", "openid email profile");
   url.searchParams.set("state", stateToken);
@@ -684,10 +721,66 @@ function googleOidcAuthorizeUrl() {
   return url.toString();
 }
 
+function yandexClientIdFromMeta() {
+  const queryClientId = String(new URLSearchParams(window.location.search).get("yandex_client_id") || "").trim();
+  if (queryClientId && canOverrideApiBase()) {
+    return queryClientId;
+  }
+  const tag = document.querySelector(`meta[name="${YANDEX_CLIENT_ID_META_NAME}"]`);
+  if (!tag) {
+    return "";
+  }
+  return String(tag.getAttribute("content") || "").trim();
+}
+
+async function sha256Base64Url(value) {
+  const digest = await window.crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(value || "")));
+  const bytes = new Uint8Array(digest);
+  let binary = "";
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+async function yandexOauthAuthorizeUrl() {
+  const clientId = yandexClientIdFromMeta();
+  if (!clientId) {
+    return "";
+  }
+  const stateToken = randomBase64Url(24);
+  const verifier = randomBase64Url(48);
+  const challenge = await sha256Base64Url(verifier);
+  writeSessionValue(YANDEX_OAUTH_STORAGE_KEYS.state, stateToken);
+  writeSessionValue(YANDEX_OAUTH_STORAGE_KEYS.verifier, verifier);
+  writeSessionValue(YANDEX_OAUTH_STORAGE_KEYS.returnTo, currentReturnToUrl());
+
+  const url = new URL(YANDEX_OAUTH_AUTHORIZE_URL);
+  url.searchParams.set("response_type", "code");
+  url.searchParams.set("client_id", clientId);
+  url.searchParams.set("redirect_uri", oauthRedirectUri());
+  url.searchParams.set("state", stateToken);
+  url.searchParams.set("scope", "login:info login:email login:avatar");
+  url.searchParams.set("code_challenge", challenge);
+  url.searchParams.set("code_challenge_method", "S256");
+  url.searchParams.set("force_confirm", "yes");
+  return url.toString();
+}
+
 function stripGoogleCallbackArtifacts() {
   const url = new URL(window.location.href);
   url.hash = "";
   url.searchParams.delete("google_auto");
+  window.history.replaceState({}, document.title, url.toString());
+}
+
+function stripYandexCallbackArtifacts() {
+  const url = new URL(window.location.href);
+  url.searchParams.delete("code");
+  url.searchParams.delete("state");
+  url.searchParams.delete("error");
+  url.searchParams.delete("error_description");
+  url.searchParams.delete("yandex_auto");
   window.history.replaceState({}, document.title, url.toString());
 }
 
@@ -738,6 +831,48 @@ async function consumeGoogleOidcCallback() {
   const url = new URL(returnTo);
   url.hash = "";
   url.searchParams.delete("google_auto");
+  window.history.replaceState({}, document.title, url.toString());
+  return true;
+}
+
+async function consumeYandexOauthCallback() {
+  const params = new URLSearchParams(window.location.search);
+  const returnedCode = String(params.get("code") || "").trim();
+  const returnedState = String(params.get("state") || "").trim();
+  const oauthError = String(params.get("error") || "").trim();
+  const oauthErrorDescription = String(params.get("error_description") || "").trim();
+  if (!returnedCode && !returnedState && !oauthError) {
+    return false;
+  }
+
+  const expectedState = readSessionValue(YANDEX_OAUTH_STORAGE_KEYS.state);
+  const verifier = readSessionValue(YANDEX_OAUTH_STORAGE_KEYS.verifier);
+  const returnTo = readSessionValue(YANDEX_OAUTH_STORAGE_KEYS.returnTo) || currentReturnToUrl();
+
+  if (!returnedState || !expectedState || returnedState !== expectedState) {
+    stripYandexCallbackArtifacts();
+    clearYandexOauthSession();
+    setNote("Сессия входа через Яндекс устарела. Запусти вход заново.", true);
+    return true;
+  }
+
+  stripYandexCallbackArtifacts();
+  clearYandexOauthSession();
+
+  if (oauthError) {
+    const description = oauthErrorDescription ? decodeURIComponent(oauthErrorDescription.replace(/\+/g, " ")) : "";
+    setNote(description || "Не удалось завершить вход через Яндекс.", true);
+    return true;
+  }
+  if (!returnedCode || !verifier) {
+    setNote("Яндекс не вернул данные для входа. Повтори попытку.", true);
+    return true;
+  }
+
+  await loginViaYandexCode(returnedCode, verifier);
+  const url = new URL(returnTo);
+  url.hash = "";
+  url.searchParams.delete("yandex_auto");
   window.history.replaceState({}, document.title, url.toString());
   return true;
 }
@@ -1644,11 +1779,14 @@ function initTelegramViewport() {
 }
 
 function refreshAuthButtons() {
-  if (!googleAuthButton) {
-    return;
+  if (googleAuthButton) {
+    googleAuthButton.textContent = "Войти через Google";
+    googleAuthButton.classList.toggle("is-hidden", !googleClientIdFromMeta());
   }
-  googleAuthButton.textContent = "Войти через Google";
-  googleAuthButton.classList.remove("is-hidden");
+  if (yandexAuthButton) {
+    yandexAuthButton.textContent = "Войти через Яндекс";
+    yandexAuthButton.classList.toggle("is-hidden", !yandexClientIdFromMeta());
+  }
 }
 
 function setTelegramLinkNote(message, isError = false) {
@@ -1698,7 +1836,7 @@ async function logoutSession() {
   setAuthGateVisible(true);
   switchScreen("feed");
   await Promise.allSettled([loadPrivateData(), loadHistory()]);
-  setNote("Сессия завершена. Войди снова через Google или Telegram.");
+  setNote("Сессия завершена. Войди снова через Google, Яндекс или Telegram.");
 }
 
 function renderIdentityActions() {
@@ -1708,6 +1846,9 @@ function renderIdentityActions() {
   }
   if (identityGoogle) {
     identityGoogle.textContent = state.linkedProviders.has("google") ? "Подключен" : "Не подключен";
+  }
+  if (identityYandex) {
+    identityYandex.textContent = state.linkedProviders.has("yandex") ? "Подключен" : "Не подключен";
   }
 
   if (linkTelegramButton) {
@@ -2724,6 +2865,9 @@ async function loadIdentities() {
   if (payload.linked_google && !state.linkedProviders.has("google")) {
     state.linkedProviders.add("google");
   }
+  if (payload.linked_yandex && !state.linkedProviders.has("yandex")) {
+    state.linkedProviders.add("yandex");
+  }
   if (!state.linkedProviders.has("telegram") && payload.telegram_user_id) {
     state.linkedProviders.add("telegram");
   }
@@ -3181,6 +3325,14 @@ function setGoogleAuthButtonIdle() {
   refreshAuthButtons();
 }
 
+function setYandexAuthButtonIdle() {
+  yandexAuthPending = false;
+  if (yandexAuthButton) {
+    yandexAuthButton.disabled = false;
+  }
+  refreshAuthButtons();
+}
+
 async function loginViaGoogleCredential(idToken) {
   const payload = await apiFetch("/v1/auth/google", {
     method: "POST",
@@ -3201,6 +3353,30 @@ async function loginViaGoogleCredential(idToken) {
   saveState();
   setAuthGateVisible(false);
   setNote("Авторизация через Google успешна.");
+  await Promise.all([loadPrivateData(), loadHistory({ forceServerCheck: true })]);
+  switchScreen("feed");
+}
+
+async function loginViaYandexCode(code, codeVerifier) {
+  const payload = await apiFetch("/v1/auth/yandex", {
+    method: "POST",
+    body: { code, code_verifier: codeVerifier },
+  });
+  state.telegramWebLoginToken = "";
+  clearTelegramWebLoginPolling();
+  if (prefersCookieAuth()) {
+    state.accessToken = "";
+    state.refreshToken = "";
+    state.isCookieSession = true;
+  } else {
+    state.accessToken = payload.access_token;
+    state.refreshToken = payload.refresh_token;
+    state.isCookieSession = false;
+  }
+  state.lastAuthProvider = "yandex";
+  saveState();
+  setAuthGateVisible(false);
+  setNote("Авторизация через Яндекс успешна.");
   await Promise.all([loadPrivateData(), loadHistory({ forceServerCheck: true })]);
   switchScreen("feed");
 }
@@ -3240,6 +3416,45 @@ async function loginViaGoogle() {
   window.location.assign(url);
 }
 
+async function loginViaYandex() {
+  if (!yandexAuthButton) {
+    return;
+  }
+  if (yandexAuthPending) {
+    return;
+  }
+  const clientId = yandexClientIdFromMeta();
+  if (!clientId) {
+    setNote("Yandex Client ID не задан в мета-теге kartivio-yandex-client-id.", true);
+    return;
+  }
+  if (!(window.crypto && window.crypto.subtle)) {
+    setNote("Этот браузер не поддерживает безопасный вход через Яндекс.", true);
+    return;
+  }
+  if (isTelegramMiniAppRuntime()) {
+    const url = yandexAuthLaunchUrl();
+    setNote("Открываю внешний браузер для входа через Яндекс.");
+    if (tg && typeof tg.openLink === "function") {
+      tg.openLink(url);
+      return;
+    }
+    window.open(url, "_blank", "noopener,noreferrer");
+    return;
+  }
+
+  yandexAuthPending = true;
+  yandexAuthButton.disabled = true;
+  const url = await yandexOauthAuthorizeUrl();
+  if (!url) {
+    setYandexAuthButtonIdle();
+    setNote("Yandex login недоступен для этого окружения.", true);
+    return;
+  }
+  setNote("Открываю Яндекс...");
+  window.location.assign(url);
+}
+
 function bindEvents() {
   if (apiBaseInput) {
     apiBaseInput.addEventListener("change", () => {
@@ -3269,6 +3484,14 @@ function bindEvents() {
   }
   if (googleAuthButton) {
     googleAuthButton.addEventListener("click", loginViaGoogle);
+  }
+  if (yandexAuthButton) {
+    yandexAuthButton.addEventListener("click", () => {
+      loginViaYandex().catch((error) => {
+        setYandexAuthButtonIdle();
+        setNote(userFacingErrorMessage(error, "Не удалось выполнить вход через Яндекс."), true);
+      });
+    });
   }
   if (logoutButton) {
     logoutButton.addEventListener("click", () => {
@@ -3482,6 +3705,23 @@ async function bootstrap() {
     setNote(userFacingErrorMessage(error, "Не удалось выполнить вход через Google."), true);
   }
 
+  try {
+    const consumedYandexCallback = await consumeYandexOauthCallback();
+    if (consumedYandexCallback && hasActiveSession()) {
+      setAuthGateVisible(false);
+      setBootPending(false);
+      return;
+    }
+  } catch (error) {
+    state.accessToken = "";
+    state.refreshToken = "";
+    state.isCookieSession = false;
+    state.lastAuthProvider = "";
+    clearYandexOauthSession();
+    saveState();
+    setNote(userFacingErrorMessage(error, "Не удалось выполнить вход через Яндекс."), true);
+  }
+
   let authorized = false;
   if (state.accessToken || prefersCookieAuth()) {
     authorized = await hydrateAuthorizedSession();
@@ -3518,11 +3758,21 @@ async function bootstrap() {
     return;
   }
 
+  const autoYandex = new URLSearchParams(window.location.search).get("yandex_auto");
+  if (autoYandex === "1" && !isTelegramMiniAppRuntime() && !hasActiveSession()) {
+    setAuthGateVisible(true);
+    setBootPending(false);
+    window.setTimeout(() => {
+      loginViaYandex().catch(() => {});
+    }, 150);
+    return;
+  }
+
   if (authorized) {
     switchScreen("feed");
   } else {
     setAuthGateVisible(true);
-    setNote("Войди через Google или Telegram, чтобы начать.");
+    setNote("Войди через Google, Яндекс или Telegram, чтобы начать.");
     switchScreen("feed");
   }
   setBootPending(false);
