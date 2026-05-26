@@ -1284,6 +1284,12 @@ body.is-web-runtime.is-mobile-browser .app-main {
   gap: 8px;
 }
 
+.history-pagination {
+  margin-top: 12px;
+  display: grid;
+  gap: 8px;
+}
+
 .history-item {
   border: 1px solid var(--line);
   border-radius: 8px;

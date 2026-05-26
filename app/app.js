@@ -261,11 +261,14 @@ const state = {
   historyLoadedAt: 0,
   historyLoadPromise: null,
   historyRequestToken: 0,
+  historyNextOffset: 0,
+  historyHasMore: false,
 };
 
 let tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
 const TELEGRAM_BOT_URL = "https://t.me/kartivio_ai_bot";
 const HISTORY_CACHE_TTL_MS = 15_000;
+const HISTORY_PAGE_SIZE = 50;
 
 const bootSplash = document.getElementById("bootSplash");
 const appShell = document.getElementById("appShell");
@@ -320,6 +323,9 @@ const activeJobMeta = document.getElementById("activeJobMeta");
 const activeResult = document.getElementById("activeResult");
 const historyList = document.getElementById("historyList");
 const refreshHistoryButton = document.getElementById("refreshHistoryButton");
+const historyPagination = document.getElementById("historyPagination");
+const historyMoreButton = document.getElementById("historyMoreButton");
+const historyMoreNote = document.getElementById("historyMoreNote");
 const templateModal = document.getElementById("templateModal");
 const templateModalClose = document.getElementById("templateModalClose");
 const templateModalImage = document.getElementById("templateModalImage");
@@ -1276,6 +1282,9 @@ function switchScreen(nextScreen) {
 function resetHistoryCache() {
   state.historyItems = null;
   state.historyLoadedAt = 0;
+  state.historyLoadPromise = null;
+  state.historyNextOffset = 0;
+  state.historyHasMore = false;
 }
 
 function sourceImageFiles() {
@@ -2522,12 +2531,31 @@ function historyThumb(job) {
   return "Превью";
 }
 
+function renderHistoryPagination({ hasMore = false, loadingMore = false, itemCount = 0 } = {}) {
+  if (!historyPagination || !historyMoreButton || !historyMoreNote) {
+    return;
+  }
+  const shouldShow = itemCount > 0;
+  historyPagination.classList.toggle("is-hidden", !shouldShow);
+  if (!shouldShow) {
+    historyMoreNote.textContent = "";
+    historyMoreButton.disabled = true;
+    return;
+  }
+  historyMoreButton.disabled = !hasMore || loadingMore;
+  historyMoreButton.textContent = loadingMore ? "Загружаю…" : "Показать еще";
+  historyMoreNote.textContent = hasMore ? `Показано ${itemCount} результатов.` : `Показаны все ${itemCount} результатов.`;
+}
+
 function renderHistory(payload) {
   const items = Array.isArray(payload && payload.items) ? payload.items : [];
+  const hasMore = Boolean(payload && payload.hasMore);
+  const loadingMore = Boolean(payload && payload.loadingMore);
   const canDownload = !isTelegramMiniAppRuntime();
   historyList.innerHTML = "";
   if (!items.length) {
     historyList.innerHTML = '<article class="history-item"><div class="history-body">История пока пустая.</div></article>';
+    renderHistoryPagination({ hasMore: false, loadingMore: false, itemCount: 0 });
     return;
   }
   for (const job of items) {
@@ -2600,21 +2628,37 @@ function renderHistory(payload) {
         .catch(() => {});
     }
   }
+  renderHistoryPagination({ hasMore, loadingMore, itemCount: items.length });
 }
 
-async function loadHistory({ forceServerCheck = false } = {}) {
+function mergeHistoryItems(existingItems, incomingItems) {
+  const merged = Array.isArray(existingItems) ? existingItems.slice() : [];
+  const knownIds = new Set(merged.map((item) => String(item && item.id ? item.id : "")));
+  for (const item of incomingItems) {
+    const id = String(item && item.id ? item.id : "");
+    if (knownIds.has(id)) {
+      continue;
+    }
+    knownIds.add(id);
+    merged.push(item);
+  }
+  return merged;
+}
+
+async function loadHistory({ forceServerCheck = false, append = false } = {}) {
   if (!hasActiveSession() && !forceServerCheck) {
     resetHistoryCache();
     historyList.innerHTML = '<article class="history-item"><div class="history-body">Войди, чтобы увидеть историю.</div></article>';
+    renderHistoryPagination({ hasMore: false, loadingMore: false, itemCount: 0 });
     return;
   }
   const now = Date.now();
-  if (Array.isArray(state.historyItems)) {
-    renderHistory({ items: state.historyItems });
+  if (!append && Array.isArray(state.historyItems)) {
+    renderHistory({ items: state.historyItems, hasMore: state.historyHasMore });
     if (!forceServerCheck && now - state.historyLoadedAt < HISTORY_CACHE_TTL_MS) {
       return;
     }
-  } else if (!state.historyLoadPromise) {
+  } else if (!append && !state.historyLoadPromise) {
     historyList.innerHTML =
       '<article class="history-item"><div class="history-body">Загружаю историю…</div></article>';
   }
@@ -2623,13 +2667,29 @@ async function loadHistory({ forceServerCheck = false } = {}) {
     return state.historyLoadPromise;
   }
 
+  if (append && !state.historyHasMore) {
+    return;
+  }
+
+  if (append && Array.isArray(state.historyItems)) {
+    renderHistory({ items: state.historyItems, hasMore: state.historyHasMore, loadingMore: true });
+  }
+
   const requestToken = ++state.historyRequestToken;
-  const requestPromise = authorizedGetWithRetry("/v1/generations?limit=20", 1)
+  const requestOffset = append ? state.historyNextOffset : 0;
+  const requestPromise = authorizedGetWithRetry(`/v1/generations?limit=${HISTORY_PAGE_SIZE}&offset=${requestOffset}`, 1)
     .then((payload) => {
-      state.historyItems = Array.isArray(payload && payload.items) ? payload.items : [];
-      state.historyLoadedAt = Date.now();
+      const incomingItems = Array.isArray(payload && payload.items) ? payload.items : [];
+      const nextOffset =
+        payload && Number.isInteger(payload.next_offset) ? payload.next_offset : null;
+      const hasMore = Boolean(payload && payload.has_more);
       if (requestToken === state.historyRequestToken) {
-        renderHistory({ items: state.historyItems });
+        state.historyItems = append ? mergeHistoryItems(state.historyItems, incomingItems) : incomingItems;
+        state.historyHasMore = hasMore;
+        state.historyNextOffset =
+          nextOffset !== null ? nextOffset : Array.isArray(state.historyItems) ? state.historyItems.length : 0;
+        state.historyLoadedAt = Date.now();
+        renderHistory({ items: state.historyItems, hasMore: state.historyHasMore });
       }
     })
     .finally(() => {
@@ -3226,9 +3286,14 @@ function bindEvents() {
     });
   }
   createButton.addEventListener("click", handleCreate);
-  refreshHistoryButton.addEventListener("click", () => loadHistory().catch((error) => {
+  refreshHistoryButton.addEventListener("click", () => loadHistory({ forceServerCheck: true }).catch((error) => {
     setCreateNote(userFacingErrorMessage(error, "Не удалось загрузить историю."), true);
   }));
+  if (historyMoreButton) {
+    historyMoreButton.addEventListener("click", () => loadHistory({ append: true }).catch((error) => {
+      setCreateNote(userFacingErrorMessage(error, "Не удалось загрузить историю."), true);
+    }));
+  }
   clearTemplateButton.addEventListener("click", () => {
     clearSelectedTemplate({ clearPrompt: true });
     promptInput.focus();
