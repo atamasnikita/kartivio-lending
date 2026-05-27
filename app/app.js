@@ -370,6 +370,7 @@ let templateModalCloseTimer = null;
 let templateModalImageLoadToken = 0;
 let templateModalScrollTop = 0;
 let telegramViewportListenersAttached = false;
+let telegramImmersiveListenersAttached = false;
 let lucideRetryTimer = 0;
 let mobileWebNavListenerAttached = false;
 let lastAppMainScrollTop = 0;
@@ -1709,17 +1710,26 @@ function applyTelegramSafeInsets() {
     return;
   }
   const platform = String(tg.platform || "").trim().toLowerCase();
-  const controlsOffset = platform === "ios" ? 44 : 0;
-  const topInset = Number(
-    (tg.contentSafeAreaInset && tg.contentSafeAreaInset.top) ||
-      (tg.safeAreaInset && tg.safeAreaInset.top) ||
-      0
+  const contentSafeArea = tg.contentSafeAreaInset || {};
+  const safeArea = tg.safeAreaInset || {};
+  const topInset = Math.max(
+    0,
+    Number(contentSafeArea.top || 0),
+    Number(safeArea.top || 0)
   );
-  const bottomInset = Number(
-    (tg.contentSafeAreaInset && tg.contentSafeAreaInset.bottom) ||
-      (tg.safeAreaInset && tg.safeAreaInset.bottom) ||
-      0
+  const bottomInset = Math.max(
+    0,
+    Number(contentSafeArea.bottom || 0),
+    Number(safeArea.bottom || 0)
   );
+  const isMobile = isTelegramMobileClient();
+  let controlsOffset = 0;
+  if (isMobile) {
+    controlsOffset = platform === "ios" ? 54 : 18;
+    if (!tg.isFullscreen) {
+      controlsOffset += platform === "ios" ? 36 : 22;
+    }
+  }
   document.documentElement.style.setProperty("--tg-safe-top", `${Math.max(0, topInset)}px`);
   document.documentElement.style.setProperty("--tg-safe-bottom", `${Math.max(0, bottomInset)}px`);
   document.documentElement.style.setProperty("--tg-controls-offset", `${controlsOffset}px`);
@@ -1753,34 +1763,65 @@ function initTelegramViewport() {
   } catch (_) {
     // noop
   }
-  if (isTelegramMobileClient()) {
-    try {
-      if (typeof tg.disableVerticalSwipes === "function") {
-        tg.disableVerticalSwipes();
-      }
-    } catch (_) {
-      // noop
-    }
-    try {
-      if (typeof tg.requestFullscreen === "function" && !tg.isFullscreen) {
-        tg.requestFullscreen();
-      }
-    } catch (_) {
-      // noop
-    }
-  }
+  ensureTelegramImmersiveMode();
   applyTelegramSafeInsets();
+  attachTelegramImmersiveListeners();
   if (telegramViewportListenersAttached || typeof tg.onEvent !== "function") {
     return;
   }
   try {
-    tg.onEvent("viewportChanged", applyTelegramSafeInsets);
+    tg.onEvent("viewportChanged", () => {
+      ensureTelegramImmersiveMode();
+      applyTelegramSafeInsets();
+    });
     tg.onEvent("safeAreaChanged", applyTelegramSafeInsets);
     tg.onEvent("contentSafeAreaChanged", applyTelegramSafeInsets);
   } catch (_) {
     // noop
   }
   telegramViewportListenersAttached = true;
+}
+
+function ensureTelegramImmersiveMode() {
+  if (!tg || !isTelegramMobileClient()) {
+    return;
+  }
+  try {
+    if (typeof tg.disableVerticalSwipes === "function") {
+      tg.disableVerticalSwipes();
+    }
+  } catch (_) {
+    // noop
+  }
+  try {
+    if (typeof tg.expand === "function") {
+      tg.expand();
+    }
+  } catch (_) {
+    // noop
+  }
+  try {
+    if (typeof tg.requestFullscreen === "function" && !tg.isFullscreen) {
+      tg.requestFullscreen();
+    }
+  } catch (_) {
+    // noop
+  }
+}
+
+function attachTelegramImmersiveListeners() {
+  if (!tg || telegramImmersiveListenersAttached || !isTelegramMobileClient()) {
+    return;
+  }
+  const trigger = () => {
+    ensureTelegramImmersiveMode();
+    applyTelegramSafeInsets();
+  };
+  const options = { passive: true };
+  window.addEventListener("touchstart", trigger, options);
+  window.addEventListener("pointerdown", trigger, options);
+  window.addEventListener("focus", trigger, options);
+  telegramImmersiveListenersAttached = true;
 }
 
 function refreshAuthButtons() {

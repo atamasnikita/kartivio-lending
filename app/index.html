@@ -314,12 +314,10 @@
 
     <div id="templateModal" class="template-modal is-hidden" role="dialog" aria-modal="true" aria-labelledby="templateModalTitle">
       <article class="template-modal-card">
-        <button id="templateModalClose" class="template-modal-close" type="button" aria-label="Закрыть">×</button>
-        <img id="templateModalImage" class="template-modal-image" src="" alt="Превью шаблона" loading="eager" decoding="async" />
-        <div class="template-modal-body">
-          <strong id="templateModalTitle">Шаблон</strong>
-          <span id="templateModalCategory">Категория</span>
-          <div class="template-modal-stats">
+        <div class="template-modal-media">
+          <button id="templateModalClose" class="template-modal-close" type="button" aria-label="Закрыть">×</button>
+          <img id="templateModalImage" class="template-modal-image" src="" alt="Превью шаблона" loading="eager" decoding="async" />
+          <div class="template-modal-stats template-modal-stats-overlay">
             <button id="templateLikeButton" class="template-like-btn template-modal-like-btn" type="button" aria-label="Лайкнуть шаблон">
               <i data-lucide="heart"></i>
               <span id="templateLikeCount">0</span>
@@ -329,6 +327,10 @@
               <span id="templateUsageCount">0</span>
             </span>
           </div>
+        </div>
+        <div class="template-modal-body">
+          <strong id="templateModalTitle">Шаблон</strong>
+          <span id="templateModalCategory">Категория</span>
           <div class="template-modal-prompt-section">
             <div id="templateModalPromptScroll" class="template-modal-prompt-scroll is-collapsed">
               <p id="templateModalPrompt" class="template-modal-prompt"></p>
@@ -352,6 +354,6 @@
       </article>
     </div>
 
-    <script src="./app.js?v=20260527b" defer></script>
+    <script src="./app.js?v=20260527c" defer></script>
   </body>
 </html>
