@@ -14,7 +14,7 @@
       content="a4ac0270475f46b1aee394196ae53987"
     />
     <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=20260526d" />
+    <link rel="stylesheet" href="./styles.css?v=20260527b" />
     <script src="https://unpkg.com/lucide@latest" async></script>
   </head>
   <body>
@@ -319,6 +319,16 @@
         <div class="template-modal-body">
           <strong id="templateModalTitle">Шаблон</strong>
           <span id="templateModalCategory">Категория</span>
+          <div class="template-modal-stats">
+            <button id="templateLikeButton" class="template-like-btn template-modal-like-btn" type="button" aria-label="Лайкнуть шаблон">
+              <i data-lucide="heart"></i>
+              <span id="templateLikeCount">0</span>
+            </button>
+            <span id="templateUsageStat" class="template-usage-stat template-modal-usage-stat">
+              <i data-lucide="sparkles"></i>
+              <span id="templateUsageCount">0</span>
+            </span>
+          </div>
           <div class="template-modal-prompt-section">
             <div id="templateModalPromptScroll" class="template-modal-prompt-scroll is-collapsed">
               <p id="templateModalPrompt" class="template-modal-prompt"></p>
@@ -342,6 +352,6 @@
       </article>
     </div>
 
-    <script src="./app.js?v=20260527a" defer></script>
+    <script src="./app.js?v=20260527b" defer></script>
   </body>
 </html>

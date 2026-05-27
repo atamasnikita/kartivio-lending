@@ -242,6 +242,7 @@ const JOB_ERROR_MESSAGES = Object.freeze({
   gemini_empty_result: "Провайдер не вернул изображение. Кредиты возвращены.",
   gemini_invalid_image_data: "Провайдер вернул поврежденный результат. Кредиты возвращены.",
   source_image_not_found: "Референс-фото недоступно. Загрузите его снова.",
+  template_not_found: "Шаблон не найден.",
 });
 
 const state = {
@@ -350,6 +351,10 @@ const templateModalClose = document.getElementById("templateModalClose");
 const templateModalImage = document.getElementById("templateModalImage");
 const templateModalTitle = document.getElementById("templateModalTitle");
 const templateModalCategory = document.getElementById("templateModalCategory");
+const templateLikeButton = document.getElementById("templateLikeButton");
+const templateLikeCount = document.getElementById("templateLikeCount");
+const templateUsageStat = document.getElementById("templateUsageStat");
+const templateUsageCountValue = document.getElementById("templateUsageCount");
 const templateModalPromptScroll = document.getElementById("templateModalPromptScroll");
 const templateModalPrompt = document.getElementById("templateModalPrompt");
 const templatePromptToggle = document.getElementById("templatePromptToggle");
@@ -1835,7 +1840,7 @@ async function logoutSession() {
   saveState();
   setAuthGateVisible(true);
   switchScreen("feed");
-  await Promise.allSettled([loadPrivateData(), loadHistory()]);
+  await Promise.allSettled([loadPrivateData(), loadHistory(), loadTemplates()]);
   setNote("Сессия завершена. Войди снова через Google, Яндекс или Telegram.");
 }
 
@@ -2268,6 +2273,9 @@ function selectTemplate(item) {
     prompt: item.prompt,
     preview_image_url: item.preview_image_url,
     full_image_url: item.full_image_url,
+    usage_count: templateUsageCount(item),
+    likes_count: templateLikesCount(item),
+    liked_by_me: templateLikedByMe(item),
   };
   promptInput.value = item.prompt || "";
   renderSelectedTemplateCard();
@@ -2277,6 +2285,40 @@ function selectTemplate(item) {
 
 function normalizeTemplateCategory(raw) {
   return String(raw || "").trim() || "Разное";
+}
+
+function normalizeTemplateCount(raw) {
+  const value = Number(raw || 0);
+  if (!Number.isFinite(value) || value < 0) {
+    return 0;
+  }
+  return Math.floor(value);
+}
+
+function isFavoritesTemplateFilter(filterId) {
+  return String(filterId || "").trim() === "favorites";
+}
+
+function templateLikesCount(item) {
+  return normalizeTemplateCount(item && item.likes_count);
+}
+
+function templateUsageCount(item) {
+  return normalizeTemplateCount(item && item.usage_count);
+}
+
+function templateLikedByMe(item) {
+  return Boolean(item && item.liked_by_me);
+}
+
+function templateFilterCount(filterId) {
+  if (isFavoritesTemplateFilter(filterId)) {
+    return state.templates.filter((item) => templateLikedByMe(item)).length;
+  }
+  if (filterId === "all") {
+    return state.templates.length;
+  }
+  return state.templates.filter((item) => normalizeTemplateCategory(item.category) === filterId).length;
 }
 
 function templatePreviewUrl(item) {
@@ -2299,7 +2341,13 @@ function templatePreviewRatio(item) {
 }
 
 function templateFilterLabel(filterId) {
-  return filterId === "all" ? "Все темы" : filterId;
+  if (filterId === "all") {
+    return "Все темы";
+  }
+  if (isFavoritesTemplateFilter(filterId)) {
+    return "Избранное";
+  }
+  return filterId;
 }
 
 function currentTemplateModalItem() {
@@ -2310,6 +2358,42 @@ function currentTemplateModalItem() {
     return null;
   }
   return state.templates.find((item) => item.id === state.activeTemplateModalId) || null;
+}
+
+function updateTemplateInState(templateId, patch) {
+  const normalizedId = String(templateId || "").trim();
+  if (!normalizedId) {
+    return null;
+  }
+  let updatedItem = null;
+  state.templates = state.templates.map((item) => {
+    if (item.id !== normalizedId) {
+      return item;
+    }
+    updatedItem = { ...item, ...patch };
+    return updatedItem;
+  });
+  if (state.selectedTemplate && state.selectedTemplate.id === normalizedId) {
+    state.selectedTemplate = { ...state.selectedTemplate, ...patch };
+    renderSelectedTemplateCard();
+  }
+  if (state.activeTemplateModalItem && state.activeTemplateModalItem.id === normalizedId) {
+    state.activeTemplateModalItem = { ...state.activeTemplateModalItem, ...patch };
+  }
+  return updatedItem;
+}
+
+function renderTemplateModalStats(item) {
+  if (!templateLikeButton || !templateLikeCount || !templateUsageStat || !templateUsageCountValue) {
+    return;
+  }
+  const liked = templateLikedByMe(item);
+  templateLikeButton.classList.toggle("is-liked", liked);
+  templateLikeButton.setAttribute("aria-pressed", liked ? "true" : "false");
+  templateLikeButton.setAttribute("aria-label", liked ? "Убрать лайк у шаблона" : "Лайкнуть шаблон");
+  templateLikeCount.textContent = String(templateLikesCount(item));
+  templateUsageCountValue.textContent = String(templateUsageCount(item));
+  templateUsageStat.setAttribute("aria-label", `Использований: ${templateUsageCount(item)}`);
 }
 
 function setTemplateModalNote(message, isError = false) {
@@ -2448,6 +2532,7 @@ function openTemplateModal(item, initialPreviewUrl = "") {
   templateModalImage.alt = item.title || "Шаблон";
   templateModalTitle.textContent = item.title || "Шаблон";
   templateModalCategory.textContent = normalizeTemplateCategory(item.category);
+  renderTemplateModalStats(item);
   templateModalPrompt.textContent = item.prompt || "";
   setTemplatePromptExpanded(false);
   setTemplateModalNote("");
@@ -2459,6 +2544,7 @@ function openTemplateModal(item, initialPreviewUrl = "") {
   window.requestAnimationFrame(() => {
     if (templateModal) {
       templateModal.classList.add("is-visible");
+      refreshIcons();
       window.requestAnimationFrame(() => {
         syncTemplatePromptToggle(true);
       });
@@ -2478,7 +2564,7 @@ function templateFilters() {
     seen.add(category);
     categories.push(category);
   }
-  return ["all", ...categories];
+  return ["all", "favorites", ...categories];
 }
 
 function renderTemplateFilters() {
@@ -2495,7 +2581,10 @@ function renderTemplateFilters() {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "template-filter-chip";
-    button.textContent = templateFilterLabel(filterId);
+    button.innerHTML = `
+      <span>${escapeHtml(templateFilterLabel(filterId))}</span>
+      <span class="template-filter-count">${templateFilterCount(filterId)}</span>
+    `;
     button.setAttribute("role", "tab");
     const isActive = state.selectedTemplateFilter === filterId;
     button.classList.toggle("is-active", isActive);
@@ -2507,11 +2596,15 @@ function renderTemplateFilters() {
     });
     templateFilterChips.appendChild(button);
   }
+  refreshIcons();
 }
 
 function filteredTemplateItems() {
   if (state.selectedTemplateFilter === "all") {
     return state.templates;
+  }
+  if (isFavoritesTemplateFilter(state.selectedTemplateFilter)) {
+    return state.templates.filter((item) => templateLikedByMe(item));
   }
   return state.templates.filter((item) => normalizeTemplateCategory(item.category) === state.selectedTemplateFilter);
 }
@@ -2543,7 +2636,13 @@ function renderTemplateCards() {
   }
   templatesGrid.innerHTML = "";
   if (!items.length) {
-    templatesGrid.innerHTML = '<article class="tool-card"><div class="tool-overlay"><strong>Нет шаблонов</strong><p>Попробуй другой фильтр</p></div></article>';
+    const emptyTitle = isFavoritesTemplateFilter(state.selectedTemplateFilter)
+      ? "Пока нет избранных шаблонов"
+      : "Нет шаблонов";
+    const emptyText = isFavoritesTemplateFilter(state.selectedTemplateFilter)
+      ? "Лайкни понравившиеся идеи в ленте."
+      : "Попробуй другой фильтр";
+    templatesGrid.innerHTML = `<article class="tool-card"><div class="tool-overlay"><strong>${escapeHtml(emptyTitle)}</strong><p>${escapeHtml(emptyText)}</p></div></article>`;
     return;
   }
 
@@ -2559,11 +2658,37 @@ function renderTemplateCards() {
       <div class="tool-media">
         <img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(item.title)}" loading="lazy" decoding="async" />
       </div>
+      <div class="tool-card-top-actions">
+        <button class="template-like-btn tool-like-btn${templateLikedByMe(item) ? " is-liked" : ""}" data-action="toggle-like" type="button" aria-label="${templateLikedByMe(item) ? "Убрать лайк у шаблона" : "Лайкнуть шаблон"}" aria-pressed="${templateLikedByMe(item) ? "true" : "false"}">
+          <i data-lucide="heart"></i>
+          <span>${templateLikesCount(item)}</span>
+        </button>
+      </div>
       <div class="tool-overlay">
         <strong>${escapeHtml(item.title)}</strong>
         <p>${escapeHtml(normalizeTemplateCategory(item.category))}</p>
+        <div class="template-card-stats">
+          <span class="template-usage-stat">
+            <i data-lucide="sparkles"></i>
+            <span>${templateUsageCount(item)}</span>
+          </span>
+        </div>
       </div>
     `;
+    const likeButton = card.querySelector('[data-action="toggle-like"]');
+    likeButton.addEventListener("click", async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const wasLiked = templateLikedByMe(item);
+      likeButton.disabled = true;
+      try {
+        await toggleTemplateLike(item.id, !wasLiked);
+      } catch (error) {
+        setNote(userFacingErrorMessage(error, "Не удалось обновить лайк шаблона."), true);
+      } finally {
+        likeButton.disabled = false;
+      }
+    });
     card.addEventListener("click", () => {
       const cardImage = card.querySelector("img");
       const initialPreviewUrl = cardImage && typeof cardImage.currentSrc === "string" ? cardImage.currentSrc : imageUrl;
@@ -2579,6 +2704,7 @@ function renderTemplateCards() {
     });
     templatesGrid.appendChild(card);
   }
+  refreshIcons();
 }
 
 function renderTemplates(payload) {
@@ -2592,14 +2718,54 @@ function renderTemplates(payload) {
     full_image_url: String(item.full_image_url || "").trim(),
     preview_width: Number(item.preview_width || 0),
     preview_height: Number(item.preview_height || 0),
+    usage_count: normalizeTemplateCount(item.usage_count),
+    likes_count: normalizeTemplateCount(item.likes_count),
+    liked_by_me: Boolean(item.liked_by_me),
   })).filter((item) => item.id && item.prompt);
   state.templates = normalized.map((item) => ({
     ...item,
     preview_ratio: templatePreviewRatio(item),
   }));
+  if (state.selectedTemplateId) {
+    const selected = state.templates.find((item) => item.id === state.selectedTemplateId);
+    if (selected) {
+      state.selectedTemplate = { ...selected };
+      renderSelectedTemplateCard();
+    }
+  }
+  if (state.activeTemplateModalId) {
+    const modalItem = state.templates.find((item) => item.id === state.activeTemplateModalId);
+    if (modalItem) {
+      state.activeTemplateModalItem = { ...modalItem };
+      renderTemplateModalStats(modalItem);
+    }
+  }
   state.templatesLoading = false;
   renderTemplateFilters();
   renderTemplateCards();
+}
+
+async function loadTemplates() {
+  const payload = await apiFetch("/v1/templates", { auth: Boolean(state.accessToken) });
+  renderTemplates(payload);
+}
+
+async function toggleTemplateLike(templateId, shouldLike) {
+  ensureAuthorizedForCreate();
+  const method = shouldLike ? "POST" : "DELETE";
+  const payload = await authorizedFetch(`/v1/templates/${encodeURIComponent(templateId)}/like`, { method });
+  const patch = {
+    likes_count: normalizeTemplateCount(payload.likes_count),
+    liked_by_me: Boolean(payload.liked_by_me),
+  };
+  updateTemplateInState(templateId, patch);
+  renderTemplateFilters();
+  renderTemplateCards();
+  const currentItem = currentTemplateModalItem();
+  if (currentItem && currentItem.id === templateId) {
+    renderTemplateModalStats({ ...currentItem, ...patch });
+  }
+  return payload;
 }
 
 function jobStatusLabel(status) {
@@ -2844,7 +3010,7 @@ async function loadHistory({ forceServerCheck = false, append = false } = {}) {
 async function loadPublicData() {
   const [plansPayload, templatesPayload] = await Promise.all([
     apiFetch("/v1/plans"),
-    apiFetch("/v1/templates"),
+    apiFetch("/v1/templates", { auth: Boolean(state.accessToken) }),
   ]);
   renderPlans(plansPayload);
   renderTemplates(templatesPayload);
@@ -2919,6 +3085,7 @@ async function createTextGeneration(prompt, imageModel, outputSize, clientReques
       prompt,
       image_model: imageModel,
       output_size: outputSize,
+      template_id: state.selectedTemplateId || null,
       client_request_id: clientRequestId,
     },
     idempotencyKey: clientRequestId,
@@ -2930,6 +3097,9 @@ async function createEditGeneration(prompt, imageModel, outputSize, sourceImages
   form.append("prompt", prompt);
   form.append("image_model", imageModel);
   form.append("output_size", outputSize);
+  if (state.selectedTemplateId) {
+    form.append("template_id", state.selectedTemplateId);
+  }
   form.append("client_request_id", clientRequestId);
   for (const sourceImage of sourceImages) {
     form.append("source_image", sourceImage);
@@ -3083,7 +3253,7 @@ async function pollTelegramWebLoginStatus() {
       renderAuthGateActions();
       setAuthGateVisible(false);
       setNote(payload.message || "Вход через Telegram выполнен.");
-      await Promise.all([loadPrivateData(), loadHistory({ forceServerCheck: true })]);
+      await Promise.all([loadPrivateData(), loadHistory({ forceServerCheck: true }), loadTemplates()]);
       switchScreen("feed");
       return;
     }
@@ -3253,6 +3423,7 @@ async function hydrateAuthorizedSession() {
     await Promise.all([
       loadPrivateData({ forceServerCheck: prefersCookieAuth() }),
       loadHistory({ forceServerCheck: true }),
+      loadTemplates(),
     ]);
     if (prefersCookieAuth()) {
       state.isCookieSession = true;
@@ -3301,7 +3472,7 @@ async function loginViaTelegram(options = {}) {
     if (!silent) {
       setNote("Авторизация успешна.");
     }
-    await Promise.all([loadPrivateData(), loadHistory({ forceServerCheck: true })]);
+    await Promise.all([loadPrivateData(), loadHistory({ forceServerCheck: true }), loadTemplates()]);
     switchScreen(targetScreen);
     return true;
   } catch (error) {
@@ -3353,7 +3524,7 @@ async function loginViaGoogleCredential(idToken) {
   saveState();
   setAuthGateVisible(false);
   setNote("Авторизация через Google успешна.");
-  await Promise.all([loadPrivateData(), loadHistory({ forceServerCheck: true })]);
+  await Promise.all([loadPrivateData(), loadHistory({ forceServerCheck: true }), loadTemplates()]);
   switchScreen("feed");
 }
 
@@ -3377,7 +3548,7 @@ async function loginViaYandexCode(code, codeVerifier) {
   saveState();
   setAuthGateVisible(false);
   setNote("Авторизация через Яндекс успешна.");
-  await Promise.all([loadPrivateData(), loadHistory({ forceServerCheck: true })]);
+  await Promise.all([loadPrivateData(), loadHistory({ forceServerCheck: true }), loadTemplates()]);
   switchScreen("feed");
 }
 
@@ -3556,6 +3727,27 @@ function bindEvents() {
       event.preventDefault();
       event.stopPropagation();
       setTemplatePromptExpanded(!templatePromptExpanded);
+    });
+  }
+  if (templateLikeButton) {
+    templateLikeButton.addEventListener("click", async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const item = currentTemplateModalItem();
+      if (!item) {
+        setTemplateModalNote("Шаблон не найден.", true);
+        return;
+      }
+      templateLikeButton.disabled = true;
+      try {
+        const wasLiked = templateLikedByMe(item);
+        await toggleTemplateLike(item.id, !wasLiked);
+        setTemplateModalNote(wasLiked ? "Шаблон убран из избранного." : "Шаблон добавлен в избранное.");
+      } catch (error) {
+        setTemplateModalNote(userFacingErrorMessage(error, "Не удалось обновить лайк шаблона."), true);
+      } finally {
+        templateLikeButton.disabled = false;
+      }
     });
   }
   if (templateModalClose) {

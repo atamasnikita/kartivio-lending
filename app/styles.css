@@ -360,6 +360,9 @@ body.is-web-runtime.is-mobile-browser .app-main {
 }
 
 .template-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   min-height: 36px;
   padding: 0 14px;
   border-radius: 999px;
@@ -372,10 +375,19 @@ body.is-web-runtime.is-mobile-browser .app-main {
   cursor: pointer;
 }
 
+.template-filter-count {
+  color: rgba(165, 175, 198, 0.88);
+  font-size: 12px;
+}
+
 .template-filter-chip.is-active {
   border-color: var(--accent);
   background: var(--accent);
   color: #0a1412;
+}
+
+.template-filter-chip.is-active .template-filter-count {
+  color: rgba(10, 20, 18, 0.78);
 }
 
 .tool-card {
@@ -393,6 +405,15 @@ body.is-web-runtime.is-mobile-browser .app-main {
   break-inside: avoid;
   transform: translateY(0) scale(1);
   transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.22s ease, box-shadow 0.28s ease;
+}
+
+.tool-card-top-actions {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .tool-media {
@@ -434,6 +455,74 @@ body.is-web-runtime.is-mobile-browser .app-main {
   background: linear-gradient(to top, rgba(4, 4, 6, 0.86), rgba(4, 4, 6, 0));
   display: grid;
   gap: 4px;
+}
+
+.template-card-stats {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  margin-top: 2px;
+}
+
+.template-like-btn,
+.template-usage-stat {
+  min-height: 30px;
+  border-radius: 999px;
+  border: 1px solid rgba(40, 49, 68, 0.86);
+  background: rgba(8, 11, 18, 0.66);
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #e8edf8;
+}
+
+.template-like-btn {
+  cursor: pointer;
+}
+
+.template-like-btn:hover:not(:disabled) {
+  border-color: rgba(255, 111, 145, 0.38);
+  background: rgba(255, 111, 145, 0.12);
+}
+
+.template-like-btn:disabled {
+  opacity: 0.72;
+  cursor: default;
+}
+
+.template-like-btn svg,
+.template-usage-stat svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 2px;
+}
+
+.template-like-btn svg {
+  color: #ff6f91;
+}
+
+.template-like-btn.is-liked {
+  border-color: rgba(255, 111, 145, 0.44);
+  background: rgba(255, 111, 145, 0.14);
+}
+
+.template-like-btn.is-liked svg {
+  fill: currentColor;
+}
+
+.template-usage-stat {
+  color: #d7ddf2;
+}
+
+.template-usage-stat svg {
+  color: #ffd447;
+}
+
+.tool-like-btn {
+  padding: 0 9px;
 }
 
 .tool-overlay strong {
@@ -1126,6 +1215,19 @@ body.is-web-runtime.is-mobile-browser .app-main {
 
 .template-modal-body span {
   color: var(--muted);
+  font-size: 13px;
+}
+
+.template-modal-stats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.template-modal-like-btn,
+.template-modal-usage-stat {
+  min-height: 34px;
   font-size: 13px;
 }
 
