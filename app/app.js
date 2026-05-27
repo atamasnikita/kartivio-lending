@@ -3122,7 +3122,7 @@ async function pollActiveJob(jobId) {
       state.activePollTimer = window.setTimeout(() => pollActiveJob(jobId), 2500);
       return;
     }
-    await Promise.allSettled([loadPrivateData(), loadHistory({ forceServerCheck: true })]);
+    await Promise.allSettled([loadPrivateData(), loadHistory({ forceServerCheck: true }), loadTemplates()]);
   } catch (error) {
     setCreateNote(userFacingErrorMessage(error, "Не удалось обновить статус задачи."), true);
   }
@@ -3178,7 +3178,7 @@ async function handleCreate() {
     state.activeJobId = job.id;
     renderActiveJob(job);
     setCreateNote(`Задача создана: ${jobStatusLabel(job.status)}.`);
-    await Promise.allSettled([loadPrivateData(), loadHistory({ forceServerCheck: true })]);
+    await Promise.allSettled([loadPrivateData(), loadHistory({ forceServerCheck: true }), loadTemplates()]);
     await pollActiveJob(job.id);
   } catch (error) {
     setCreateNote(userFacingErrorMessage(error, "Не удалось запустить генерацию."), true);
