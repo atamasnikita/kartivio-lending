@@ -2,12 +2,13 @@
   "hero": [
     { "src": "/assets/landing/hero/hero_01.jpg", "alt": "Пример ИИ-фотосессии 1" },
     { "src": "/assets/landing/hero/hero_02.jpg", "alt": "Пример ИИ-фотосессии 2" },
-    { "src": "/assets/landing/hero/hero_03.jpg", "alt": "Пример ИИ-фотосессии 3" },
+    { "src": "/assets/landing/hero/hero_09.jpg", "alt": "Пример ИИ-фотосессии 3" },
     { "src": "/assets/landing/hero/hero_04.jpg", "alt": "Пример ИИ-фотосессии 4" },
-    { "src": "/assets/landing/hero/hero_05.jpg", "alt": "Пример ИИ-фотосессии 5" },
+    { "src": "/assets/landing/hero/hero_10.jpg", "alt": "Пример ИИ-фотосессии 5" },
     { "src": "/assets/landing/hero/hero_06.jpg", "alt": "Пример ИИ-фотосессии 6" },
     { "src": "/assets/landing/hero/hero_07.jpg", "alt": "Пример ИИ-фотосессии 7" },
-    { "src": "/assets/landing/hero/hero_08.jpg", "alt": "Пример ИИ-фотосессии 8" }
+    { "src": "/assets/landing/hero/hero_08.jpg", "alt": "Пример ИИ-фотосессии 8" },
+    { "src": "/assets/landing/hero/hero_11.jpg", "alt": "Пример ИИ-фотосессии 9" }
   ],
   "how": {
     "before": { "src": "/assets/landing/how/how_before.jpg", "alt": "Исходное фото пользователя" },
