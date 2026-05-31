@@ -371,6 +371,7 @@ let templateModalImageLoadToken = 0;
 let templateModalScrollTop = 0;
 let telegramViewportListenersAttached = false;
 let telegramImmersiveListenersAttached = false;
+let telegramImmersiveRetryTimer = 0;
 let lucideRetryTimer = 0;
 let mobileWebNavListenerAttached = false;
 let lastAppMainScrollTop = 0;
@@ -451,6 +452,21 @@ function ensureTelegramSdkLoaded(timeoutMs = 5000) {
 
 function isTelegramMiniAppRuntime() {
   return Boolean(refreshTelegramWebAppHandle() && tg && tg.initData);
+}
+
+function getTelegramRuntimePlatform() {
+  const tgPlatform = String(tg?.platform || "").trim().toLowerCase();
+  if (tgPlatform === "ios" || tgPlatform === "android") {
+    return tgPlatform;
+  }
+  const ua = String(navigator.userAgent || "").toLowerCase();
+  if (/iphone|ipad|ipod|ios/.test(ua)) {
+    return "ios";
+  }
+  if (/android/.test(ua)) {
+    return "android";
+  }
+  return tgPlatform || "unknown";
 }
 
 function isMobileBrowser() {
@@ -1709,7 +1725,7 @@ function applyTelegramSafeInsets() {
   if (!tg) {
     return;
   }
-  const platform = String(tg.platform || "").trim().toLowerCase();
+  const platform = getTelegramRuntimePlatform();
   const contentSafeArea = tg.contentSafeAreaInset || {};
   const safeArea = tg.safeAreaInset || {};
   const topInset = Math.max(
@@ -1725,9 +1741,9 @@ function applyTelegramSafeInsets() {
   const isMobile = isTelegramMobileClient();
   let controlsOffset = 0;
   if (isMobile) {
-    controlsOffset = platform === "ios" ? 54 : 18;
+    controlsOffset = platform === "ios" ? 64 : 18;
     if (!tg.isFullscreen) {
-      controlsOffset += platform === "ios" ? 36 : 22;
+      controlsOffset += platform === "ios" ? 48 : 22;
     }
   }
   document.documentElement.style.setProperty("--tg-safe-top", `${Math.max(0, topInset)}px`);
@@ -1739,7 +1755,7 @@ function isTelegramMobileClient() {
   if (!tg) {
     return false;
   }
-  const platform = String(tg.platform || "").trim().toLowerCase();
+  const platform = getTelegramRuntimePlatform();
   if (platform === "ios" || platform === "android") {
     return true;
   }
@@ -1764,6 +1780,7 @@ function initTelegramViewport() {
     // noop
   }
   ensureTelegramImmersiveMode();
+  scheduleTelegramImmersiveRetry();
   applyTelegramSafeInsets();
   attachTelegramImmersiveListeners();
   if (telegramViewportListenersAttached || typeof tg.onEvent !== "function") {
@@ -1772,6 +1789,7 @@ function initTelegramViewport() {
   try {
     tg.onEvent("viewportChanged", () => {
       ensureTelegramImmersiveMode();
+      scheduleTelegramImmersiveRetry();
       applyTelegramSafeInsets();
     });
     tg.onEvent("safeAreaChanged", applyTelegramSafeInsets);
@@ -1809,12 +1827,38 @@ function ensureTelegramImmersiveMode() {
   }
 }
 
+function scheduleTelegramImmersiveRetry() {
+  if (!tg || !isTelegramMobileClient()) {
+    return;
+  }
+  if (telegramImmersiveRetryTimer) {
+    window.clearTimeout(telegramImmersiveRetryTimer);
+    telegramImmersiveRetryTimer = 0;
+  }
+  const retryDelays = [140, 420, 980];
+  retryDelays.forEach((delay, index) => {
+    const run = () => {
+      ensureTelegramImmersiveMode();
+      applyTelegramSafeInsets();
+      if (index === retryDelays.length - 1) {
+        telegramImmersiveRetryTimer = 0;
+      }
+    };
+    if (index === retryDelays.length - 1) {
+      telegramImmersiveRetryTimer = window.setTimeout(run, delay);
+      return;
+    }
+    window.setTimeout(run, delay);
+  });
+}
+
 function attachTelegramImmersiveListeners() {
   if (!tg || telegramImmersiveListenersAttached || !isTelegramMobileClient()) {
     return;
   }
   const trigger = () => {
     ensureTelegramImmersiveMode();
+    scheduleTelegramImmersiveRetry();
     applyTelegramSafeInsets();
   };
   const options = { passive: true };
