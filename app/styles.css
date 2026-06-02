@@ -347,16 +347,85 @@ body.is-web-runtime.is-mobile-browser .app-main {
   column-gap: 8px;
 }
 
+.template-filter-shell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
 .template-filter-row {
   display: flex;
   flex-wrap: nowrap;
   gap: 8px;
   overflow-x: auto;
-  padding-bottom: 2px;
+  padding: 2px 0 4px;
+  min-width: 0;
+  flex: 1 1 auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(var(--accent-rgb), 0.34) rgba(14, 18, 28, 0.8);
 }
 
 .template-filter-row::-webkit-scrollbar {
+  height: 8px;
+}
+
+.template-filter-row::-webkit-scrollbar-track {
+  background: rgba(14, 18, 28, 0.72);
+  border-radius: 999px;
+}
+
+.template-filter-row::-webkit-scrollbar-thumb {
+  background: rgba(var(--accent-rgb), 0.34);
+  border-radius: 999px;
+}
+
+.template-filter-row::-webkit-scrollbar-thumb:hover {
+  background: rgba(var(--accent-rgb), 0.48);
+}
+
+.template-filter-nav {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  border-radius: 999px;
+  border: 1px solid rgba(37, 43, 56, 0.9);
+  background: rgba(10, 13, 20, 0.92);
+  color: #dbe3f7;
   display: none;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 160ms cubic-bezier(0.23, 1, 0.32, 1), border-color 180ms ease, background 180ms ease,
+    opacity 180ms ease;
+}
+
+.template-filter-nav svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 2.2px;
+}
+
+.template-filter-nav:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: rgba(var(--accent-rgb), 0.42);
+  background: rgba(14, 19, 28, 0.98);
+}
+
+.template-filter-nav:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.template-filter-nav:disabled {
+  opacity: 0.32;
+  cursor: default;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .template-filter-shell.has-overflow .template-filter-nav {
+    display: inline-flex;
+  }
 }
 
 .template-filter-chip {
@@ -1732,6 +1801,22 @@ body.is-web-runtime.is-mobile-browser.nav-hidden .bottom-nav {
 }
 
 @media (max-width: 520px) {
+  .template-filter-shell {
+    gap: 0;
+  }
+
+  .template-filter-nav {
+    display: none !important;
+  }
+
+  .template-filter-row {
+    scrollbar-width: none;
+  }
+
+  .template-filter-row::-webkit-scrollbar {
+    display: none;
+  }
+
   .template-modal {
     place-items: start center;
     padding-top: calc(12px + max(var(--tg-safe-top, 0px), env(safe-area-inset-top)) + var(--tg-controls-offset, 0px));

@@ -14,7 +14,7 @@
       content="a4ac0270475f46b1aee394196ae53987"
     />
     <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=20260527b" />
+    <link rel="stylesheet" href="./styles.css?v=20260602a" />
     <script src="https://unpkg.com/lucide@latest" async></script>
   </head>
   <body>
@@ -108,7 +108,25 @@
               <i data-lucide="chevron-right"></i>
             </button>
           </div>
-          <div id="templateFilterChips" class="template-filter-row" role="tablist" aria-label="Фильтр тем"></div>
+          <div id="templateFilterShell" class="template-filter-shell">
+            <button
+              id="templateFilterPrev"
+              class="template-filter-nav"
+              type="button"
+              aria-label="Прокрутить темы влево"
+            >
+              <i data-lucide="chevron-left"></i>
+            </button>
+            <div id="templateFilterChips" class="template-filter-row" role="tablist" aria-label="Фильтр тем"></div>
+            <button
+              id="templateFilterNext"
+              class="template-filter-nav"
+              type="button"
+              aria-label="Прокрутить темы вправо"
+            >
+              <i data-lucide="chevron-right"></i>
+            </button>
+          </div>
           <div id="templatesGrid" class="tools-grid"></div>
         </section>
 
@@ -354,6 +372,6 @@
       </article>
     </div>
 
-    <script src="./app.js?v=20260531a" defer></script>
+    <script src="./app.js?v=20260602a" defer></script>
   </body>
 </html>

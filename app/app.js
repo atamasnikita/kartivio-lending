@@ -315,6 +315,9 @@ const logoutButton = document.getElementById("logoutButton");
 const plansGrid = document.getElementById("plansGrid");
 const plansActionButton = document.getElementById("plansActionButton");
 const plansNote = document.getElementById("plansNote");
+const templateFilterShell = document.getElementById("templateFilterShell");
+const templateFilterPrev = document.getElementById("templateFilterPrev");
+const templateFilterNext = document.getElementById("templateFilterNext");
 const templateFilterChips = document.getElementById("templateFilterChips");
 const templatesGrid = document.getElementById("templatesGrid");
 const promptInput = document.getElementById("promptInput");
@@ -376,6 +379,9 @@ let lucideRetryTimer = 0;
 let mobileWebNavListenerAttached = false;
 let lastAppMainScrollTop = 0;
 let templatePromptExpanded = false;
+let templateFilterScrollerBound = false;
+
+const TEMPLATE_FILTER_PRIORITY = ["Полезности", "Мужское", "Семейные"];
 
 function refreshIcons() {
   if (window.lucide && typeof window.lucide.createIcons === "function") {
@@ -2638,6 +2644,66 @@ function openTemplateModal(item, initialPreviewUrl = "") {
   lockTemplateModalScroll();
 }
 
+function updateTemplateFilterScroller() {
+  if (!templateFilterShell || !templateFilterChips || !templateFilterPrev || !templateFilterNext) {
+    return;
+  }
+  const maxScrollLeft = Math.max(0, templateFilterChips.scrollWidth - templateFilterChips.clientWidth);
+  const scrollLeft = templateFilterChips.scrollLeft;
+  const hasOverflow = maxScrollLeft > 8;
+  const atStart = scrollLeft <= 6;
+  const atEnd = scrollLeft >= maxScrollLeft - 6;
+
+  templateFilterShell.classList.toggle("has-overflow", hasOverflow);
+  templateFilterPrev.disabled = !hasOverflow || atStart;
+  templateFilterNext.disabled = !hasOverflow || atEnd;
+}
+
+function scrollTemplateFilters(direction) {
+  if (!templateFilterChips) {
+    return;
+  }
+  const delta = Math.max(templateFilterChips.clientWidth * 0.72, 180) * direction;
+  templateFilterChips.scrollBy({
+    left: delta,
+    behavior: "smooth",
+  });
+}
+
+function bindTemplateFilterScroller() {
+  if (
+    templateFilterScrollerBound ||
+    !templateFilterShell ||
+    !templateFilterChips ||
+    !templateFilterPrev ||
+    !templateFilterNext
+  ) {
+    return;
+  }
+  templateFilterScrollerBound = true;
+  templateFilterPrev.addEventListener("click", () => scrollTemplateFilters(-1));
+  templateFilterNext.addEventListener("click", () => scrollTemplateFilters(1));
+  templateFilterChips.addEventListener("scroll", updateTemplateFilterScroller, { passive: true });
+  templateFilterChips.addEventListener(
+    "wheel",
+    (event) => {
+      const maxScrollLeft = Math.max(0, templateFilterChips.scrollWidth - templateFilterChips.clientWidth);
+      if (maxScrollLeft <= 0) {
+        return;
+      }
+      const horizontalIntent = Math.abs(event.deltaX) > Math.abs(event.deltaY);
+      if (horizontalIntent) {
+        return;
+      }
+      event.preventDefault();
+      templateFilterChips.scrollLeft += event.deltaY;
+      updateTemplateFilterScroller();
+    },
+    { passive: false }
+  );
+  window.addEventListener("resize", updateTemplateFilterScroller, { passive: true });
+}
+
 function templateFilters() {
   const categories = [];
   const seen = new Set();
@@ -2649,13 +2715,17 @@ function templateFilters() {
     seen.add(category);
     categories.push(category);
   }
-  return ["all", "favorites", ...categories];
+  const priority = TEMPLATE_FILTER_PRIORITY.filter((category) => seen.has(category));
+  const prioritySet = new Set(priority);
+  const rest = categories.filter((category) => !prioritySet.has(category));
+  return ["all", "favorites", ...priority, ...rest];
 }
 
 function renderTemplateFilters() {
   if (!templateFilterChips) {
     return;
   }
+  bindTemplateFilterScroller();
   const filters = templateFilters();
   if (!filters.includes(state.selectedTemplateFilter)) {
     state.selectedTemplateFilter = "all";
@@ -2681,6 +2751,7 @@ function renderTemplateFilters() {
     });
     templateFilterChips.appendChild(button);
   }
+  window.requestAnimationFrame(updateTemplateFilterScroller);
   refreshIcons();
 }
 
