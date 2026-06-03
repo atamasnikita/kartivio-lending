@@ -958,6 +958,17 @@ function formatCredits(amount) {
   return `${value} ${creditsWord(value)}`;
 }
 
+function formatPricePerImage(value) {
+  const number = Number(value || 0);
+  if (!Number.isFinite(number) || number <= 0) {
+    return "—";
+  }
+  return new Intl.NumberFormat("ru-RU", {
+    minimumFractionDigits: Number.isInteger(number) ? 0 : 1,
+    maximumFractionDigits: 1,
+  }).format(number);
+}
+
 function setCreateButtonIdleLabel() {
   const cost = selectedGenerationCost();
   createButton.textContent = `Генерировать · ${formatCredits(cost)}`;
@@ -2336,23 +2347,47 @@ function renderPlans(payload) {
 
   for (const item of topups) {
     const credits = Number(item.credits || 0);
-    const nb2Count = Math.floor(credits / (MODEL_COSTS["gemini-3.1-flash-image-preview"] || 1));
-    const nbproCount = Math.floor(credits / (MODEL_COSTS["gemini-3-pro-image-preview"] || 1));
+    const nb2Count = Number(item.nb2_images || Math.floor(credits / (MODEL_COSTS["gemini-3.1-flash-image-preview"] || 1)));
+    const nbproCount = Number(item.nbpro_images || Math.floor(credits / (MODEL_COSTS["gemini-3-pro-image-preview"] || 1)));
+    const nb2PricePerImage = formatPricePerImage(
+      item.nb2_price_per_image_rub ?? (nb2Count ? Number(item.price_rub) / nb2Count : 0)
+    );
+    const nbproPricePerImage = formatPricePerImage(
+      item.nbpro_price_per_image_rub ?? (nbproCount ? Number(item.price_rub) / nbproCount : 0)
+    );
+    const isPopular = Boolean(item.is_popular);
+    const valueDiscountPercent = Number(item.value_discount_percent || 0);
+    const badgeHtml = isPopular
+      ? '<span class="plan-badge">Популярный</span>'
+      : valueDiscountPercent > 0
+        ? `<span class="plan-badge plan-badge-muted">Выгоднее на ${valueDiscountPercent}%</span>`
+        : "";
     const card = document.createElement("article");
     card.className = "plan-card";
+    if (isPopular) {
+      card.classList.add("is-popular");
+    }
     card.dataset.code = item.code;
     card.innerHTML = `
       <div class="plan-title-row">
-        <h3>${escapeHtml(item.title)}</h3>
+        <div class="plan-title-copy">
+          ${badgeHtml}
+          <h3>${escapeHtml(item.title)}</h3>
+        </div>
         <span class="chip">${escapeHtml(formatCredits(item.credits))}</span>
       </div>
       <div class="plan-price">${escapeHtml(item.price_rub)} ₽</div>
-      <div class="plan-meta">~${nb2Count} Nano Banana 2 · ~${nbproCount} Nano Banana Pro</div>
+      <div class="plan-stats">
+        <div>${nb2Count} фото Nano Banana 2</div>
+        <div>${nbproCount} фото Nano Banana Pro</div>
+      </div>
+      <div class="plan-value">${nb2PricePerImage} ₽ / NB2 · ${nbproPricePerImage} ₽ / Pro</div>
     `;
     card.addEventListener("click", () => selectTopup(item.code));
     plansGrid.appendChild(card);
   }
-  selectTopup(topups[0].code);
+  const defaultCode = topups.find((item) => item.is_popular)?.code || topups[0].code;
+  selectTopup(defaultCode);
 }
 
 function selectTemplate(item) {
