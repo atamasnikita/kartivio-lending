@@ -870,6 +870,17 @@ a {
   font-weight: 600;
 }
 
+.price-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.price-badges .badge {
+  margin-bottom: 0;
+}
+
 .badge-muted {
   background: rgba(255, 255, 255, 0.06);
   color: var(--muted);

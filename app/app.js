@@ -958,17 +958,6 @@ function formatCredits(amount) {
   return `${value} ${creditsWord(value)}`;
 }
 
-function formatPricePerImage(value) {
-  const number = Number(value || 0);
-  if (!Number.isFinite(number) || number <= 0) {
-    return "—";
-  }
-  return new Intl.NumberFormat("ru-RU", {
-    minimumFractionDigits: Number.isInteger(number) ? 0 : 1,
-    maximumFractionDigits: 1,
-  }).format(number);
-}
-
 function setCreateButtonIdleLabel() {
   const cost = selectedGenerationCost();
   createButton.textContent = `Генерировать · ${formatCredits(cost)}`;
@@ -2349,19 +2338,16 @@ function renderPlans(payload) {
     const credits = Number(item.credits || 0);
     const nb2Count = Number(item.nb2_images || Math.floor(credits / (MODEL_COSTS["gemini-3.1-flash-image-preview"] || 1)));
     const nbproCount = Number(item.nbpro_images || Math.floor(credits / (MODEL_COSTS["gemini-3-pro-image-preview"] || 1)));
-    const nb2PricePerImage = formatPricePerImage(
-      item.nb2_price_per_image_rub ?? (nb2Count ? Number(item.price_rub) / nb2Count : 0)
-    );
-    const nbproPricePerImage = formatPricePerImage(
-      item.nbpro_price_per_image_rub ?? (nbproCount ? Number(item.price_rub) / nbproCount : 0)
-    );
     const isPopular = Boolean(item.is_popular);
     const valueDiscountPercent = Number(item.value_discount_percent || 0);
-    const badgeHtml = isPopular
-      ? '<span class="plan-badge">Популярный</span>'
-      : valueDiscountPercent > 0
-        ? `<span class="plan-badge plan-badge-muted">Выгоднее на ${valueDiscountPercent}%</span>`
-        : "";
+    const badges = [];
+    if (isPopular) {
+      badges.push('<span class="plan-badge">Популярный</span>');
+    }
+    if (valueDiscountPercent > 0) {
+      badges.push(`<span class="plan-badge plan-badge-muted">Выгода ${valueDiscountPercent}%</span>`);
+    }
+    const badgeHtml = badges.length ? `<div class="plan-badges">${badges.join("")}</div>` : "";
     const card = document.createElement("article");
     card.className = "plan-card";
     if (isPopular) {
@@ -2381,7 +2367,6 @@ function renderPlans(payload) {
         <div>${nb2Count} фото Nano Banana 2</div>
         <div>${nbproCount} фото Nano Banana Pro</div>
       </div>
-      <div class="plan-value">${nb2PricePerImage} ₽ / NB2 · ${nbproPricePerImage} ₽ / Pro</div>
     `;
     card.addEventListener("click", () => selectTopup(item.code));
     plansGrid.appendChild(card);

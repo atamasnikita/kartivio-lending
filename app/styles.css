@@ -1609,6 +1609,12 @@ body.is-web-runtime.is-mobile-browser .app-main {
   gap: 6px;
 }
 
+.plan-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .plan-badge {
   display: inline-flex;
   align-items: center;
@@ -1644,11 +1650,6 @@ body.is-web-runtime.is-mobile-browser .app-main {
   gap: 4px;
   color: #eef2ff;
   font-size: 14px;
-}
-
-.plan-value {
-  color: var(--muted);
-  font-size: 13px;
 }
 
 .profile-card {
