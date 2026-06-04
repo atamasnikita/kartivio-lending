@@ -503,6 +503,38 @@
     <script src="/landing-media.js?v=20260531a"></script>
     <script>
       (function () {
+        const keys = [
+          "utm_source",
+          "utm_medium",
+          "utm_campaign",
+          "utm_content",
+          "utm_term",
+          "utm_device",
+          "utm_position",
+          "yclid",
+        ];
+        const current = new URL(window.location.href);
+        const preserved = new URLSearchParams();
+        for (const key of keys) {
+          const value = String(current.searchParams.get(key) || "").trim();
+          if (value) preserved.set(key, value);
+        }
+        if (!preserved.toString()) return;
+
+        const anchors = Array.from(document.querySelectorAll('a[href="/app/"]'));
+        for (const anchor of anchors) {
+          const target = new URL(anchor.getAttribute("href"), window.location.origin);
+          for (const [key, value] of preserved.entries()) {
+            if (!target.searchParams.has(key)) {
+              target.searchParams.set(key, value);
+            }
+          }
+          anchor.setAttribute("href", target.pathname + target.search + target.hash);
+        }
+      })();
+    </script>
+    <script>
+      (function () {
         const faq = document.querySelector(".faq");
         if (!faq) return;
         const items = Array.from(faq.querySelectorAll("details"));

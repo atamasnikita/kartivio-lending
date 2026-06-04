@@ -4,6 +4,8 @@ const STORAGE_KEYS = {
   refreshToken: "kartivio.refresh_token",
   lastAuthProvider: "kartivio.last_auth_provider",
   telegramWebLoginToken: "kartivio.telegram_web_login_token",
+  acquisitionAnonymousId: "kartivio.acquisition_anonymous_id",
+  acquisitionFirstTouch: "kartivio.acquisition_first_touch",
 };
 
 const DEFAULT_PROD_API_BASE = "https://api.kartivio-ai.ru";
@@ -269,6 +271,7 @@ const state = {
   topups: [],
   selectedTopupCode: "",
   linkedProviders: new Set(),
+  acquisitionTouch: null,
   telegramLinkToken: "",
   telegramLinkPollTimer: null,
   telegramWebLoginToken: "",
@@ -657,6 +660,137 @@ function currentReturnToUrl() {
   url.searchParams.delete("yandex_auto");
   url.hash = "";
   return url.toString();
+}
+
+function normalizeAttributionValue(raw, maxLength = 255) {
+  const value = String(raw || "").trim();
+  if (!value) {
+    return "";
+  }
+  return value.slice(0, maxLength);
+}
+
+function hasAcquisitionSignal(touch) {
+  if (!touch || typeof touch !== "object") {
+    return false;
+  }
+  return Boolean(
+    touch.utm_source ||
+      touch.utm_medium ||
+      touch.utm_campaign ||
+      touch.utm_content ||
+      touch.utm_term ||
+      touch.utm_device ||
+      touch.utm_position ||
+      touch.yclid
+  );
+}
+
+function buildAnonymousId() {
+  if (window.crypto && typeof window.crypto.randomUUID === "function") {
+    return window.crypto.randomUUID();
+  }
+  return `anon_${Date.now()}_${randomBase64Url(12)}`;
+}
+
+function ensureAcquisitionAnonymousId() {
+  try {
+    const existing = normalizeAttributionValue(window.localStorage.getItem(STORAGE_KEYS.acquisitionAnonymousId), 128);
+    if (existing) {
+      return existing;
+    }
+    const nextValue = buildAnonymousId();
+    window.localStorage.setItem(STORAGE_KEYS.acquisitionAnonymousId, nextValue);
+    return nextValue;
+  } catch (_error) {
+    return buildAnonymousId();
+  }
+}
+
+function readStoredAcquisitionTouch() {
+  try {
+    const raw = String(window.localStorage.getItem(STORAGE_KEYS.acquisitionFirstTouch) || "").trim();
+    if (!raw) {
+      return null;
+    }
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") {
+      return null;
+    }
+    return parsed;
+  } catch (_error) {
+    return null;
+  }
+}
+
+function writeStoredAcquisitionTouch(touch) {
+  try {
+    window.localStorage.setItem(STORAGE_KEYS.acquisitionFirstTouch, JSON.stringify(touch));
+  } catch (_error) {
+    // noop
+  }
+}
+
+function buildAcquisitionTouchFromLocation() {
+  const params = new URLSearchParams(window.location.search);
+  const touch = {
+    anonymous_id: ensureAcquisitionAnonymousId(),
+    utm_source: normalizeAttributionValue(params.get("utm_source"), 128),
+    utm_medium: normalizeAttributionValue(params.get("utm_medium"), 128),
+    utm_campaign: normalizeAttributionValue(params.get("utm_campaign"), 255),
+    utm_content: normalizeAttributionValue(params.get("utm_content"), 255),
+    utm_term: normalizeAttributionValue(params.get("utm_term"), 255),
+    utm_device: normalizeAttributionValue(params.get("utm_device"), 64),
+    utm_position: normalizeAttributionValue(params.get("utm_position"), 64),
+    yclid: normalizeAttributionValue(params.get("yclid"), 255),
+    referrer: normalizeAttributionValue(document.referrer, 1024),
+    landing_path: normalizeAttributionValue(window.location.pathname, 512),
+    first_seen_at: new Date().toISOString(),
+  };
+  return hasAcquisitionSignal(touch) ? touch : null;
+}
+
+function captureFirstAcquisitionTouch() {
+  const existing = readStoredAcquisitionTouch();
+  if (existing) {
+    state.acquisitionTouch = existing;
+    return existing;
+  }
+  const nextTouch = buildAcquisitionTouchFromLocation();
+  if (!nextTouch) {
+    state.acquisitionTouch = null;
+    return null;
+  }
+  writeStoredAcquisitionTouch(nextTouch);
+  state.acquisitionTouch = nextTouch;
+  return nextTouch;
+}
+
+async function syncAcquisitionTouch({ auth = false } = {}) {
+  const touch = state.acquisitionTouch || readStoredAcquisitionTouch();
+  if (!touch || !touch.anonymous_id || !hasAcquisitionSignal(touch)) {
+    return null;
+  }
+  const payload = {
+    anonymous_id: normalizeAttributionValue(touch.anonymous_id, 128),
+    utm_source: normalizeAttributionValue(touch.utm_source, 128) || undefined,
+    utm_medium: normalizeAttributionValue(touch.utm_medium, 128) || undefined,
+    utm_campaign: normalizeAttributionValue(touch.utm_campaign, 255) || undefined,
+    utm_content: normalizeAttributionValue(touch.utm_content, 255) || undefined,
+    utm_term: normalizeAttributionValue(touch.utm_term, 255) || undefined,
+    utm_device: normalizeAttributionValue(touch.utm_device, 64) || undefined,
+    utm_position: normalizeAttributionValue(touch.utm_position, 64) || undefined,
+    yclid: normalizeAttributionValue(touch.yclid, 255) || undefined,
+    referrer: normalizeAttributionValue(touch.referrer, 1024) || undefined,
+    landing_path: normalizeAttributionValue(touch.landing_path, 512) || undefined,
+    first_seen_at: touch.first_seen_at || undefined,
+  };
+  const request = auth ? authorizedFetch : apiFetch;
+  return request("/v1/attribution/touch", {
+    method: "POST",
+    body: payload,
+    auth,
+  });
 }
 
 function oauthRedirectUri() {
@@ -1220,6 +1354,7 @@ function loadState() {
     state.telegramWebLoginToken = "";
     localStorage.removeItem(STORAGE_KEYS.telegramWebLoginToken);
   }
+  state.acquisitionTouch = readStoredAcquisitionTouch();
 }
 
 function escapeHtml(raw) {
@@ -3644,6 +3779,11 @@ async function loginViaTelegram(options = {}) {
     }
     state.lastAuthProvider = "telegram";
     saveState();
+    try {
+      await syncAcquisitionTouch({ auth: true });
+    } catch (_error) {
+      // noop
+    }
     setAuthGateVisible(false);
     if (!silent) {
       setNote("Авторизация успешна.");
@@ -3698,6 +3838,11 @@ async function loginViaGoogleCredential(idToken) {
   }
   state.lastAuthProvider = "google";
   saveState();
+  try {
+    await syncAcquisitionTouch({ auth: true });
+  } catch (_error) {
+    // noop
+  }
   setAuthGateVisible(false);
   setNote("Авторизация через Google успешна.");
   await Promise.all([loadPrivateData(), loadHistory({ forceServerCheck: true }), loadTemplates()]);
@@ -3722,6 +3867,11 @@ async function loginViaYandexCode(code, codeVerifier) {
   }
   state.lastAuthProvider = "yandex";
   saveState();
+  try {
+    await syncAcquisitionTouch({ auth: true });
+  } catch (_error) {
+    // noop
+  }
   setAuthGateVisible(false);
   setNote("Авторизация через Яндекс успешна.");
   await Promise.all([loadPrivateData(), loadHistory({ forceServerCheck: true }), loadTemplates()]);
@@ -4028,6 +4178,7 @@ async function bootstrap() {
   setBootPending(true);
   unlockTemplateModalScroll();
   loadState();
+  captureFirstAcquisitionTouch();
   promptInput.maxLength = PROMPT_MAX_LENGTH;
   setDevPanelVisibility();
   await ensureTelegramSdkLoaded();
@@ -4050,6 +4201,11 @@ async function bootstrap() {
 
   try {
     await resolveApiBase();
+    try {
+      await syncAcquisitionTouch();
+    } catch (_error) {
+      // noop
+    }
     refreshAuthButtons();
     await loadPublicData();
   } catch (error) {
@@ -4104,6 +4260,11 @@ async function bootstrap() {
   }
 
   if (authorized) {
+    try {
+      await syncAcquisitionTouch({ auth: true });
+    } catch (_error) {
+      // noop
+    }
     setAuthGateVisible(false);
   } else {
     state.accessToken = "";
