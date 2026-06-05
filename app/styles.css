@@ -1746,6 +1746,15 @@ body.is-web-runtime.is-mobile-browser .app-main {
   gap: 8px;
 }
 
+.admin-selected-summary {
+  min-height: 18px;
+  color: #aeb7c9;
+}
+
+.admin-selected-summary.is-warning {
+  color: #ffd36b;
+}
+
 .admin-primary-action {
   font-size: 16px;
   height: 46px;

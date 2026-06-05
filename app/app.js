@@ -358,6 +358,7 @@ const campaignMediaPreviewImage = document.getElementById("campaignMediaPreviewI
 const campaignPromoOfferField = document.getElementById("campaignPromoOfferField");
 const campaignPromoOfferSelect = document.getElementById("campaignPromoOfferSelect");
 const campaignTestChatIdInput = document.getElementById("campaignTestChatIdInput");
+const campaignSelectedSummary = document.getElementById("campaignSelectedSummary");
 const campaignCreateButton = document.getElementById("campaignCreateButton");
 const campaignPreviewButton = document.getElementById("campaignPreviewButton");
 const campaignTestButton = document.getElementById("campaignTestButton");
@@ -2329,6 +2330,77 @@ function adminSelectedCampaign() {
   return state.adminCampaigns.find((item) => item.id === state.selectedAdminCampaignId) || null;
 }
 
+function normalizeDraftText(value) {
+  const normalized = String(value || "").trim();
+  return normalized || null;
+}
+
+function buildCampaignDraftBody() {
+  const kind = String(campaignKindSelect && campaignKindSelect.value || "").trim() || "new_templates";
+  const body = {
+    kind,
+    title: String(campaignTitleInput && campaignTitleInput.value || "").trim(),
+    message_text: String(campaignMessageInput && campaignMessageInput.value || "").trim(),
+    cta_text: normalizeDraftText(campaignCtaTextInput && campaignCtaTextInput.value),
+    media_url: null,
+    promo_offer_id: null,
+  };
+  if (kind === "new_templates") {
+    body.media_url = normalizeDraftText(campaignMediaUrlInput && campaignMediaUrlInput.value);
+  }
+  if (kind === "promo_discount") {
+    body.promo_offer_id = normalizeDraftText(campaignPromoOfferSelect && campaignPromoOfferSelect.value);
+  }
+  return body;
+}
+
+function selectedCampaignDiffersFromDraft() {
+  const selected = adminSelectedCampaign();
+  if (!selected) {
+    return false;
+  }
+  const draft = buildCampaignDraftBody();
+  if (String(selected.kind || "") !== String(draft.kind || "")) {
+    return true;
+  }
+  if (String(selected.title || "").trim() !== String(draft.title || "").trim()) {
+    return true;
+  }
+  if (String(selected.message_text || "").trim() !== String(draft.message_text || "").trim()) {
+    return true;
+  }
+  if (normalizeDraftText(selected.cta_text) !== normalizeDraftText(draft.cta_text)) {
+    return true;
+  }
+  if (draft.kind === "new_templates" && normalizeDraftText(selected.media_url) !== normalizeDraftText(draft.media_url)) {
+    return true;
+  }
+  if (draft.kind === "promo_discount" && normalizeDraftText(selected.promo_offer_id) !== normalizeDraftText(draft.promo_offer_id)) {
+    return true;
+  }
+  return false;
+}
+
+function renderSelectedCampaignSummary() {
+  if (!campaignSelectedSummary) {
+    return;
+  }
+  const selected = adminSelectedCampaign();
+  if (!selected) {
+    campaignSelectedSummary.textContent = "Кампания не выбрана.";
+    campaignSelectedSummary.classList.remove("is-warning");
+    return;
+  }
+  const summary = `Выбрана кампания: ${selected.title} · ${adminKindLabel(selected.kind)} · ${adminStatusLabel(selected.status)}`;
+  if (selectedCampaignDiffersFromDraft()) {
+    campaignSelectedSummary.textContent = `${summary}. В форме есть несохраненные изменения.`;
+    campaignSelectedSummary.classList.add("is-warning");
+    return;
+  }
+  campaignSelectedSummary.textContent = summary;
+  campaignSelectedSummary.classList.remove("is-warning");
+}
+
 function isPromoCampaignDraft() {
   return String(campaignKindSelect && campaignKindSelect.value || "").trim() === "promo_discount";
 }
@@ -2344,6 +2416,7 @@ function renderCampaignDraftVisibility() {
   if (campaignMediaPreview && isPromo) {
     campaignMediaPreview.classList.add("is-hidden");
   }
+  renderSelectedCampaignSummary();
 }
 
 function setCampaignMediaPreview(url) {
@@ -2546,6 +2619,7 @@ function resetCampaignDraft() {
   }
   setCampaignMediaPreview("");
   renderCampaignDraftVisibility();
+  renderSelectedCampaignSummary();
 }
 
 async function loadAdminCampaigns() {
@@ -2575,6 +2649,7 @@ async function loadAdminCampaigns() {
   }
   renderCampaignsList();
   renderCampaignPreviewStats();
+  renderSelectedCampaignSummary();
 }
 
 async function loadAdminOffers() {
@@ -2592,21 +2667,7 @@ async function loadAdminData() {
 }
 
 async function createAdminCampaign() {
-  const kind = String(campaignKindSelect && campaignKindSelect.value || "").trim() || "new_templates";
-  const body = {
-    kind,
-    title: String(campaignTitleInput && campaignTitleInput.value || "").trim(),
-    message_text: String(campaignMessageInput && campaignMessageInput.value || "").trim(),
-    cta_text: String(campaignCtaTextInput && campaignCtaTextInput.value || "").trim() || null,
-    media_url: null,
-    promo_offer_id: null,
-  };
-  if (kind === "new_templates") {
-    body.media_url = String(campaignMediaUrlInput && campaignMediaUrlInput.value || "").trim() || null;
-  }
-  if (kind === "promo_discount") {
-    body.promo_offer_id = String(campaignPromoOfferSelect && campaignPromoOfferSelect.value || "").trim() || null;
-  }
+  const body = buildCampaignDraftBody();
   const payload = await authorizedFetch("/v1/admin/notification-campaigns", {
     method: "POST",
     body,
@@ -2618,11 +2679,19 @@ async function createAdminCampaign() {
   return payload;
 }
 
-async function previewSelectedCampaign() {
+function ensureSelectedCampaignMatchesDraft() {
   const campaignId = String(state.selectedAdminCampaignId || "").trim();
   if (!campaignId) {
     throw new Error("Сначала выбери кампанию.");
   }
+  if (selectedCampaignDiffersFromDraft()) {
+    throw new Error("Сначала сохрани draft. Сейчас в форме и в выбранной кампании разные данные.");
+  }
+  return campaignId;
+}
+
+async function previewSelectedCampaign() {
+  const campaignId = ensureSelectedCampaignMatchesDraft();
   const payload = await authorizedFetch(`/v1/admin/notification-campaigns/${campaignId}/preview`, {
     method: "POST",
   });
@@ -2633,10 +2702,7 @@ async function previewSelectedCampaign() {
 }
 
 async function testSelectedCampaign() {
-  const campaignId = String(state.selectedAdminCampaignId || "").trim();
-  if (!campaignId) {
-    throw new Error("Сначала выбери кампанию.");
-  }
+  const campaignId = ensureSelectedCampaignMatchesDraft();
   const rawChatId = String(campaignTestChatIdInput && campaignTestChatIdInput.value || "").trim();
   const body = {};
   if (rawChatId) {
@@ -2651,10 +2717,7 @@ async function testSelectedCampaign() {
 }
 
 async function launchSelectedCampaign() {
-  const campaignId = String(state.selectedAdminCampaignId || "").trim();
-  if (!campaignId) {
-    throw new Error("Сначала выбери кампанию.");
-  }
+  const campaignId = ensureSelectedCampaignMatchesDraft();
   const payload = await authorizedFetch(`/v1/admin/notification-campaigns/${campaignId}/launch`, {
     method: "POST",
   });
@@ -4914,6 +4977,18 @@ function bindEvents() {
       renderCampaignDraftVisibility();
     });
   }
+  for (const input of [campaignTitleInput, campaignMessageInput, campaignCtaTextInput, campaignMediaUrlInput]) {
+    if (input) {
+      input.addEventListener("input", () => {
+        renderSelectedCampaignSummary();
+      });
+    }
+  }
+  if (campaignPromoOfferSelect) {
+    campaignPromoOfferSelect.addEventListener("change", () => {
+      renderSelectedCampaignSummary();
+    });
+  }
   if (campaignMediaUrlInput) {
     campaignMediaUrlInput.addEventListener("input", () => {
       setCampaignMediaPreview(campaignMediaUrlInput.value);
@@ -4951,7 +5026,7 @@ function bindEvents() {
       setCampaignFormNote("Сохраняю draft...");
       try {
         const payload = await createAdminCampaign();
-        setCampaignFormNote(`Draft создан: ${payload.title}`);
+        setCampaignFormNote(`Draft создан и выбран: ${payload.title}`);
       } catch (error) {
         setCampaignFormNote(userFacingErrorMessage(error, "Не удалось создать кампанию."), true);
       } finally {
@@ -5030,6 +5105,7 @@ function bindEvents() {
       }
       renderCampaignPreviewStats();
       renderCampaignsList();
+      renderSelectedCampaignSummary();
       setCampaignFormNote("Кампания выбрана. Можно сделать preview, тест или запуск.");
     });
   }
