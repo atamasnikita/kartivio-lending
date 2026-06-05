@@ -2547,13 +2547,14 @@ function renderPromoOfferOptions() {
   const currentValue = String(campaignPromoOfferSelect.value || "").trim();
   const options = ['<option value="">Выбери оффер</option>'];
   for (const item of state.adminOffers) {
+    const activeLabel = item.active ? "активен" : "неактивен";
     const expires = item.expires_at ? ` · до ${formatAdminDateTime(item.expires_at)}` : "";
     options.push(
-      `<option value="${escapeHtml(item.id)}">${escapeHtml(item.title)} · ${escapeHtml(String(item.price_rub))} ₽ · ${escapeHtml(String(item.credits))} кр${escapeHtml(expires)}</option>`
+      `<option value="${escapeHtml(item.id)}" ${item.active ? "" : "disabled"}>${escapeHtml(item.title)} · ${escapeHtml(String(item.price_rub))} ₽ · ${escapeHtml(String(item.credits))} кр · ${escapeHtml(activeLabel)}${escapeHtml(expires)}</option>`
     );
   }
   campaignPromoOfferSelect.innerHTML = options.join("");
-  if (currentValue && state.adminOffers.some((item) => item.id === currentValue)) {
+  if (currentValue && state.adminOffers.some((item) => item.id === currentValue && item.active)) {
     campaignPromoOfferSelect.value = currentValue;
   }
 }
