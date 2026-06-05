@@ -2955,7 +2955,9 @@ function renderTemplateFilters() {
     if (isNewestTemplateFilter(filterId)) {
       button.classList.add("is-promoted");
     }
-    button.innerHTML = `
+    button.innerHTML = isNewestTemplateFilter(filterId)
+      ? `<span>${escapeHtml(templateFilterLabel(filterId))}</span>`
+      : `
       <span>${escapeHtml(templateFilterLabel(filterId))}</span>
       <span class="template-filter-count">${templateFilterCount(filterId)}</span>
     `;
