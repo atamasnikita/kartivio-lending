@@ -1928,14 +1928,21 @@ function applyTelegramSafeInsets() {
     cssSafeBottomInset
   );
   const isMobile = isTelegramMobileClient();
+  const isFullscreen = Boolean(tg.isFullscreen);
   let controlsOffset = 0;
   if (isMobile) {
-    if (topInset > 0) {
+    if (platform === "ios") {
+      if (isFullscreen) {
+        controlsOffset = 0;
+      } else if (topInset > 0) {
+        controlsOffset = 56;
+      } else {
+        controlsOffset = 104;
+      }
+    } else if (topInset > 0) {
       controlsOffset = 0;
-    } else if (platform === "ios") {
-      controlsOffset = 104;
     } else {
-      controlsOffset = tg.isFullscreen ? 18 : 40;
+      controlsOffset = isFullscreen ? 18 : 40;
     }
   }
   document.documentElement.style.setProperty("--tg-safe-top", `${Math.max(0, topInset)}px`);
@@ -1989,10 +1996,14 @@ function initTelegramViewport() {
     tg.onEvent("safeAreaChanged", applyTelegramSafeInsets);
     tg.onEvent("contentSafeAreaChanged", applyTelegramSafeInsets);
     tg.onEvent("fullscreenChanged", () => {
+      ensureTelegramImmersiveMode();
+      scheduleTelegramImmersiveRetry();
       requestTelegramSafeAreas();
       applyTelegramSafeInsets();
     });
     tg.onEvent("fullscreenFailed", () => {
+      ensureTelegramImmersiveMode();
+      scheduleTelegramImmersiveRetry();
       requestTelegramSafeAreas();
       applyTelegramSafeInsets();
     });
@@ -2037,7 +2048,9 @@ function scheduleTelegramImmersiveRetry() {
     window.clearTimeout(telegramImmersiveRetryTimer);
     telegramImmersiveRetryTimer = 0;
   }
-  const retryDelays = [140, 420, 980];
+  const retryDelays = getTelegramRuntimePlatform() === "ios"
+    ? [120, 320, 760, 1400, 2400, 3600]
+    : [140, 420, 980];
   retryDelays.forEach((delay, index) => {
     const run = () => {
       ensureTelegramImmersiveMode();
@@ -2069,6 +2082,13 @@ function attachTelegramImmersiveListeners() {
   window.addEventListener("touchstart", trigger, options);
   window.addEventListener("pointerdown", trigger, options);
   window.addEventListener("focus", trigger, options);
+  window.addEventListener("pageshow", trigger, options);
+  window.addEventListener("load", trigger, options);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+      trigger();
+    }
+  });
   telegramImmersiveListenersAttached = true;
 }
 
