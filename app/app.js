@@ -157,6 +157,14 @@ const API_ERROR_MESSAGES = Object.freeze({
   unsupported_source_image_type: "Поддерживаются только PNG, JPG и WEBP.",
   source_image_too_large: "Одно из фото слишком большое. Используй файл до 10 MB.",
   source_image_not_found: "Не удалось найти загруженное фото. Попробуй загрузить заново.",
+  unsupported_campaign_media_type: "Для рассылки подходят только PNG, JPG и WEBP.",
+  campaign_media_too_large: "Файл для рассылки слишком большой. Используй изображение до 10 MB.",
+  unsupported_campaign_kind: "Выбран неподдерживаемый тип кампании.",
+  promo_discount_offer_required: "Для кампании со скидкой нужно выбрать оффер.",
+  promo_offer_not_found: "Оффер не найден.",
+  test_chat_id_required: "Нужен Telegram chat id для тестовой отправки.",
+  promo_offer_code_taken: "Такой код оффера уже существует.",
+  promo_offer_redemptions_unsupported: "Сейчас поддерживается только 1 использование на пользователя.",
   payment_not_found: "Платеж не найден.",
   unknown_package: "Пакет не найден. Выбери один из доступных.",
   unsupported_payment_kind: "Этот тип оплаты сейчас недоступен.",
@@ -254,6 +262,7 @@ const state = {
   refreshToken: "",
   isCookieSession: false,
   lastAuthProvider: "",
+  me: null,
   selectedImageModel: DEFAULT_IMAGE_MODEL,
   selectedResolution: DEFAULT_RESOLUTION,
   selectedRatio: DEFAULT_RATIO,
@@ -287,6 +296,11 @@ const state = {
   historyRequestToken: 0,
   historyNextOffset: 0,
   historyHasMore: false,
+  adminTab: "campaigns",
+  adminCampaigns: [],
+  adminOffers: [],
+  selectedAdminCampaignId: "",
+  adminCampaignPreview: null,
 };
 
 let tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
@@ -320,10 +334,51 @@ const identityYandex = document.getElementById("identityYandex");
 const identityTelegram = document.getElementById("identityTelegram");
 const linkTelegramButton = document.getElementById("linkTelegramButton");
 const telegramLinkNote = document.getElementById("telegramLinkNote");
+const adminAccessCard = document.getElementById("adminAccessCard");
+const openMarketingAdminButton = document.getElementById("openMarketingAdminButton");
 const logoutButton = document.getElementById("logoutButton");
 const plansGrid = document.getElementById("plansGrid");
 const plansActionButton = document.getElementById("plansActionButton");
 const plansNote = document.getElementById("plansNote");
+const marketingBackButton = document.getElementById("marketingBackButton");
+const marketingAdminTabs = document.getElementById("marketingAdminTabs");
+const marketingCampaignsPanel = document.getElementById("marketingCampaignsPanel");
+const marketingOffersPanel = document.getElementById("marketingOffersPanel");
+const campaignKindSelect = document.getElementById("campaignKindSelect");
+const campaignTitleInput = document.getElementById("campaignTitleInput");
+const campaignMessageInput = document.getElementById("campaignMessageInput");
+const campaignCtaTextInput = document.getElementById("campaignCtaTextInput");
+const campaignMediaFields = document.getElementById("campaignMediaFields");
+const campaignMediaUrlInput = document.getElementById("campaignMediaUrlInput");
+const campaignMediaFileInput = document.getElementById("campaignMediaFileInput");
+const campaignMediaUploadButton = document.getElementById("campaignMediaUploadButton");
+const campaignMediaUploadNote = document.getElementById("campaignMediaUploadNote");
+const campaignMediaPreview = document.getElementById("campaignMediaPreview");
+const campaignMediaPreviewImage = document.getElementById("campaignMediaPreviewImage");
+const campaignPromoOfferField = document.getElementById("campaignPromoOfferField");
+const campaignPromoOfferSelect = document.getElementById("campaignPromoOfferSelect");
+const campaignTestChatIdInput = document.getElementById("campaignTestChatIdInput");
+const campaignCreateButton = document.getElementById("campaignCreateButton");
+const campaignPreviewButton = document.getElementById("campaignPreviewButton");
+const campaignTestButton = document.getElementById("campaignTestButton");
+const campaignLaunchButton = document.getElementById("campaignLaunchButton");
+const campaignFormNote = document.getElementById("campaignFormNote");
+const campaignPreviewStats = document.getElementById("campaignPreviewStats");
+const campaignsList = document.getElementById("campaignsList");
+const refreshCampaignsButton = document.getElementById("refreshCampaignsButton");
+const offerCodeInput = document.getElementById("offerCodeInput");
+const offerTitleInput = document.getElementById("offerTitleInput");
+const offerPriceInput = document.getElementById("offerPriceInput");
+const offerCreditsInput = document.getElementById("offerCreditsInput");
+const offerExpiresAtInput = document.getElementById("offerExpiresAtInput");
+const offerMaxRedemptionsInput = document.getElementById("offerMaxRedemptionsInput");
+const offerActiveInput = document.getElementById("offerActiveInput");
+const offerRequireGenerationInput = document.getElementById("offerRequireGenerationInput");
+const offerRequireNoPaymentsInput = document.getElementById("offerRequireNoPaymentsInput");
+const offerCreateButton = document.getElementById("offerCreateButton");
+const offerFormNote = document.getElementById("offerFormNote");
+const offersList = document.getElementById("offersList");
+const refreshOffersButton = document.getElementById("refreshOffersButton");
 const templateFilterShell = document.getElementById("templateFilterShell");
 const templateFilterPrev = document.getElementById("templateFilterPrev");
 const templateFilterNext = document.getElementById("templateFilterNext");
@@ -397,6 +452,15 @@ let templateFilterScrollerBound = false;
 
 const TEMPLATE_FILTER_NEW = "new";
 const TEMPLATE_FILTER_PRIORITY = ["Полезности", "Мужское", "Семейные"];
+const ADMIN_CAMPAIGN_KIND_LABELS = Object.freeze({
+  new_templates: "Новые шаблоны",
+  promo_discount: "Персональный оффер",
+});
+const ADMIN_CAMPAIGN_STATUS_LABELS = Object.freeze({
+  draft: "Draft",
+  sending: "Отправляется",
+  completed: "Завершена",
+});
 
 function refreshIcons() {
   if (window.lucide && typeof window.lucide.createIcons === "function") {
@@ -1574,6 +1638,10 @@ function switchScreen(nextScreen) {
   if (!target) {
     return;
   }
+  if (target === "marketing" && !isAdminUser()) {
+    setNote("Недостаточно прав для этого раздела.", true);
+    return;
+  }
   closeTemplateModal();
   state.currentScreen = target;
   for (const screen of screens) {
@@ -1585,6 +1653,10 @@ function switchScreen(nextScreen) {
   if (target === "history") {
     loadHistory().catch((error) => {
       setCreateNote(userFacingErrorMessage(error, "Не удалось загрузить историю."), true);
+    });
+  } else if (target === "marketing") {
+    loadAdminData().catch((error) => {
+      setCampaignFormNote(userFacingErrorMessage(error, "Не удалось загрузить кампании."), true);
     });
   } else if (target === "feed") {
     window.requestAnimationFrame(() => maybeAutoLoadMoreTemplates());
@@ -2143,8 +2215,13 @@ async function logoutSession() {
   state.refreshToken = "";
   state.isCookieSession = false;
   state.lastAuthProvider = "";
+  state.me = null;
   state.telegramLinkToken = "";
   state.telegramWebLoginToken = "";
+  state.adminCampaigns = [];
+  state.adminOffers = [];
+  state.selectedAdminCampaignId = "";
+  state.adminCampaignPreview = null;
   resetHistoryCache();
   saveState();
   setAuthGateVisible(true);
@@ -2177,6 +2254,443 @@ function renderIdentityActions() {
   } else {
     setTelegramLinkNote("Привяжи Telegram, чтобы синхронизировать вход в боте и вебе.");
   }
+}
+
+function isAdminUser() {
+  return Boolean(state.me && state.me.is_admin);
+}
+
+function formatAdminDateTime(raw) {
+  const value = String(raw || "").trim();
+  if (!value) {
+    return "—";
+  }
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed)) {
+    return value;
+  }
+  return new Intl.DateTimeFormat("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(parsed));
+}
+
+function formatOfferCreditsMeta(credits) {
+  const numericCredits = Number(credits || 0);
+  const nb2 = Math.floor(numericCredits / (MODEL_COSTS["gemini-3.1-flash-image-preview"] || 1));
+  return `${formatCredits(numericCredits)} · ${nb2} фото NB2`;
+}
+
+function setCampaignFormNote(message, isError = false) {
+  if (!campaignFormNote) {
+    return;
+  }
+  campaignFormNote.textContent = String(message || "");
+  campaignFormNote.style.color = isError ? "#ff8080" : "";
+}
+
+function setOfferFormNote(message, isError = false) {
+  if (!offerFormNote) {
+    return;
+  }
+  offerFormNote.textContent = String(message || "");
+  offerFormNote.style.color = isError ? "#ff8080" : "";
+}
+
+function setCampaignMediaUploadStatus(message, isError = false) {
+  if (!campaignMediaUploadNote) {
+    return;
+  }
+  campaignMediaUploadNote.textContent = String(message || "");
+  campaignMediaUploadNote.style.color = isError ? "#ff8080" : "";
+}
+
+function renderAdminAccess() {
+  if (!adminAccessCard) {
+    return;
+  }
+  adminAccessCard.classList.toggle("is-hidden", !isAdminUser());
+}
+
+function adminKindLabel(kind) {
+  const normalized = String(kind || "").trim().toLowerCase();
+  return ADMIN_CAMPAIGN_KIND_LABELS[normalized] || normalized || "Кампания";
+}
+
+function adminStatusLabel(status) {
+  const normalized = String(status || "").trim().toLowerCase();
+  return ADMIN_CAMPAIGN_STATUS_LABELS[normalized] || normalized || "—";
+}
+
+function adminSelectedCampaign() {
+  return state.adminCampaigns.find((item) => item.id === state.selectedAdminCampaignId) || null;
+}
+
+function isPromoCampaignDraft() {
+  return String(campaignKindSelect && campaignKindSelect.value || "").trim() === "promo_discount";
+}
+
+function renderCampaignDraftVisibility() {
+  const isPromo = isPromoCampaignDraft();
+  if (campaignMediaFields) {
+    campaignMediaFields.classList.toggle("is-hidden", isPromo);
+  }
+  if (campaignPromoOfferField) {
+    campaignPromoOfferField.classList.toggle("is-hidden", !isPromo);
+  }
+  if (campaignMediaPreview && isPromo) {
+    campaignMediaPreview.classList.add("is-hidden");
+  }
+}
+
+function setCampaignMediaPreview(url) {
+  const normalized = normalizeImageUrl(url);
+  if (!campaignMediaPreview || !campaignMediaPreviewImage) {
+    return;
+  }
+  if (!normalized) {
+    campaignMediaPreview.classList.add("is-hidden");
+    campaignMediaPreviewImage.removeAttribute("src");
+    return;
+  }
+  campaignMediaPreviewImage.src = normalized;
+  campaignMediaPreview.classList.remove("is-hidden");
+}
+
+function renderAdminTabs() {
+  if (!marketingAdminTabs) {
+    return;
+  }
+  const buttons = Array.from(marketingAdminTabs.querySelectorAll("[data-admin-tab]"));
+  for (const button of buttons) {
+    button.classList.toggle("is-active", button.dataset.adminTab === state.adminTab);
+  }
+  if (marketingCampaignsPanel) {
+    marketingCampaignsPanel.classList.toggle("is-hidden", state.adminTab !== "campaigns");
+  }
+  if (marketingOffersPanel) {
+    marketingOffersPanel.classList.toggle("is-hidden", state.adminTab !== "offers");
+  }
+}
+
+function renderCampaignPreviewStats(preview = null) {
+  if (!campaignPreviewStats) {
+    return;
+  }
+  const data = preview || state.adminCampaignPreview;
+  if (!data) {
+    campaignPreviewStats.classList.add("is-hidden");
+    campaignPreviewStats.innerHTML = "";
+    return;
+  }
+  campaignPreviewStats.classList.remove("is-hidden");
+  campaignPreviewStats.innerHTML = `
+    <article class="admin-mini-stat"><span>Доступно</span><strong>${escapeHtml(String(data.sendable_count || 0))}</strong></article>
+    <article class="admin-mini-stat"><span>Reachable</span><strong>${escapeHtml(String(data.reachable_count || 0))}</strong></article>
+    <article class="admin-mini-stat"><span>Muted</span><strong>${escapeHtml(String(data.muted_count || 0))}</strong></article>
+    <article class="admin-mini-stat"><span>24ч лимит</span><strong>${escapeHtml(String(data.rate_limited_24h_count || 0))}</strong></article>
+    <article class="admin-mini-stat"><span>7д лимит</span><strong>${escapeHtml(String(data.rate_limited_7d_count || 0))}</strong></article>
+  `;
+}
+
+function renderPromoOfferOptions() {
+  if (!campaignPromoOfferSelect) {
+    return;
+  }
+  const currentValue = String(campaignPromoOfferSelect.value || "").trim();
+  const options = ['<option value="">Выбери оффер</option>'];
+  for (const item of state.adminOffers) {
+    const expires = item.expires_at ? ` · до ${formatAdminDateTime(item.expires_at)}` : "";
+    options.push(
+      `<option value="${escapeHtml(item.id)}">${escapeHtml(item.title)} · ${escapeHtml(String(item.price_rub))} ₽ · ${escapeHtml(String(item.credits))} кр${escapeHtml(expires)}</option>`
+    );
+  }
+  campaignPromoOfferSelect.innerHTML = options.join("");
+  if (currentValue && state.adminOffers.some((item) => item.id === currentValue)) {
+    campaignPromoOfferSelect.value = currentValue;
+  }
+}
+
+function renderCampaignsList() {
+  if (!campaignsList) {
+    return;
+  }
+  if (!state.adminCampaigns.length) {
+    campaignsList.innerHTML = '<article class="admin-list-empty">Кампаний пока нет.</article>';
+    return;
+  }
+  campaignsList.innerHTML = state.adminCampaigns.map((item) => {
+    const isSelected = item.id === state.selectedAdminCampaignId;
+    const hasMedia = Boolean(item.media_url);
+    const meta = [
+      `${adminKindLabel(item.kind)}`,
+      `status: ${adminStatusLabel(item.status)}`,
+      `sent ${item.sent_count || 0}`,
+      `failed ${item.failed_count || 0}`,
+    ].join(" · ");
+    const preview = item.preview_sendable_count != null
+      ? `Preview: ${item.preview_sendable_count}`
+      : "Preview еще не считали";
+    return `
+      <article class="admin-record-card${isSelected ? " is-selected" : ""}" data-campaign-id="${escapeHtml(item.id)}">
+        <div class="admin-record-head">
+          <div>
+            <strong>${escapeHtml(item.title)}</strong>
+            <p>${escapeHtml(meta)}</p>
+          </div>
+          <span class="chip">${escapeHtml(preview)}</span>
+        </div>
+        <p class="admin-record-text">${escapeHtml(item.message_text)}</p>
+        <div class="admin-record-meta">
+          <span>${escapeHtml(formatAdminDateTime(item.created_at))}</span>
+          ${hasMedia ? '<span class="plan-badge plan-badge-muted">photo</span>' : ""}
+        </div>
+      </article>
+    `;
+  }).join("");
+}
+
+function renderOffersList() {
+  if (!offersList) {
+    return;
+  }
+  if (!state.adminOffers.length) {
+    offersList.innerHTML = '<article class="admin-list-empty">Офферов пока нет.</article>';
+    return;
+  }
+  offersList.innerHTML = state.adminOffers.map((item) => {
+    const flags = [];
+    if (item.active) {
+      flags.push('<span class="plan-badge">Активен</span>');
+    }
+    if (item.require_successful_generation) {
+      flags.push('<span class="plan-badge plan-badge-muted">После генерации</span>');
+    }
+    if (item.require_no_successful_payments) {
+      flags.push('<span class="plan-badge plan-badge-muted">Без оплат</span>');
+    }
+    const expires = item.expires_at ? formatAdminDateTime(item.expires_at) : "без срока";
+    return `
+      <article class="admin-record-card admin-record-card-static">
+        <div class="admin-record-head">
+          <div>
+            <strong>${escapeHtml(item.title)}</strong>
+            <p>${escapeHtml(item.code)} · ${escapeHtml(formatOfferCreditsMeta(item.credits))}</p>
+          </div>
+          <span class="chip">${escapeHtml(String(item.price_rub))} ₽</span>
+        </div>
+        <div class="plan-badges">${flags.join("")}</div>
+        <div class="admin-record-meta">
+          <span>До ${escapeHtml(expires)}</span>
+          <span>1 use / user</span>
+        </div>
+      </article>
+    `;
+  }).join("");
+}
+
+function resetOfferDraft() {
+  if (offerCodeInput) {
+    offerCodeInput.value = "personal_200_299";
+  }
+  if (offerTitleInput) {
+    offerTitleInput.value = "Персональный пакет";
+  }
+  if (offerPriceInput) {
+    offerPriceInput.value = "299.00";
+  }
+  if (offerCreditsInput) {
+    offerCreditsInput.value = "200";
+  }
+  if (offerExpiresAtInput) {
+    offerExpiresAtInput.value = "";
+  }
+  if (offerMaxRedemptionsInput) {
+    offerMaxRedemptionsInput.value = "1";
+  }
+  if (offerActiveInput) {
+    offerActiveInput.checked = true;
+  }
+  if (offerRequireGenerationInput) {
+    offerRequireGenerationInput.checked = true;
+  }
+  if (offerRequireNoPaymentsInput) {
+    offerRequireNoPaymentsInput.checked = true;
+  }
+}
+
+function resetCampaignDraft() {
+  if (campaignKindSelect) {
+    campaignKindSelect.value = "new_templates";
+  }
+  if (campaignTitleInput) {
+    campaignTitleInput.value = "Новые шаблоны в ленте";
+  }
+  if (campaignMessageInput) {
+    campaignMessageInput.value = "В ленте появились новые семейные, мужские и полезные шаблоны. Открыть Kartivio?";
+  }
+  if (campaignCtaTextInput) {
+    campaignCtaTextInput.value = "Посмотреть шаблоны";
+  }
+  if (campaignMediaUrlInput) {
+    campaignMediaUrlInput.value = "";
+  }
+  if (campaignPromoOfferSelect) {
+    campaignPromoOfferSelect.value = "";
+  }
+  if (campaignTestChatIdInput) {
+    campaignTestChatIdInput.value = "";
+  }
+  setCampaignMediaPreview("");
+  renderCampaignDraftVisibility();
+}
+
+async function loadAdminCampaigns() {
+  const payload = await authorizedFetch("/v1/admin/notification-campaigns?limit=100&offset=0");
+  state.adminCampaigns = Array.isArray(payload.items) ? payload.items : [];
+  if (!state.selectedAdminCampaignId && state.adminCampaigns.length) {
+    state.selectedAdminCampaignId = state.adminCampaigns[0].id;
+  }
+  if (
+    state.selectedAdminCampaignId &&
+    !state.adminCampaigns.some((item) => item.id === state.selectedAdminCampaignId)
+  ) {
+    state.selectedAdminCampaignId = state.adminCampaigns[0] ? state.adminCampaigns[0].id : "";
+  }
+  const selected = adminSelectedCampaign();
+  if (selected && selected.preview_sendable_count != null) {
+    state.adminCampaignPreview = {
+      campaign_id: selected.id,
+      reachable_count: Number(selected.preview_reachable_count || 0),
+      muted_count: Number(selected.preview_muted_count || 0),
+      rate_limited_24h_count: Number(selected.preview_rate_limited_24h_count || 0),
+      rate_limited_7d_count: Number(selected.preview_rate_limited_7d_count || 0),
+      sendable_count: Number(selected.preview_sendable_count || 0),
+    };
+  } else if (!selected) {
+    state.adminCampaignPreview = null;
+  }
+  renderCampaignsList();
+  renderCampaignPreviewStats();
+}
+
+async function loadAdminOffers() {
+  const payload = await authorizedFetch("/v1/admin/promo-offers?limit=100&offset=0");
+  state.adminOffers = Array.isArray(payload.items) ? payload.items : [];
+  renderOffersList();
+  renderPromoOfferOptions();
+}
+
+async function loadAdminData() {
+  if (!isAdminUser()) {
+    return;
+  }
+  await Promise.all([loadAdminCampaigns(), loadAdminOffers()]);
+}
+
+async function createAdminCampaign() {
+  const kind = String(campaignKindSelect && campaignKindSelect.value || "").trim() || "new_templates";
+  const body = {
+    kind,
+    title: String(campaignTitleInput && campaignTitleInput.value || "").trim(),
+    message_text: String(campaignMessageInput && campaignMessageInput.value || "").trim(),
+    cta_text: String(campaignCtaTextInput && campaignCtaTextInput.value || "").trim() || null,
+    media_url: null,
+    promo_offer_id: null,
+  };
+  if (kind === "new_templates") {
+    body.media_url = String(campaignMediaUrlInput && campaignMediaUrlInput.value || "").trim() || null;
+  }
+  if (kind === "promo_discount") {
+    body.promo_offer_id = String(campaignPromoOfferSelect && campaignPromoOfferSelect.value || "").trim() || null;
+  }
+  const payload = await authorizedFetch("/v1/admin/notification-campaigns", {
+    method: "POST",
+    body,
+  });
+  state.selectedAdminCampaignId = payload.id || "";
+  state.adminCampaignPreview = null;
+  renderCampaignPreviewStats(null);
+  await loadAdminCampaigns();
+  return payload;
+}
+
+async function previewSelectedCampaign() {
+  const campaignId = String(state.selectedAdminCampaignId || "").trim();
+  if (!campaignId) {
+    throw new Error("Сначала выбери кампанию.");
+  }
+  const payload = await authorizedFetch(`/v1/admin/notification-campaigns/${campaignId}/preview`, {
+    method: "POST",
+  });
+  state.adminCampaignPreview = payload;
+  renderCampaignPreviewStats(payload);
+  await loadAdminCampaigns();
+  return payload;
+}
+
+async function testSelectedCampaign() {
+  const campaignId = String(state.selectedAdminCampaignId || "").trim();
+  if (!campaignId) {
+    throw new Error("Сначала выбери кампанию.");
+  }
+  const rawChatId = String(campaignTestChatIdInput && campaignTestChatIdInput.value || "").trim();
+  const body = {};
+  if (rawChatId) {
+    body.chat_id = Number(rawChatId);
+  }
+  const payload = await authorizedFetch(`/v1/admin/notification-campaigns/${campaignId}/test`, {
+    method: "POST",
+    body,
+  });
+  await loadAdminCampaigns();
+  return payload;
+}
+
+async function launchSelectedCampaign() {
+  const campaignId = String(state.selectedAdminCampaignId || "").trim();
+  if (!campaignId) {
+    throw new Error("Сначала выбери кампанию.");
+  }
+  const payload = await authorizedFetch(`/v1/admin/notification-campaigns/${campaignId}/launch`, {
+    method: "POST",
+  });
+  await loadAdminCampaigns();
+  return payload;
+}
+
+async function uploadCampaignMedia(file) {
+  if (!(file instanceof File)) {
+    throw new Error("Файл не выбран.");
+  }
+  const form = new FormData();
+  form.append("file", file);
+  const payload = await authorizedMultipart("/v1/admin/notification-media", form);
+  return payload;
+}
+
+async function createPromoOffer() {
+  const rawExpiresAt = String(offerExpiresAtInput && offerExpiresAtInput.value || "").trim();
+  const body = {
+    code: String(offerCodeInput && offerCodeInput.value || "").trim(),
+    title: String(offerTitleInput && offerTitleInput.value || "").trim(),
+    price_rub: String(offerPriceInput && offerPriceInput.value || "").trim(),
+    credits: Number(offerCreditsInput && offerCreditsInput.value || 0),
+    active: Boolean(offerActiveInput && offerActiveInput.checked),
+    expires_at: rawExpiresAt ? new Date(rawExpiresAt).toISOString() : null,
+    max_redemptions_per_user: Number(offerMaxRedemptionsInput && offerMaxRedemptionsInput.value || 1),
+    require_successful_generation: Boolean(offerRequireGenerationInput && offerRequireGenerationInput.checked),
+    require_no_successful_payments: Boolean(offerRequireNoPaymentsInput && offerRequireNoPaymentsInput.checked),
+  };
+  const payload = await authorizedFetch("/v1/admin/promo-offers", {
+    method: "POST",
+    body,
+  });
+  await loadAdminOffers();
+  return payload;
 }
 
 async function parseJsonResponse(response) {
@@ -2482,12 +2996,14 @@ function renderUser(me, wallet) {
   const tgId = String(me.telegram_user_id || "—");
   const balance = Number(wallet.balance_credits || 0);
 
+  state.me = me;
   userName.textContent = display;
   userTgId.textContent = tgId;
   creditsValue.textContent = formatCredits(balance);
   creditsBadge.textContent = String(balance);
   profileAvatar.textContent = display === "—" ? "K" : display[0].toUpperCase();
   renderIdentityActions();
+  renderAdminAccess();
 }
 
 function openCheckout(url) {
@@ -3599,12 +4115,14 @@ async function loadPrivateData({ forceServerCheck = false } = {}) {
     state.telegramLinkToken = "";
     state.isCookieSession = false;
     state.linkedProviders = new Set();
+    state.me = null;
     userName.textContent = "—";
     userTgId.textContent = "—";
     creditsValue.textContent = "—";
     creditsBadge.textContent = "0";
     profileAvatar.textContent = "K";
     renderIdentityActions();
+    renderAdminAccess();
     return;
   }
   const [me, wallet] = await Promise.all([
@@ -4375,6 +4893,168 @@ function bindEvents() {
   for (const button of jumpButtons) {
     button.addEventListener("click", () => switchScreen(button.dataset.navTarget));
   }
+  if (openMarketingAdminButton) {
+    openMarketingAdminButton.addEventListener("click", () => switchScreen("marketing"));
+  }
+  if (marketingBackButton) {
+    marketingBackButton.addEventListener("click", () => switchScreen("profile"));
+  }
+  if (marketingAdminTabs) {
+    marketingAdminTabs.addEventListener("click", (event) => {
+      const button = event.target instanceof Element ? event.target.closest("[data-admin-tab]") : null;
+      if (!(button instanceof HTMLButtonElement)) {
+        return;
+      }
+      state.adminTab = String(button.dataset.adminTab || "campaigns").trim() || "campaigns";
+      renderAdminTabs();
+    });
+  }
+  if (campaignKindSelect) {
+    campaignKindSelect.addEventListener("change", () => {
+      renderCampaignDraftVisibility();
+    });
+  }
+  if (campaignMediaUrlInput) {
+    campaignMediaUrlInput.addEventListener("input", () => {
+      setCampaignMediaPreview(campaignMediaUrlInput.value);
+    });
+  }
+  if (campaignMediaUploadButton && campaignMediaFileInput) {
+    campaignMediaUploadButton.addEventListener("click", () => {
+      campaignMediaFileInput.click();
+    });
+    campaignMediaFileInput.addEventListener("change", async () => {
+      const file = campaignMediaFileInput.files && campaignMediaFileInput.files[0];
+      if (!file) {
+        return;
+      }
+      campaignMediaUploadButton.disabled = true;
+      setCampaignMediaUploadStatus("Загружаю файл...");
+      try {
+        const payload = await uploadCampaignMedia(file);
+        if (campaignMediaUrlInput) {
+          campaignMediaUrlInput.value = payload.media_url || "";
+        }
+        setCampaignMediaPreview(payload.media_url);
+        setCampaignMediaUploadStatus("Файл загружен.");
+      } catch (error) {
+        setCampaignMediaUploadStatus(userFacingErrorMessage(error, "Не удалось загрузить файл."), true);
+      } finally {
+        campaignMediaUploadButton.disabled = false;
+        campaignMediaFileInput.value = "";
+      }
+    });
+  }
+  if (campaignCreateButton) {
+    campaignCreateButton.addEventListener("click", async () => {
+      campaignCreateButton.disabled = true;
+      setCampaignFormNote("Сохраняю draft...");
+      try {
+        const payload = await createAdminCampaign();
+        setCampaignFormNote(`Draft создан: ${payload.title}`);
+      } catch (error) {
+        setCampaignFormNote(userFacingErrorMessage(error, "Не удалось создать кампанию."), true);
+      } finally {
+        campaignCreateButton.disabled = false;
+      }
+    });
+  }
+  if (campaignPreviewButton) {
+    campaignPreviewButton.addEventListener("click", async () => {
+      campaignPreviewButton.disabled = true;
+      setCampaignFormNote("Считаю preview...");
+      try {
+        const payload = await previewSelectedCampaign();
+        setCampaignFormNote(`Preview готов: можно отправить ${payload.sendable_count}.`);
+      } catch (error) {
+        setCampaignFormNote(userFacingErrorMessage(error, "Не удалось построить preview."), true);
+      } finally {
+        campaignPreviewButton.disabled = false;
+      }
+    });
+  }
+  if (campaignTestButton) {
+    campaignTestButton.addEventListener("click", async () => {
+      campaignTestButton.disabled = true;
+      setCampaignFormNote("Отправляю тест...");
+      try {
+        const payload = await testSelectedCampaign();
+        setCampaignFormNote(`Тест отправлен: ${payload.title}`);
+      } catch (error) {
+        setCampaignFormNote(userFacingErrorMessage(error, "Не удалось отправить тест."), true);
+      } finally {
+        campaignTestButton.disabled = false;
+      }
+    });
+  }
+  if (campaignLaunchButton) {
+    campaignLaunchButton.addEventListener("click", async () => {
+      campaignLaunchButton.disabled = true;
+      setCampaignFormNote("Запускаю кампанию...");
+      try {
+        const payload = await launchSelectedCampaign();
+        setCampaignFormNote(`Кампания запущена: ${payload.title}`);
+      } catch (error) {
+        setCampaignFormNote(userFacingErrorMessage(error, "Не удалось запустить кампанию."), true);
+      } finally {
+        campaignLaunchButton.disabled = false;
+      }
+    });
+  }
+  if (refreshCampaignsButton) {
+    refreshCampaignsButton.addEventListener("click", () => {
+      loadAdminCampaigns().catch((error) => {
+        setCampaignFormNote(userFacingErrorMessage(error, "Не удалось обновить кампании."), true);
+      });
+    });
+  }
+  if (campaignsList) {
+    campaignsList.addEventListener("click", (event) => {
+      const card = event.target instanceof Element ? event.target.closest("[data-campaign-id]") : null;
+      if (!(card instanceof HTMLElement)) {
+        return;
+      }
+      state.selectedAdminCampaignId = String(card.dataset.campaignId || "").trim();
+      const selected = adminSelectedCampaign();
+      if (selected && selected.preview_sendable_count != null) {
+        state.adminCampaignPreview = {
+          campaign_id: selected.id,
+          reachable_count: Number(selected.preview_reachable_count || 0),
+          muted_count: Number(selected.preview_muted_count || 0),
+          rate_limited_24h_count: Number(selected.preview_rate_limited_24h_count || 0),
+          rate_limited_7d_count: Number(selected.preview_rate_limited_7d_count || 0),
+          sendable_count: Number(selected.preview_sendable_count || 0),
+        };
+      } else {
+        state.adminCampaignPreview = null;
+      }
+      renderCampaignPreviewStats();
+      renderCampaignsList();
+      setCampaignFormNote("Кампания выбрана. Можно сделать preview, тест или запуск.");
+    });
+  }
+  if (offerCreateButton) {
+    offerCreateButton.addEventListener("click", async () => {
+      offerCreateButton.disabled = true;
+      setOfferFormNote("Создаю оффер...");
+      try {
+        const payload = await createPromoOffer();
+        setOfferFormNote(`Оффер создан: ${payload.title}`);
+        resetOfferDraft();
+      } catch (error) {
+        setOfferFormNote(userFacingErrorMessage(error, "Не удалось создать оффер."), true);
+      } finally {
+        offerCreateButton.disabled = false;
+      }
+    });
+  }
+  if (refreshOffersButton) {
+    refreshOffersButton.addEventListener("click", () => {
+      loadAdminOffers().catch((error) => {
+        setOfferFormNote(userFacingErrorMessage(error, "Не удалось обновить офферы."), true);
+      });
+    });
+  }
 
   plansActionButton.addEventListener("click", () => {
     if (!state.selectedTopupCode) {
@@ -4449,6 +5129,12 @@ async function bootstrap() {
   refreshGenerationCostNote();
   refreshIcons();
   renderIdentityActions();
+  renderAdminAccess();
+  renderAdminTabs();
+  renderCampaignDraftVisibility();
+  resetCampaignDraft();
+  resetOfferDraft();
+  renderCampaignPreviewStats(null);
   renderAuthGateActions();
 
   try {
