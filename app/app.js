@@ -1863,6 +1863,32 @@ function setEnvHint() {
   envHint.textContent = "Открыто в Telegram Mini App.";
 }
 
+function readTelegramCssInset(name) {
+  const value = window.getComputedStyle(document.documentElement).getPropertyValue(name);
+  const parsed = Number.parseFloat(String(value || "").trim());
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function requestTelegramSafeAreas() {
+  if (!tg) {
+    return;
+  }
+  try {
+    if (typeof tg.requestSafeArea === "function") {
+      tg.requestSafeArea();
+    }
+  } catch (_) {
+    // noop
+  }
+  try {
+    if (typeof tg.requestContentSafeArea === "function") {
+      tg.requestContentSafeArea();
+    }
+  } catch (_) {
+    // noop
+  }
+}
+
 function applyTelegramSafeInsets() {
   if (!tg) {
     return;
@@ -1870,22 +1896,33 @@ function applyTelegramSafeInsets() {
   const platform = getTelegramRuntimePlatform();
   const contentSafeArea = tg.contentSafeAreaInset || {};
   const safeArea = tg.safeAreaInset || {};
+  const cssContentTopInset = readTelegramCssInset("--tg-content-safe-area-inset-top");
+  const cssContentBottomInset = readTelegramCssInset("--tg-content-safe-area-inset-bottom");
+  const cssSafeTopInset = readTelegramCssInset("--tg-safe-area-inset-top");
+  const cssSafeBottomInset = readTelegramCssInset("--tg-safe-area-inset-bottom");
   const topInset = Math.max(
     0,
     Number(contentSafeArea.top || 0),
-    Number(safeArea.top || 0)
+    Number(safeArea.top || 0),
+    cssContentTopInset,
+    cssSafeTopInset
   );
   const bottomInset = Math.max(
     0,
     Number(contentSafeArea.bottom || 0),
-    Number(safeArea.bottom || 0)
+    Number(safeArea.bottom || 0),
+    cssContentBottomInset,
+    cssSafeBottomInset
   );
   const isMobile = isTelegramMobileClient();
   let controlsOffset = 0;
   if (isMobile) {
-    controlsOffset = platform === "ios" ? 64 : 18;
-    if (!tg.isFullscreen) {
-      controlsOffset += platform === "ios" ? 48 : 22;
+    if (topInset > 0) {
+      controlsOffset = 0;
+    } else if (platform === "ios") {
+      controlsOffset = 104;
+    } else {
+      controlsOffset = tg.isFullscreen ? 18 : 40;
     }
   }
   document.documentElement.style.setProperty("--tg-safe-top", `${Math.max(0, topInset)}px`);
@@ -1921,6 +1958,7 @@ function initTelegramViewport() {
   } catch (_) {
     // noop
   }
+  requestTelegramSafeAreas();
   ensureTelegramImmersiveMode();
   scheduleTelegramImmersiveRetry();
   applyTelegramSafeInsets();
@@ -1931,11 +1969,20 @@ function initTelegramViewport() {
   try {
     tg.onEvent("viewportChanged", () => {
       ensureTelegramImmersiveMode();
+      requestTelegramSafeAreas();
       scheduleTelegramImmersiveRetry();
       applyTelegramSafeInsets();
     });
     tg.onEvent("safeAreaChanged", applyTelegramSafeInsets);
     tg.onEvent("contentSafeAreaChanged", applyTelegramSafeInsets);
+    tg.onEvent("fullscreenChanged", () => {
+      requestTelegramSafeAreas();
+      applyTelegramSafeInsets();
+    });
+    tg.onEvent("fullscreenFailed", () => {
+      requestTelegramSafeAreas();
+      applyTelegramSafeInsets();
+    });
   } catch (_) {
     // noop
   }
@@ -1981,6 +2028,7 @@ function scheduleTelegramImmersiveRetry() {
   retryDelays.forEach((delay, index) => {
     const run = () => {
       ensureTelegramImmersiveMode();
+      requestTelegramSafeAreas();
       applyTelegramSafeInsets();
       if (index === retryDelays.length - 1) {
         telegramImmersiveRetryTimer = 0;
@@ -2000,6 +2048,7 @@ function attachTelegramImmersiveListeners() {
   }
   const trigger = () => {
     ensureTelegramImmersiveMode();
+    requestTelegramSafeAreas();
     scheduleTelegramImmersiveRetry();
     applyTelegramSafeInsets();
   };
