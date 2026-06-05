@@ -385,6 +385,7 @@ let lastAppMainScrollTop = 0;
 let templatePromptExpanded = false;
 let templateFilterScrollerBound = false;
 
+const TEMPLATE_FILTER_NEW = "new";
 const TEMPLATE_FILTER_PRIORITY = ["Полезности", "Мужское", "Семейные"];
 
 function refreshIcons() {
@@ -2595,6 +2596,10 @@ function isFavoritesTemplateFilter(filterId) {
   return String(filterId || "").trim() === "favorites";
 }
 
+function isNewestTemplateFilter(filterId) {
+  return String(filterId || "").trim() === TEMPLATE_FILTER_NEW;
+}
+
 function templateLikesCount(item) {
   return normalizeTemplateCount(item && item.likes_count);
 }
@@ -2608,6 +2613,9 @@ function templateLikedByMe(item) {
 }
 
 function templateFilterCount(filterId) {
+  if (isNewestTemplateFilter(filterId)) {
+    return state.templates.length;
+  }
   if (isFavoritesTemplateFilter(filterId)) {
     return state.templates.filter((item) => templateLikedByMe(item)).length;
   }
@@ -2637,6 +2645,9 @@ function templatePreviewRatio(item) {
 }
 
 function templateFilterLabel(filterId) {
+  if (isNewestTemplateFilter(filterId)) {
+    return "Новое";
+  }
   if (filterId === "all") {
     return "Все темы";
   }
@@ -2923,7 +2934,7 @@ function templateFilters() {
   const priority = TEMPLATE_FILTER_PRIORITY.filter((category) => seen.has(category));
   const prioritySet = new Set(priority);
   const rest = categories.filter((category) => !prioritySet.has(category));
-  return ["all", "favorites", ...priority, ...rest];
+  return [TEMPLATE_FILTER_NEW, "all", "favorites", ...priority, ...rest];
 }
 
 function renderTemplateFilters() {
@@ -2941,6 +2952,9 @@ function renderTemplateFilters() {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "template-filter-chip";
+    if (isNewestTemplateFilter(filterId)) {
+      button.classList.add("is-promoted");
+    }
     button.innerHTML = `
       <span>${escapeHtml(templateFilterLabel(filterId))}</span>
       <span class="template-filter-count">${templateFilterCount(filterId)}</span>
@@ -2961,6 +2975,16 @@ function renderTemplateFilters() {
 }
 
 function filteredTemplateItems() {
+  if (isNewestTemplateFilter(state.selectedTemplateFilter)) {
+    return [...state.templates].sort((left, right) => {
+      const leftCreatedAt = Number(left.created_at_ts || 0);
+      const rightCreatedAt = Number(right.created_at_ts || 0);
+      if (leftCreatedAt !== rightCreatedAt) {
+        return rightCreatedAt - leftCreatedAt;
+      }
+      return String(right.id || "").localeCompare(String(left.id || ""), "ru");
+    });
+  }
   if (state.selectedTemplateFilter === "all") {
     return state.templates;
   }
@@ -3075,6 +3099,7 @@ function renderTemplates(payload) {
     title: String(item.title || "").trim() || "Шаблон",
     category: normalizeTemplateCategory(item.category),
     prompt: String(item.prompt || "").trim(),
+    created_at: String(item.created_at || "").trim(),
     preview_image_url: String(item.preview_image_url || "").trim(),
     full_image_url: String(item.full_image_url || "").trim(),
     preview_width: Number(item.preview_width || 0),
@@ -3086,6 +3111,7 @@ function renderTemplates(payload) {
   state.templates = normalized.map((item) => ({
     ...item,
     preview_ratio: templatePreviewRatio(item),
+    created_at_ts: Date.parse(item.created_at || "") || 0,
   }));
   if (state.selectedTemplateId) {
     const selected = state.templates.find((item) => item.id === state.selectedTemplateId);

@@ -459,6 +459,58 @@ body.is-web-runtime.is-mobile-browser .app-main {
   color: rgba(10, 20, 18, 0.78);
 }
 
+.template-filter-chip.is-promoted {
+  position: relative;
+  overflow: hidden;
+  border-color: rgba(94, 233, 214, 0.42);
+  background:
+    linear-gradient(135deg, rgba(26, 33, 48, 0.96), rgba(18, 25, 37, 0.96)),
+    linear-gradient(120deg, rgba(53, 197, 255, 0.22), rgba(94, 233, 214, 0.18), rgba(255, 205, 113, 0.18));
+  color: #e8fff9;
+  box-shadow: 0 10px 24px rgba(7, 15, 26, 0.22), inset 0 0 0 1px rgba(94, 233, 214, 0.08);
+}
+
+.template-filter-chip.is-promoted::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, transparent 12%, rgba(255, 255, 255, 0.28) 42%, transparent 68%);
+  transform: translateX(-140%);
+  animation: template-filter-sheen 3.6s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.template-filter-chip.is-promoted .template-filter-count {
+  color: rgba(232, 255, 249, 0.82);
+}
+
+.template-filter-chip.is-promoted.is-active {
+  border-color: #6ef2de;
+  background: linear-gradient(135deg, #30d8cc, #6ef2de 48%, #ffd073);
+  color: #071412;
+  box-shadow: 0 14px 28px rgba(27, 215, 198, 0.18);
+}
+
+.template-filter-chip.is-promoted.is-active .template-filter-count {
+  color: rgba(7, 20, 18, 0.78);
+}
+
+.template-filter-chip.is-promoted.is-active::before {
+  opacity: 0.34;
+}
+
+@keyframes template-filter-sheen {
+  0% {
+    transform: translateX(-140%);
+  }
+  42% {
+    transform: translateX(145%);
+  }
+  100% {
+    transform: translateX(145%);
+  }
+}
+
 .tool-card {
   --template-ratio: 1;
   position: relative;
