@@ -229,6 +229,7 @@ const API_ERROR_MESSAGES = Object.freeze({
 
 const JOB_ERROR_MESSAGES = Object.freeze({
   queue_unavailable: "Очередь генерации временно недоступна. Кредиты возвращены.",
+  queue_orphaned: "Задача зависла в очереди. Кредиты возвращены автоматически.",
   provider_unexpected_error: "Ошибка генерации на стороне провайдера. Кредиты возвращены.",
   insufficient_credits: "Недостаточно кредитов.",
   concurrent_jobs_limit_exceeded: "Слишком много задач в работе.",
