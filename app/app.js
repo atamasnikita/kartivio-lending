@@ -146,7 +146,7 @@ const API_ERROR_MESSAGES = Object.freeze({
   auth_rate_limit_exceeded: "Слишком много попыток входа. Подожди немного и попробуй снова.",
   rate_limit_unavailable: "Сервис временно недоступен. Попробуй еще раз.",
   hour_limit_exceeded: "Лимит генераций на этот час исчерпан.",
-  queue_unavailable: "Сервис генерации перегружен. Попробуй чуть позже.",
+  queue_unavailable: "Не удалось запустить генерацию из-за перегрузки очереди. Попробуй еще раз.",
   insufficient_credits: "Недостаточно кредитов для генерации.",
   concurrent_jobs_limit_exceeded: "Слишком много задач в работе. Дождись завершения текущих.",
   prompt_too_long: "Промпт слишком длинный.",
@@ -228,8 +228,8 @@ const API_ERROR_MESSAGES = Object.freeze({
 });
 
 const JOB_ERROR_MESSAGES = Object.freeze({
-  queue_unavailable: "Очередь генерации временно недоступна. Кредиты возвращены.",
-  queue_orphaned: "Задача зависла в очереди. Кредиты возвращены автоматически.",
+  queue_unavailable: "Не удалось запустить генерацию из-за перегрузки очереди. Кредиты возвращены.",
+  queue_orphaned: "Задача зависла в очереди. Мы остановили её автоматически и вернули кредиты.",
   provider_unexpected_error: "Ошибка генерации на стороне провайдера. Кредиты возвращены.",
   insufficient_credits: "Недостаточно кредитов.",
   concurrent_jobs_limit_exceeded: "Слишком много задач в работе.",
