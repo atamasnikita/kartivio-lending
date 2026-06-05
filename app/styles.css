@@ -566,6 +566,18 @@ body.is-web-runtime.is-mobile-browser .app-main {
   }
 }
 
+html.is-telegram-runtime .tool-card:hover,
+body.is-telegram-runtime .tool-card:hover {
+  transform: none;
+  border-color: #253043;
+  box-shadow: none;
+}
+
+html.is-telegram-runtime .tool-card:hover img,
+body.is-telegram-runtime .tool-card:hover img {
+  transform: scale(1.001);
+}
+
 .tool-card:active {
   transform: scale(0.992);
 }
@@ -1980,15 +1992,23 @@ body.is-web-runtime.is-mobile-browser.nav-hidden .bottom-nav {
 }
 
 @media (max-width: 390px) {
-  .tools-grid {
-    column-count: 1;
-  }
-
   .history-grid {
     grid-template-columns: 1fr;
   }
 
   .nav-btn span {
+    font-size: 11px;
+  }
+
+  .tool-overlay {
+    padding: 8px;
+  }
+
+  .tool-overlay strong {
+    font-size: 14px;
+  }
+
+  .tool-overlay p {
     font-size: 11px;
   }
 
