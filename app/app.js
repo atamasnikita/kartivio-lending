@@ -256,6 +256,19 @@ const JOB_ERROR_MESSAGES = Object.freeze({
   template_not_found: "Шаблон не найден.",
 });
 
+const ADMIN_CAMPAIGN_DEFAULTS = Object.freeze({
+  new_templates: {
+    title: "Новые шаблоны в ленте",
+    message_text: "В ленте появились новые семейные, мужские и полезные шаблоны. Открыть Kartivio?",
+    cta_text: "Посмотреть шаблоны",
+  },
+  promo_discount: {
+    title: "Персональный оффер",
+    message_text: "Для вас открыт персональный пакет. Забрать предложение можно по кнопке ниже.",
+    cta_text: "Забрать пакет",
+  },
+});
+
 const state = {
   apiBase: "",
   accessToken: "",
@@ -301,6 +314,7 @@ const state = {
   adminOffers: [],
   selectedAdminCampaignId: "",
   adminCampaignPreview: null,
+  adminCampaignDraftKind: "new_templates",
 };
 
 let tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
@@ -2335,6 +2349,63 @@ function normalizeDraftText(value) {
   return normalized || null;
 }
 
+function adminCampaignDefaults(kind) {
+  return ADMIN_CAMPAIGN_DEFAULTS[String(kind || "").trim()] || ADMIN_CAMPAIGN_DEFAULTS.new_templates;
+}
+
+function selectedDraftPromoOffer() {
+  const offerId = normalizeDraftText(campaignPromoOfferSelect && campaignPromoOfferSelect.value);
+  if (!offerId) {
+    return null;
+  }
+  return state.adminOffers.find((item) => String(item.id) === offerId) || null;
+}
+
+function buildPromoCampaignMessage(offer) {
+  if (!offer) {
+    return adminCampaignDefaults("promo_discount").message_text;
+  }
+  return `Для вас открыт ${offer.title}: ${offer.credits} кредитов за ${offer.price_rub} ₽.\n\nЗабрать пакет можно по кнопке ниже.`;
+}
+
+function applyCampaignKindDefaults(kind, previousKind = state.adminCampaignDraftKind) {
+  const nextDefaults = adminCampaignDefaults(kind);
+  const prevDefaults = adminCampaignDefaults(previousKind);
+  const promoOffer = kind === "promo_discount" ? selectedDraftPromoOffer() : null;
+  const nextTitle = promoOffer ? String(promoOffer.title || "").trim() || nextDefaults.title : nextDefaults.title;
+  const nextMessage = kind === "promo_discount" ? buildPromoCampaignMessage(promoOffer) : nextDefaults.message_text;
+  const nextCta = kind === "promo_discount" ? "Забрать пакет" : nextDefaults.cta_text;
+
+  const currentTitle = String(campaignTitleInput && campaignTitleInput.value || "").trim();
+  const currentMessage = String(campaignMessageInput && campaignMessageInput.value || "").trim();
+  const currentCta = String(campaignCtaTextInput && campaignCtaTextInput.value || "").trim();
+
+  if (campaignTitleInput && (!currentTitle || currentTitle === prevDefaults.title || currentTitle === ADMIN_CAMPAIGN_DEFAULTS.promo_discount.title || currentTitle === ADMIN_CAMPAIGN_DEFAULTS.new_templates.title)) {
+    campaignTitleInput.value = nextTitle;
+  }
+  if (campaignMessageInput && (!currentMessage || currentMessage === prevDefaults.message_text || currentMessage === ADMIN_CAMPAIGN_DEFAULTS.promo_discount.message_text || currentMessage === ADMIN_CAMPAIGN_DEFAULTS.new_templates.message_text || /Забрать пакет можно по кнопке ниже\./.test(currentMessage))) {
+    campaignMessageInput.value = nextMessage;
+  }
+  if (campaignCtaTextInput && (!currentCta || currentCta === prevDefaults.cta_text || currentCta === ADMIN_CAMPAIGN_DEFAULTS.promo_discount.cta_text || currentCta === ADMIN_CAMPAIGN_DEFAULTS.new_templates.cta_text || currentCta === "Посмотреть шаблоны")) {
+    campaignCtaTextInput.value = nextCta;
+  }
+}
+
+function forceApplyPromoOfferDraft(offer) {
+  if (!offer) {
+    return;
+  }
+  if (campaignTitleInput) {
+    campaignTitleInput.value = String(offer.title || "").trim() || ADMIN_CAMPAIGN_DEFAULTS.promo_discount.title;
+  }
+  if (campaignMessageInput) {
+    campaignMessageInput.value = buildPromoCampaignMessage(offer);
+  }
+  if (campaignCtaTextInput) {
+    campaignCtaTextInput.value = "Забрать пакет";
+  }
+}
+
 function buildCampaignDraftBody() {
   const kind = String(campaignKindSelect && campaignKindSelect.value || "").trim() || "new_templates";
   const body = {
@@ -2617,6 +2688,7 @@ function resetCampaignDraft() {
   if (campaignTestChatIdInput) {
     campaignTestChatIdInput.value = "";
   }
+  state.adminCampaignDraftKind = "new_templates";
   setCampaignMediaPreview("");
   renderCampaignDraftVisibility();
   renderSelectedCampaignSummary();
@@ -4974,6 +5046,9 @@ function bindEvents() {
   }
   if (campaignKindSelect) {
     campaignKindSelect.addEventListener("change", () => {
+      const nextKind = String(campaignKindSelect.value || "").trim() || "new_templates";
+      applyCampaignKindDefaults(nextKind, state.adminCampaignDraftKind);
+      state.adminCampaignDraftKind = nextKind;
       renderCampaignDraftVisibility();
     });
   }
@@ -4986,6 +5061,9 @@ function bindEvents() {
   }
   if (campaignPromoOfferSelect) {
     campaignPromoOfferSelect.addEventListener("change", () => {
+      if (isPromoCampaignDraft()) {
+        forceApplyPromoOfferDraft(selectedDraftPromoOffer());
+      }
       renderSelectedCampaignSummary();
     });
   }
