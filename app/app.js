@@ -267,6 +267,8 @@ const state = {
   templates: [],
   templatesLoading: false,
   selectedTemplateFilter: "all",
+  templateVisibleCount: 0,
+  templateRenderKey: "",
   activeTemplateModalId: "",
   activeTemplateModalItem: null,
   topups: [],
@@ -291,6 +293,9 @@ let tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : nu
 const TELEGRAM_BOT_URL = "https://t.me/kartivio_ai_bot";
 const HISTORY_CACHE_TTL_MS = 15_000;
 const HISTORY_PAGE_SIZE = 50;
+const TEMPLATE_FEED_INCREMENTAL_THRESHOLD = 24;
+const TEMPLATE_FEED_INITIAL_BATCH_SIZE = 18;
+const TEMPLATE_FEED_BATCH_SIZE = 18;
 
 const bootSplash = document.getElementById("bootSplash");
 const appShell = document.getElementById("appShell");
@@ -324,6 +329,9 @@ const templateFilterPrev = document.getElementById("templateFilterPrev");
 const templateFilterNext = document.getElementById("templateFilterNext");
 const templateFilterChips = document.getElementById("templateFilterChips");
 const templatesGrid = document.getElementById("templatesGrid");
+const templateFeedPagination = document.getElementById("templateFeedPagination");
+const templateFeedMoreButton = document.getElementById("templateFeedMoreButton");
+const templateFeedMoreNote = document.getElementById("templateFeedMoreNote");
 const promptInput = document.getElementById("promptInput");
 const modelChips = document.getElementById("modelChips");
 const resolutionChips = document.getElementById("resolutionChips");
@@ -368,6 +376,8 @@ const templatePromptToggle = document.getElementById("templatePromptToggle");
 const templateCopyPromptButton = document.getElementById("templateCopyPromptButton");
 const templateUseButton = document.getElementById("templateUseButton");
 const templateModalNote = document.getElementById("templateModalNote");
+
+let templateFeedAutoLoadRaf = 0;
 const navButtons = Array.from(document.querySelectorAll("[data-nav]"));
 const jumpButtons = Array.from(document.querySelectorAll("[data-nav-target]"));
 const screens = Array.from(document.querySelectorAll("[data-screen]"));
@@ -1576,6 +1586,8 @@ function switchScreen(nextScreen) {
     loadHistory().catch((error) => {
       setCreateNote(userFacingErrorMessage(error, "Не удалось загрузить историю."), true);
     });
+  } else if (target === "feed") {
+    window.requestAnimationFrame(() => maybeAutoLoadMoreTemplates());
   }
 }
 
@@ -2967,6 +2979,7 @@ function renderTemplateFilters() {
     button.setAttribute("aria-selected", isActive ? "true" : "false");
     button.addEventListener("click", () => {
       state.selectedTemplateFilter = filterId;
+      resetTemplateFeedPagination();
       renderTemplateFilters();
       renderTemplateCards();
     });
@@ -2996,6 +3009,130 @@ function filteredTemplateItems() {
   return state.templates.filter((item) => normalizeTemplateCategory(item.category) === state.selectedTemplateFilter);
 }
 
+function templateRenderKey(items) {
+  const list = Array.isArray(items) ? items : [];
+  const firstId = String(list[0]?.id || "");
+  const lastId = String(list[list.length - 1]?.id || "");
+  return `${state.selectedTemplateFilter}:${list.length}:${firstId}:${lastId}`;
+}
+
+function shouldPaginateTemplateFeed(items) {
+  return Array.isArray(items) && items.length > TEMPLATE_FEED_INCREMENTAL_THRESHOLD;
+}
+
+function resetTemplateFeedPagination() {
+  state.templateVisibleCount = 0;
+  state.templateRenderKey = "";
+  if (templateFeedAutoLoadRaf) {
+    window.cancelAnimationFrame(templateFeedAutoLoadRaf);
+    templateFeedAutoLoadRaf = 0;
+  }
+}
+
+function syncTemplateVisibleCount(items, { reset = false } = {}) {
+  const list = Array.isArray(items) ? items : [];
+  const key = templateRenderKey(list);
+  const paginated = shouldPaginateTemplateFeed(list);
+  if (reset || state.templateRenderKey !== key) {
+    state.templateRenderKey = key;
+    state.templateVisibleCount = paginated ? Math.min(TEMPLATE_FEED_INITIAL_BATCH_SIZE, list.length) : list.length;
+    return;
+  }
+  if (!paginated) {
+    state.templateVisibleCount = list.length;
+    return;
+  }
+  if (!state.templateVisibleCount) {
+    state.templateVisibleCount = Math.min(TEMPLATE_FEED_INITIAL_BATCH_SIZE, list.length);
+    return;
+  }
+  state.templateVisibleCount = Math.min(Math.max(state.templateVisibleCount, TEMPLATE_FEED_INITIAL_BATCH_SIZE), list.length);
+}
+
+function visibleTemplateItems(items) {
+  const list = Array.isArray(items) ? items : [];
+  syncTemplateVisibleCount(list);
+  if (!shouldPaginateTemplateFeed(list)) {
+    return list;
+  }
+  return list.slice(0, Math.min(state.templateVisibleCount, list.length));
+}
+
+function renderTemplateFeedPagination({ shownCount = 0, totalCount = 0 } = {}) {
+  if (!templateFeedPagination || !templateFeedMoreButton || !templateFeedMoreNote) {
+    return;
+  }
+  const normalizedShown = Math.max(0, Number(shownCount || 0));
+  const normalizedTotal = Math.max(0, Number(totalCount || 0));
+  const hasMore = normalizedShown < normalizedTotal;
+  const shouldShow = normalizedTotal > TEMPLATE_FEED_INCREMENTAL_THRESHOLD;
+  templateFeedPagination.classList.toggle("is-hidden", !shouldShow);
+  if (!shouldShow) {
+    templateFeedMoreButton.disabled = true;
+    templateFeedMoreNote.textContent = "";
+    return;
+  }
+  templateFeedMoreButton.disabled = !hasMore;
+  templateFeedMoreNote.textContent = hasMore
+    ? `Показано ${normalizedShown} из ${normalizedTotal} шаблонов.`
+    : `Показаны все ${normalizedTotal} шаблонов.`;
+}
+
+function revealMoreTemplateItems() {
+  const items = filteredTemplateItems();
+  if (!shouldPaginateTemplateFeed(items)) {
+    return false;
+  }
+  const nextVisibleCount = Math.min(items.length, Math.max(state.templateVisibleCount, 0) + TEMPLATE_FEED_BATCH_SIZE);
+  if (nextVisibleCount <= state.templateVisibleCount) {
+    return false;
+  }
+  state.templateVisibleCount = nextVisibleCount;
+  renderTemplateCards();
+  return true;
+}
+
+function getPrimaryScrollMetrics() {
+  if (!isTelegramMiniAppRuntime() && isMobileBrowser()) {
+    const root = document.documentElement;
+    const body = document.body;
+    return {
+      scrollTop: Number(window.scrollY || window.pageYOffset || root.scrollTop || body.scrollTop || 0),
+      clientHeight: Number(window.innerHeight || root.clientHeight || body.clientHeight || 0),
+      scrollHeight: Number(Math.max(root.scrollHeight || 0, body.scrollHeight || 0)),
+    };
+  }
+  return {
+    scrollTop: Number(appMain?.scrollTop || 0),
+    clientHeight: Number(appMain?.clientHeight || window.innerHeight || 0),
+    scrollHeight: Number(appMain?.scrollHeight || document.documentElement.scrollHeight || 0),
+  };
+}
+
+function maybeAutoLoadMoreTemplates() {
+  if (templateFeedAutoLoadRaf) {
+    return;
+  }
+  templateFeedAutoLoadRaf = window.requestAnimationFrame(() => {
+    templateFeedAutoLoadRaf = 0;
+    if (state.currentScreen !== "feed" || state.templatesLoading) {
+      return;
+    }
+    const items = filteredTemplateItems();
+    if (!shouldPaginateTemplateFeed(items) || state.templateVisibleCount >= items.length) {
+      return;
+    }
+    const metrics = getPrimaryScrollMetrics();
+    const distanceToBottom = metrics.scrollHeight - (metrics.scrollTop + metrics.clientHeight);
+    if (distanceToBottom > 420) {
+      return;
+    }
+    if (revealMoreTemplateItems()) {
+      window.requestAnimationFrame(() => maybeAutoLoadMoreTemplates());
+    }
+  });
+}
+
 function renderTemplateSkeleton(count = 6) {
   const total = Math.min(Math.max(Number(count || 0), 6), 18);
   templatesGrid.innerHTML = "";
@@ -3017,8 +3154,10 @@ function renderTemplateSkeleton(count = 6) {
 
 function renderTemplateCards() {
   const items = filteredTemplateItems();
+  const visibleItems = visibleTemplateItems(items);
   if (state.templatesLoading) {
-    renderTemplateSkeleton(items.length || 6);
+    renderTemplateSkeleton(visibleItems.length || items.length || 6);
+    renderTemplateFeedPagination({ shownCount: 0, totalCount: items.length });
     return;
   }
   templatesGrid.innerHTML = "";
@@ -3030,10 +3169,12 @@ function renderTemplateCards() {
       ? "Лайкни понравившиеся идеи в ленте."
       : "Попробуй другой фильтр";
     templatesGrid.innerHTML = `<article class="tool-card"><div class="tool-overlay"><strong>${escapeHtml(emptyTitle)}</strong><p>${escapeHtml(emptyText)}</p></div></article>`;
+    renderTemplateFeedPagination({ shownCount: 0, totalCount: 0 });
     return;
   }
 
-  for (const item of items) {
+  const fragment = document.createDocumentFragment();
+  for (const item of visibleItems) {
     const card = document.createElement("article");
     card.className = "tool-card";
     card.setAttribute("role", "button");
@@ -3089,9 +3230,12 @@ function renderTemplateCards() {
         openTemplateModal(item, initialPreviewUrl);
       }
     });
-    templatesGrid.appendChild(card);
+    fragment.appendChild(card);
   }
+  templatesGrid.appendChild(fragment);
+  renderTemplateFeedPagination({ shownCount: visibleItems.length, totalCount: items.length });
   refreshIcons();
+  maybeAutoLoadMoreTemplates();
 }
 
 function renderTemplates(payload) {
@@ -4091,6 +4235,11 @@ function bindEvents() {
       setCreateNote(userFacingErrorMessage(error, "Не удалось загрузить историю."), true);
     }));
   }
+  if (templateFeedMoreButton) {
+    templateFeedMoreButton.addEventListener("click", () => {
+      revealMoreTemplateItems();
+    });
+  }
   clearTemplateButton.addEventListener("click", () => {
     clearSelectedTemplate({ clearPrompt: true });
     promptInput.focus();
@@ -4222,6 +4371,11 @@ function bindEvents() {
     unlockTemplateModalScroll();
     resumePendingTelegramWebLogin();
   });
+  if (appMain) {
+    appMain.addEventListener("scroll", maybeAutoLoadMoreTemplates, { passive: true });
+  }
+  window.addEventListener("scroll", maybeAutoLoadMoreTemplates, { passive: true });
+  window.addEventListener("resize", maybeAutoLoadMoreTemplates, { passive: true });
   window.addEventListener("pageshow", () => {
     unlockTemplateModalScroll();
     resumePendingTelegramWebLogin();
