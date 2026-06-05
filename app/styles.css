@@ -430,6 +430,7 @@ body.is-web-runtime.is-mobile-browser .app-main {
 
 .template-filter-chip {
   display: inline-flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: 8px;
   min-height: 36px;
