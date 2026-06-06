@@ -160,6 +160,10 @@ const API_ERROR_MESSAGES = Object.freeze({
   unsupported_campaign_media_type: "Для рассылки подходят только PNG, JPG и WEBP.",
   campaign_media_too_large: "Файл для рассылки слишком большой. Используй изображение до 10 MB.",
   unsupported_campaign_kind: "Выбран неподдерживаемый тип кампании.",
+  unsupported_audience_segment: "Выбран неподдерживаемый сегмент аудитории.",
+  explicit_user_ids_required: "Для точечной рассылки нужен хотя бы один user_id.",
+  explicit_user_ids_invalid: "В списке есть некорректный user_id.",
+  explicit_user_ids_too_many: "Слишком большой список user_id. Уменьши выборку.",
   promo_discount_offer_required: "Для кампании со скидкой нужно выбрать оффер.",
   promo_offer_not_found: "Оффер не найден.",
   test_chat_id_required: "Нужен Telegram chat id для тестовой отправки.",
@@ -315,6 +319,7 @@ const state = {
   selectedAdminCampaignId: "",
   adminCampaignPreview: null,
   adminCampaignDraftKind: "new_templates",
+  adminCampaignAudienceMode: "auto",
 };
 
 let tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
@@ -362,6 +367,9 @@ const campaignKindSelect = document.getElementById("campaignKindSelect");
 const campaignTitleInput = document.getElementById("campaignTitleInput");
 const campaignMessageInput = document.getElementById("campaignMessageInput");
 const campaignCtaTextInput = document.getElementById("campaignCtaTextInput");
+const campaignAudienceModeSelect = document.getElementById("campaignAudienceModeSelect");
+const campaignAudienceUserIdsField = document.getElementById("campaignAudienceUserIdsField");
+const campaignAudienceUserIdsInput = document.getElementById("campaignAudienceUserIdsInput");
 const campaignMediaFields = document.getElementById("campaignMediaFields");
 const campaignMediaUrlInput = document.getElementById("campaignMediaUrlInput");
 const campaignMediaFileInput = document.getElementById("campaignMediaFileInput");
@@ -470,6 +478,11 @@ const TEMPLATE_FILTER_PRIORITY = ["Полезности", "Мужское", "С�
 const ADMIN_CAMPAIGN_KIND_LABELS = Object.freeze({
   new_templates: "Новые шаблоны",
   promo_discount: "Персональный оффер",
+});
+const ADMIN_AUDIENCE_LABELS = Object.freeze({
+  telegram_reachable: "Все с Telegram",
+  generated_no_payments: "Генерировали, но не платили",
+  explicit_user_ids: "Точечная рассылка",
 });
 const ADMIN_CAMPAIGN_STATUS_LABELS = Object.freeze({
   draft: "Draft",
@@ -2364,6 +2377,14 @@ function setCampaignMediaUploadStatus(message, isError = false) {
   campaignMediaUploadNote.style.color = isError ? "#ff8080" : "";
 }
 
+function adminFormErrorMessage(error, fallback) {
+  const raw = String((error && error.message) || "").trim();
+  if (raw && !error?.status && !error?.code) {
+    return raw;
+  }
+  return userFacingErrorMessage(error, fallback);
+}
+
 function renderAdminAccess() {
   if (!adminAccessCard) {
     return;
@@ -2381,6 +2402,11 @@ function adminStatusLabel(status) {
   return ADMIN_CAMPAIGN_STATUS_LABELS[normalized] || normalized || "—";
 }
 
+function adminAudienceLabel(segment) {
+  const normalized = String(segment || "").trim().toLowerCase();
+  return ADMIN_AUDIENCE_LABELS[normalized] || normalized || "Авто-сегмент";
+}
+
 function adminSelectedCampaign() {
   return state.adminCampaigns.find((item) => item.id === state.selectedAdminCampaignId) || null;
 }
@@ -2392,6 +2418,33 @@ function normalizeDraftText(value) {
 
 function adminCampaignDefaults(kind) {
   return ADMIN_CAMPAIGN_DEFAULTS[String(kind || "").trim()] || ADMIN_CAMPAIGN_DEFAULTS.new_templates;
+}
+
+function defaultAudienceSegmentForKind(kind) {
+  return String(kind || "").trim() === "promo_discount" ? "generated_no_payments" : "telegram_reachable";
+}
+
+function parseAudienceUserIds(rawValue) {
+  const raw = String(rawValue || "");
+  const parts = raw
+    .split(/[\s,\n\r\t;]+/g)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const seen = new Set();
+  const userIds = [];
+  for (const item of parts) {
+    const normalized = item.toLowerCase();
+    if (seen.has(normalized)) {
+      continue;
+    }
+    seen.add(normalized);
+    userIds.push(item);
+  }
+  return userIds;
+}
+
+function isUuidLike(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || "").trim());
 }
 
 function selectedDraftPromoOffer() {
@@ -2449,6 +2502,17 @@ function forceApplyPromoOfferDraft(offer) {
 
 function buildCampaignDraftBody() {
   const kind = String(campaignKindSelect && campaignKindSelect.value || "").trim() || "new_templates";
+  const audienceMode = String(campaignAudienceModeSelect && campaignAudienceModeSelect.value || "auto").trim() || "auto";
+  const audienceUserIds = parseAudienceUserIds(campaignAudienceUserIdsInput && campaignAudienceUserIdsInput.value);
+  if (audienceMode === "explicit_user_ids") {
+    if (!audienceUserIds.length) {
+      throw new Error(API_ERROR_MESSAGES.explicit_user_ids_required);
+    }
+    const invalidId = audienceUserIds.find((item) => !isUuidLike(item));
+    if (invalidId) {
+      throw new Error(`${API_ERROR_MESSAGES.explicit_user_ids_invalid}: ${invalidId}`);
+    }
+  }
   const body = {
     kind,
     title: String(campaignTitleInput && campaignTitleInput.value || "").trim(),
@@ -2456,6 +2520,8 @@ function buildCampaignDraftBody() {
     cta_text: normalizeDraftText(campaignCtaTextInput && campaignCtaTextInput.value),
     media_url: null,
     promo_offer_id: null,
+    audience_segment: audienceMode === "explicit_user_ids" ? "explicit_user_ids" : defaultAudienceSegmentForKind(kind),
+    audience_user_ids: audienceMode === "explicit_user_ids" ? audienceUserIds : [],
   };
   if (kind === "new_templates") {
     body.media_url = normalizeDraftText(campaignMediaUrlInput && campaignMediaUrlInput.value);
@@ -2471,7 +2537,12 @@ function selectedCampaignDiffersFromDraft() {
   if (!selected) {
     return false;
   }
-  const draft = buildCampaignDraftBody();
+  let draft;
+  try {
+    draft = buildCampaignDraftBody();
+  } catch (_error) {
+    return true;
+  }
   if (String(selected.kind || "") !== String(draft.kind || "")) {
     return true;
   }
@@ -2490,6 +2561,13 @@ function selectedCampaignDiffersFromDraft() {
   if (draft.kind === "promo_discount" && normalizeDraftText(selected.promo_offer_id) !== normalizeDraftText(draft.promo_offer_id)) {
     return true;
   }
+  if (String(selected.audience_segment || "").trim() !== String(draft.audience_segment || "").trim()) {
+    return true;
+  }
+  const selectedAudienceIds = Array.isArray(selected.audience_user_ids) ? selected.audience_user_ids.map((item) => String(item || "").trim()).filter(Boolean) : [];
+  if (selectedAudienceIds.join(",") !== (draft.audience_user_ids || []).join(",")) {
+    return true;
+  }
   return false;
 }
 
@@ -2503,7 +2581,9 @@ function renderSelectedCampaignSummary() {
     campaignSelectedSummary.classList.remove("is-warning");
     return;
   }
-  const summary = `Выбрана кампания: ${selected.title} · ${adminKindLabel(selected.kind)} · ${adminStatusLabel(selected.status)}`;
+  const audiencePart = adminAudienceLabel(selected.audience_segment);
+  const explicitCount = Array.isArray(selected.audience_user_ids) && selected.audience_user_ids.length ? ` · ${selected.audience_user_ids.length} user_id` : "";
+  const summary = `Выбрана кампания: ${selected.title} · ${adminKindLabel(selected.kind)} · ${adminStatusLabel(selected.status)} · ${audiencePart}${explicitCount}`;
   if (selectedCampaignDiffersFromDraft()) {
     campaignSelectedSummary.textContent = `${summary}. В форме есть несохраненные изменения.`;
     campaignSelectedSummary.classList.add("is-warning");
@@ -2519,11 +2599,15 @@ function isPromoCampaignDraft() {
 
 function renderCampaignDraftVisibility() {
   const isPromo = isPromoCampaignDraft();
+  const explicitAudience = String(campaignAudienceModeSelect && campaignAudienceModeSelect.value || "").trim() === "explicit_user_ids";
   if (campaignMediaFields) {
     campaignMediaFields.classList.toggle("is-hidden", isPromo);
   }
   if (campaignPromoOfferField) {
     campaignPromoOfferField.classList.toggle("is-hidden", !isPromo);
+  }
+  if (campaignAudienceUserIdsField) {
+    campaignAudienceUserIdsField.classList.toggle("is-hidden", !explicitAudience);
   }
   if (campaignMediaPreview && isPromo) {
     campaignMediaPreview.classList.add("is-hidden");
@@ -2611,15 +2695,21 @@ function renderCampaignsList() {
   campaignsList.innerHTML = state.adminCampaigns.map((item) => {
     const isSelected = item.id === state.selectedAdminCampaignId;
     const hasMedia = Boolean(item.media_url);
+    const audienceLabel = adminAudienceLabel(item.audience_segment);
+    const explicitAudienceCount = Array.isArray(item.audience_user_ids) ? item.audience_user_ids.length : 0;
     const meta = [
       `${adminKindLabel(item.kind)}`,
       `status: ${adminStatusLabel(item.status)}`,
       `sent ${item.sent_count || 0}`,
       `failed ${item.failed_count || 0}`,
+      `clicked ${item.clicks_count || 0}`,
+      `checkout ${item.checkout_created_count || 0}`,
+      `paid ${item.paid_count || 0}`,
     ].join(" · ");
     const preview = item.preview_sendable_count != null
       ? `Preview: ${item.preview_sendable_count}`
       : "Preview еще не считали";
+    const audienceMeta = explicitAudienceCount > 0 ? `${audienceLabel} · ${explicitAudienceCount} user_id` : audienceLabel;
     return `
       <article class="admin-record-card${isSelected ? " is-selected" : ""}" data-campaign-id="${escapeHtml(item.id)}">
         <div class="admin-record-head">
@@ -2631,6 +2721,7 @@ function renderCampaignsList() {
         </div>
         <p class="admin-record-text">${escapeHtml(item.message_text)}</p>
         <div class="admin-record-meta">
+          <span>${escapeHtml(audienceMeta)}</span>
           <span>${escapeHtml(formatAdminDateTime(item.created_at))}</span>
           ${hasMedia ? '<span class="plan-badge plan-badge-muted">photo</span>' : ""}
         </div>
@@ -2726,6 +2817,12 @@ function resetCampaignDraft() {
   }
   if (campaignPromoOfferSelect) {
     campaignPromoOfferSelect.value = "";
+  }
+  if (campaignAudienceModeSelect) {
+    campaignAudienceModeSelect.value = "auto";
+  }
+  if (campaignAudienceUserIdsInput) {
+    campaignAudienceUserIdsInput.value = "";
   }
   if (campaignTestChatIdInput) {
     campaignTestChatIdInput.value = "";
@@ -5145,7 +5242,12 @@ function bindEvents() {
       renderCampaignDraftVisibility();
     });
   }
-  for (const input of [campaignTitleInput, campaignMessageInput, campaignCtaTextInput, campaignMediaUrlInput]) {
+  if (campaignAudienceModeSelect) {
+    campaignAudienceModeSelect.addEventListener("change", () => {
+      renderCampaignDraftVisibility();
+    });
+  }
+  for (const input of [campaignTitleInput, campaignMessageInput, campaignCtaTextInput, campaignMediaUrlInput, campaignAudienceUserIdsInput]) {
     if (input) {
       input.addEventListener("input", () => {
         renderSelectedCampaignSummary();
@@ -5184,7 +5286,7 @@ function bindEvents() {
         setCampaignMediaPreview(payload.media_url);
         setCampaignMediaUploadStatus("Файл загружен.");
       } catch (error) {
-        setCampaignMediaUploadStatus(userFacingErrorMessage(error, "Не удалось загрузить файл."), true);
+        setCampaignMediaUploadStatus(adminFormErrorMessage(error, "Не удалось загрузить файл."), true);
       } finally {
         campaignMediaUploadButton.disabled = false;
         campaignMediaFileInput.value = "";
@@ -5199,7 +5301,7 @@ function bindEvents() {
         const payload = await createAdminCampaign();
         setCampaignFormNote(`Draft создан и выбран: ${payload.title}`);
       } catch (error) {
-        setCampaignFormNote(userFacingErrorMessage(error, "Не удалось создать кампанию."), true);
+        setCampaignFormNote(adminFormErrorMessage(error, "Не удалось создать кампанию."), true);
       } finally {
         campaignCreateButton.disabled = false;
       }
@@ -5213,7 +5315,7 @@ function bindEvents() {
         const payload = await previewSelectedCampaign();
         setCampaignFormNote(`Preview готов: можно отправить ${payload.sendable_count}.`);
       } catch (error) {
-        setCampaignFormNote(userFacingErrorMessage(error, "Не удалось построить preview."), true);
+        setCampaignFormNote(adminFormErrorMessage(error, "Не удалось построить preview."), true);
       } finally {
         campaignPreviewButton.disabled = false;
       }
@@ -5227,7 +5329,7 @@ function bindEvents() {
         const payload = await testSelectedCampaign();
         setCampaignFormNote(`Тест отправлен: ${payload.title}`);
       } catch (error) {
-        setCampaignFormNote(userFacingErrorMessage(error, "Не удалось отправить тест."), true);
+        setCampaignFormNote(adminFormErrorMessage(error, "Не удалось отправить тест."), true);
       } finally {
         campaignTestButton.disabled = false;
       }
@@ -5241,7 +5343,7 @@ function bindEvents() {
         const payload = await launchSelectedCampaign();
         setCampaignFormNote(`Кампания запущена: ${payload.title}`);
       } catch (error) {
-        setCampaignFormNote(userFacingErrorMessage(error, "Не удалось запустить кампанию."), true);
+        setCampaignFormNote(adminFormErrorMessage(error, "Не удалось запустить кампанию."), true);
       } finally {
         campaignLaunchButton.disabled = false;
       }
