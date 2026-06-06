@@ -4058,7 +4058,7 @@ function jobStatusLabel(status) {
 
 async function renderActiveImage(job, renderToken) {
   try {
-    const rendered = await resolveDisplayImage(generationThumbnailUrl(job));
+    const rendered = await resolveDisplayImage(generationViewImageUrl(job));
     if (renderToken !== state.activeImageRenderToken) {
       return;
     }
