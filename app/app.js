@@ -320,7 +320,7 @@ const state = {
 let tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
 const TELEGRAM_BOT_URL = "https://t.me/kartivio_ai_bot";
 const HISTORY_CACHE_TTL_MS = 15_000;
-const HISTORY_PAGE_SIZE = 50;
+const HISTORY_PAGE_SIZE = 16;
 const TEMPLATE_FEED_INCREMENTAL_THRESHOLD = 24;
 const TEMPLATE_FEED_INITIAL_BATCH_SIZE = 18;
 const TEMPLATE_FEED_BATCH_SIZE = 18;
@@ -1508,6 +1508,9 @@ function normalizeImageUrl(rawUrl) {
     }
     return parsed.toString();
   } catch (_e) {
+    if (value.startsWith("/v1/")) {
+      return `${trimApiBase(state.apiBase)}${value}`;
+    }
     if (value.startsWith("/generated/")) {
       return `${trimApiBase(state.apiBase)}${value}`;
     }
@@ -1540,7 +1543,9 @@ async function resolveDisplayImage(rawUrl) {
   if (!url) {
     throw new Error("Ссылка на изображение не найдена.");
   }
-  if (!isNgrokUrl(url)) {
+  const apiBase = trimApiBase(state.apiBase);
+  const isAuthorizedGenerationMedia = Boolean(apiBase) && url.startsWith(apiBase) && url.includes("/v1/generations/");
+  if (!isNgrokUrl(url) && !isAuthorizedGenerationMedia) {
     return { src: url, contentType: "", isBlob: false };
   }
 
@@ -1549,16 +1554,26 @@ async function resolveDisplayImage(rawUrl) {
     return { src: cached.src, contentType: cached.contentType, isBlob: true };
   }
 
-  const response = await fetch(url, {
-    method: "GET",
-    headers: headersForApiBase(url),
-  });
-  if (!response.ok) {
-    throw new Error("Изображение временно недоступно.");
+  let blob;
+  let contentType = "";
+  if (isAuthorizedGenerationMedia) {
+    const parsed = new URL(url);
+    const apiPath = `${parsed.pathname}${parsed.search || ""}`;
+    const payload = await authorizedBlobFetch(apiPath);
+    blob = payload.blob;
+    contentType = payload.contentType || blob.type || "";
+  } else {
+    const response = await fetch(url, {
+      method: "GET",
+      headers: headersForApiBase(url),
+    });
+    if (!response.ok) {
+      throw new Error("Изображение временно недоступно.");
+    }
+    blob = await response.blob();
+    contentType = blob.type || "";
   }
-  const blob = await response.blob();
   const objectUrl = URL.createObjectURL(blob);
-  const contentType = blob.type || "";
   state.imageBlobUrlCache.set(url, { src: objectUrl, contentType });
   return { src: objectUrl, contentType, isBlob: true };
 }
@@ -1648,6 +1663,52 @@ async function downloadGenerationImage(jobId, fallbackBase = "kartivio-image") {
   window.setTimeout(() => URL.revokeObjectURL(objectUrl), 2500);
 }
 
+function generationInlineImagePath(jobId) {
+  const normalizedJobId = String(jobId || "").trim();
+  if (!normalizedJobId) {
+    throw new Error("Идентификатор генерации не найден.");
+  }
+  return `/v1/generations/${encodeURIComponent(normalizedJobId)}/image`;
+}
+
+async function openGenerationImage(jobId) {
+  let popupHandle = null;
+  if (!isTelegramMiniAppRuntime()) {
+    try {
+      popupHandle = window.open("about:blank", "_blank");
+    } catch (_error) {
+      popupHandle = null;
+    }
+  }
+  const { blob } = await authorizedBlobFetch(generationInlineImagePath(jobId));
+  const objectUrl = URL.createObjectURL(blob);
+  if (popupHandle && !popupHandle.closed) {
+    try {
+      popupHandle.location.replace(objectUrl);
+      popupHandle.focus();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+      return;
+    } catch (_error) {
+      try {
+        popupHandle.close();
+      } catch (_closeError) {
+        // noop
+      }
+    }
+  }
+  const opened = window.open(objectUrl, "_blank", "noopener,noreferrer");
+  if (!opened) {
+    const link = document.createElement("a");
+    link.href = objectUrl;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  }
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+}
+
 function switchScreen(nextScreen) {
   const target = String(nextScreen || "").trim();
   if (!target) {
@@ -1684,6 +1745,10 @@ function resetHistoryCache() {
   state.historyLoadPromise = null;
   state.historyNextOffset = 0;
   state.historyHasMore = false;
+}
+
+function markHistoryCacheStale() {
+  state.historyLoadedAt = 0;
 }
 
 function sourceImageFiles() {
@@ -3142,15 +3207,31 @@ function renderUser(me, wallet) {
   renderAdminAccess();
 }
 
-function openCheckout(url) {
+function openCheckout(url, { popupHandle = null } = {}) {
   if (!url) {
     return;
+  }
+  if (popupHandle && !popupHandle.closed) {
+    try {
+      popupHandle.location.replace(url);
+      popupHandle.focus();
+      return;
+    } catch (_error) {
+      try {
+        popupHandle.close();
+      } catch (_closeError) {
+        // noop
+      }
+    }
   }
   if (tg && typeof tg.openLink === "function") {
     tg.openLink(url);
     return;
   }
-  window.open(url, "_blank", "noopener,noreferrer");
+  const opened = window.open(url, "_blank", "noopener,noreferrer");
+  if (!opened) {
+    window.location.assign(url);
+  }
 }
 
 async function buyPackage(code) {
@@ -3160,6 +3241,14 @@ async function buyPackage(code) {
     return;
   }
   const idem = `webapp_buy_${code}_${Date.now()}`;
+  let popupHandle = null;
+  if (!isTelegramMiniAppRuntime()) {
+    try {
+      popupHandle = window.open("about:blank", "_blank");
+    } catch (_error) {
+      popupHandle = null;
+    }
+  }
   try {
     const result = await authorizedFetch("/v1/payments/checkout", {
       method: "POST",
@@ -3167,12 +3256,26 @@ async function buyPackage(code) {
       idempotencyKey: idem,
     });
     if (result.checkout_url) {
-      openCheckout(result.checkout_url);
+      openCheckout(result.checkout_url, { popupHandle });
       setPlansNote(`Пакет ${code} готов к оплате.`);
     } else {
+      if (popupHandle && !popupHandle.closed) {
+        try {
+          popupHandle.close();
+        } catch (_error) {
+          // noop
+        }
+      }
       setPlansNote("Платеж создан, но ссылка оплаты не пришла.", true);
     }
   } catch (error) {
+    if (popupHandle && !popupHandle.closed) {
+      try {
+        popupHandle.close();
+      } catch (_closeError) {
+        // noop
+      }
+    }
     setPlansNote(userFacingErrorMessage(error, "Не удалось создать платеж."), true);
   }
 }
@@ -3979,7 +4082,7 @@ function jobStatusLabel(status) {
 
 async function renderActiveImage(job, renderToken) {
   try {
-    const rendered = await resolveDisplayImage(job.result_image_url);
+    const rendered = await resolveDisplayImage(generationInlineImagePath(job.id));
     if (renderToken !== state.activeImageRenderToken) {
       return;
     }
@@ -3994,7 +4097,7 @@ async function renderActiveImage(job, renderToken) {
     `;
     const openBtn = activeResult.querySelector('[data-action="open"]');
     openBtn.addEventListener("click", () => {
-      openImage(job.result_image_url).catch((error) => {
+      openGenerationImage(job.id).catch((error) => {
         setCreateNote(userFacingErrorMessage(error, "Не удалось открыть изображение."), true);
       });
     });
@@ -4102,7 +4205,7 @@ function renderHistory(payload) {
       if (!job.result_image_url) {
         return;
       }
-      openImage(job.result_image_url).catch((error) => {
+      openGenerationImage(job.id).catch((error) => {
         setCreateNote(userFacingErrorMessage(error, "Не удалось открыть изображение."), true);
       });
     });
@@ -4120,7 +4223,7 @@ function renderHistory(payload) {
     historyList.appendChild(item);
 
     if (job.result_image_url) {
-      resolveDisplayImage(job.result_image_url)
+      resolveDisplayImage(generationInlineImagePath(job.id))
         .then((rendered) => {
           const thumb = item.querySelector(".history-thumb");
           if (!thumb) {
@@ -4329,7 +4432,12 @@ async function pollActiveJob(jobId) {
       state.activePollTimer = window.setTimeout(() => pollActiveJob(jobId), 2500);
       return;
     }
-    await Promise.allSettled([loadPrivateData(), loadHistory({ forceServerCheck: true }), loadTemplates()]);
+    await Promise.allSettled([loadPrivateData(), loadTemplates()]);
+    if (state.currentScreen === "history") {
+      await loadHistory({ forceServerCheck: true });
+    } else {
+      markHistoryCacheStale();
+    }
   } catch (error) {
     setCreateNote(userFacingErrorMessage(error, "Не удалось обновить статус задачи."), true);
   }
@@ -4385,7 +4493,8 @@ async function handleCreate() {
     state.activeJobId = job.id;
     renderActiveJob(job);
     setCreateNote(`Задача создана: ${jobStatusLabel(job.status)}.`);
-    await Promise.allSettled([loadPrivateData(), loadHistory({ forceServerCheck: true }), loadTemplates()]);
+    await Promise.allSettled([loadPrivateData(), loadTemplates()]);
+    markHistoryCacheStale();
     await pollActiveJob(job.id);
   } catch (error) {
     setCreateNote(userFacingErrorMessage(error, "Не удалось запустить генерацию."), true);
@@ -4460,7 +4569,8 @@ async function pollTelegramWebLoginStatus() {
       renderAuthGateActions();
       setAuthGateVisible(false);
       setNote(payload.message || "Вход через Telegram выполнен.");
-      await Promise.all([loadPrivateData(), loadHistory({ forceServerCheck: true }), loadTemplates()]);
+      await Promise.all([loadPrivateData(), loadTemplates()]);
+      markHistoryCacheStale();
       switchScreen("feed");
       return;
     }
@@ -4562,7 +4672,11 @@ async function pollTelegramLinkStatus() {
       state.telegramLinkToken = "";
       clearTelegramLinkPolling();
       await loadPrivateData();
-      await loadHistory({ forceServerCheck: true });
+      if (state.currentScreen === "history") {
+        await loadHistory({ forceServerCheck: true });
+      } else {
+        markHistoryCacheStale();
+      }
       return;
     }
     if (status === "conflict") {
@@ -4629,7 +4743,6 @@ async function hydrateAuthorizedSession() {
   try {
     await Promise.all([
       loadPrivateData({ forceServerCheck: prefersCookieAuth() }),
-      loadHistory({ forceServerCheck: true }),
       loadTemplates(),
     ]);
     if (prefersCookieAuth()) {
@@ -4684,7 +4797,8 @@ async function loginViaTelegram(options = {}) {
     if (!silent) {
       setNote("Авторизация успешна.");
     }
-    await Promise.all([loadPrivateData(), loadHistory({ forceServerCheck: true }), loadTemplates()]);
+    await Promise.all([loadPrivateData(), loadTemplates()]);
+    markHistoryCacheStale();
     switchScreen(targetScreen);
     return true;
   } catch (error) {
@@ -4741,7 +4855,8 @@ async function loginViaGoogleCredential(idToken) {
   }
   setAuthGateVisible(false);
   setNote("Авторизация через Google успешна.");
-  await Promise.all([loadPrivateData(), loadHistory({ forceServerCheck: true }), loadTemplates()]);
+  await Promise.all([loadPrivateData(), loadTemplates()]);
+  markHistoryCacheStale();
   switchScreen("feed");
 }
 
@@ -4770,7 +4885,8 @@ async function loginViaYandexCode(code, codeVerifier) {
   }
   setAuthGateVisible(false);
   setNote("Авторизация через Яндекс успешна.");
-  await Promise.all([loadPrivateData(), loadHistory({ forceServerCheck: true }), loadTemplates()]);
+  await Promise.all([loadPrivateData(), loadTemplates()]);
+  markHistoryCacheStale();
   switchScreen("feed");
 }
 
