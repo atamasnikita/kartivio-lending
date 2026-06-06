@@ -320,7 +320,7 @@ const state = {
 let tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
 const TELEGRAM_BOT_URL = "https://t.me/kartivio_ai_bot";
 const HISTORY_CACHE_TTL_MS = 15_000;
-const HISTORY_PAGE_SIZE = 16;
+const HISTORY_PAGE_SIZE = 12;
 const TEMPLATE_FEED_INCREMENTAL_THRESHOLD = 24;
 const TEMPLATE_FEED_INITIAL_BATCH_SIZE = 18;
 const TEMPLATE_FEED_BATCH_SIZE = 18;
@@ -1663,50 +1663,26 @@ async function downloadGenerationImage(jobId, fallbackBase = "kartivio-image") {
   window.setTimeout(() => URL.revokeObjectURL(objectUrl), 2500);
 }
 
-function generationInlineImagePath(jobId) {
-  const normalizedJobId = String(jobId || "").trim();
-  if (!normalizedJobId) {
-    throw new Error("Идентификатор генерации не найден.");
+function generationViewImageUrl(job) {
+  if (!job || typeof job !== "object") {
+    return "";
   }
-  return `/v1/generations/${encodeURIComponent(normalizedJobId)}/image`;
+  return normalizeImageUrl(job.result_image_view_url || job.result_image_url || "");
 }
 
-async function openGenerationImage(jobId) {
-  let popupHandle = null;
-  if (!isTelegramMiniAppRuntime()) {
-    try {
-      popupHandle = window.open("about:blank", "_blank");
-    } catch (_error) {
-      popupHandle = null;
-    }
+function generationThumbnailUrl(job) {
+  if (!job || typeof job !== "object") {
+    return "";
   }
-  const { blob } = await authorizedBlobFetch(generationInlineImagePath(jobId));
-  const objectUrl = URL.createObjectURL(blob);
-  if (popupHandle && !popupHandle.closed) {
-    try {
-      popupHandle.location.replace(objectUrl);
-      popupHandle.focus();
-      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
-      return;
-    } catch (_error) {
-      try {
-        popupHandle.close();
-      } catch (_closeError) {
-        // noop
-      }
-    }
+  return normalizeImageUrl(job.result_image_thumbnail_url || job.result_image_view_url || job.result_image_url || "");
+}
+
+async function openGenerationImage(job) {
+  const targetUrl = generationViewImageUrl(job);
+  if (!targetUrl) {
+    throw new Error("Ссылка на изображение не найдена.");
   }
-  const opened = window.open(objectUrl, "_blank", "noopener,noreferrer");
-  if (!opened) {
-    const link = document.createElement("a");
-    link.href = objectUrl;
-    link.target = "_blank";
-    link.rel = "noopener noreferrer";
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-  }
-  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+  await openImage(targetUrl);
 }
 
 function switchScreen(nextScreen) {
@@ -4082,7 +4058,7 @@ function jobStatusLabel(status) {
 
 async function renderActiveImage(job, renderToken) {
   try {
-    const rendered = await resolveDisplayImage(generationInlineImagePath(job.id));
+    const rendered = await resolveDisplayImage(generationThumbnailUrl(job));
     if (renderToken !== state.activeImageRenderToken) {
       return;
     }
@@ -4097,7 +4073,7 @@ async function renderActiveImage(job, renderToken) {
     `;
     const openBtn = activeResult.querySelector('[data-action="open"]');
     openBtn.addEventListener("click", () => {
-      openGenerationImage(job.id).catch((error) => {
+      openGenerationImage(job).catch((error) => {
         setCreateNote(userFacingErrorMessage(error, "Не удалось открыть изображение."), true);
       });
     });
@@ -4205,7 +4181,7 @@ function renderHistory(payload) {
       if (!job.result_image_url) {
         return;
       }
-      openGenerationImage(job.id).catch((error) => {
+      openGenerationImage(job).catch((error) => {
         setCreateNote(userFacingErrorMessage(error, "Не удалось открыть изображение."), true);
       });
     });
@@ -4223,7 +4199,7 @@ function renderHistory(payload) {
     historyList.appendChild(item);
 
     if (job.result_image_url) {
-      resolveDisplayImage(generationInlineImagePath(job.id))
+      resolveDisplayImage(generationThumbnailUrl(job))
         .then((rendered) => {
           const thumb = item.querySelector(".history-thumb");
           if (!thumb) {
