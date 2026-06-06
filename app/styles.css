@@ -1631,6 +1631,11 @@ body.is-web-runtime.is-mobile-browser .app-main {
   gap: 6px;
 }
 
+.is-telegram-runtime [data-action="download-image"],
+.is-telegram-runtime .active-result [data-action="download"] {
+  display: none !important;
+}
+
 .btn-compact {
   width: 100%;
   height: 36px;
