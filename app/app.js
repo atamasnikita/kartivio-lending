@@ -456,6 +456,7 @@ const templateUseButton = document.getElementById("templateUseButton");
 const templateModalNote = document.getElementById("templateModalNote");
 
 let templateFeedAutoLoadRaf = 0;
+let lastTemplateGridColumnCount = 0;
 const navButtons = Array.from(document.querySelectorAll("[data-nav]"));
 const jumpButtons = Array.from(document.querySelectorAll("[data-nav-target]"));
 const screens = Array.from(document.querySelectorAll("[data-screen]"));
@@ -3838,23 +3839,26 @@ function renderTemplateFilters() {
 }
 
 function filteredTemplateItems() {
+  const sortedTemplates = [...state.templates].sort(compareTemplatesByFreshness);
   if (isNewestTemplateFilter(state.selectedTemplateFilter)) {
-    return [...state.templates].sort((left, right) => {
-      const leftCreatedAt = Number(left.created_at_ts || 0);
-      const rightCreatedAt = Number(right.created_at_ts || 0);
-      if (leftCreatedAt !== rightCreatedAt) {
-        return rightCreatedAt - leftCreatedAt;
-      }
-      return String(right.id || "").localeCompare(String(left.id || ""), "ru");
-    });
+    return sortedTemplates;
   }
   if (state.selectedTemplateFilter === "all") {
-    return state.templates;
+    return sortedTemplates;
   }
   if (isFavoritesTemplateFilter(state.selectedTemplateFilter)) {
-    return state.templates.filter((item) => templateLikedByMe(item));
+    return sortedTemplates.filter((item) => templateLikedByMe(item));
   }
-  return state.templates.filter((item) => normalizeTemplateCategory(item.category) === state.selectedTemplateFilter);
+  return sortedTemplates.filter((item) => normalizeTemplateCategory(item.category) === state.selectedTemplateFilter);
+}
+
+function compareTemplatesByFreshness(left, right) {
+  const leftCreatedAt = Number(left?.created_at_ts || 0);
+  const rightCreatedAt = Number(right?.created_at_ts || 0);
+  if (leftCreatedAt !== rightCreatedAt) {
+    return rightCreatedAt - leftCreatedAt;
+  }
+  return String(right?.id || "").localeCompare(String(left?.id || ""), "ru");
 }
 
 function templateRenderKey(items) {
@@ -3981,9 +3985,22 @@ function maybeAutoLoadMoreTemplates() {
   });
 }
 
+function handleTemplateGridLayoutChange() {
+  const nextColumnCount = templateGridColumnCount();
+  if (nextColumnCount === lastTemplateGridColumnCount) {
+    return;
+  }
+  if (state.currentScreen !== "feed") {
+    lastTemplateGridColumnCount = nextColumnCount;
+    return;
+  }
+  renderTemplateCards();
+}
+
 function renderTemplateSkeleton(count = 6) {
   const total = Math.min(Math.max(Number(count || 0), 6), 18);
   templatesGrid.innerHTML = "";
+  const cards = [];
   for (let index = 0; index < total; index += 1) {
     const ratio = TEMPLATE_SKELETON_RATIOS[index % TEMPLATE_SKELETON_RATIOS.length];
     const card = document.createElement("article");
@@ -3996,8 +4013,9 @@ function renderTemplateSkeleton(count = 6) {
         <p class="skeleton-line skeleton-line-subtitle"></p>
       </div>
     `;
-    templatesGrid.appendChild(card);
+    cards.push(card);
   }
+  renderTemplateGridCards(cards);
 }
 
 function renderTemplateCards() {
@@ -4021,7 +4039,7 @@ function renderTemplateCards() {
     return;
   }
 
-  const fragment = document.createDocumentFragment();
+  const cards = [];
   for (const item of visibleItems) {
     const card = document.createElement("article");
     card.className = "tool-card";
@@ -4078,12 +4096,39 @@ function renderTemplateCards() {
         openTemplateModal(item, initialPreviewUrl);
       }
     });
-    fragment.appendChild(card);
+    cards.push(card);
   }
-  templatesGrid.appendChild(fragment);
+  renderTemplateGridCards(cards);
   renderTemplateFeedPagination({ shownCount: visibleItems.length, totalCount: items.length });
   refreshIcons();
   maybeAutoLoadMoreTemplates();
+}
+
+function templateGridColumnCount() {
+  return window.matchMedia("(max-width: 390px)").matches ? 1 : 2;
+}
+
+function renderTemplateGridCards(cards) {
+  templatesGrid.innerHTML = "";
+  const items = Array.isArray(cards) ? cards : [];
+  if (!items.length) {
+    lastTemplateGridColumnCount = templateGridColumnCount();
+    return;
+  }
+
+  const columnCount = templateGridColumnCount();
+  lastTemplateGridColumnCount = columnCount;
+  const columns = [];
+  for (let index = 0; index < columnCount; index += 1) {
+    const column = document.createElement("div");
+    column.className = "tools-grid-column";
+    columns.push(column);
+    templatesGrid.appendChild(column);
+  }
+
+  items.forEach((card, index) => {
+    columns[index % columnCount].appendChild(card);
+  });
 }
 
 function renderTemplates(payload) {
@@ -5425,6 +5470,7 @@ function bindEvents() {
   }
   window.addEventListener("scroll", maybeAutoLoadMoreTemplates, { passive: true });
   window.addEventListener("resize", maybeAutoLoadMoreTemplates, { passive: true });
+  window.addEventListener("resize", handleTemplateGridLayoutChange, { passive: true });
   window.addEventListener("pageshow", () => {
     unlockTemplateModalScroll();
     resumePendingTelegramWebLogin();
