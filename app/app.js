@@ -3840,11 +3840,12 @@ function renderTemplateFilters() {
 
 function filteredTemplateItems() {
   const sortedTemplates = [...state.templates].sort(compareTemplatesByFreshness);
+  const reverseSortedTemplates = [...sortedTemplates].reverse();
   if (isNewestTemplateFilter(state.selectedTemplateFilter)) {
     return sortedTemplates;
   }
   if (state.selectedTemplateFilter === "all") {
-    return sortedTemplates;
+    return reverseSortedTemplates;
   }
   if (isFavoritesTemplateFilter(state.selectedTemplateFilter)) {
     return sortedTemplates.filter((item) => templateLikedByMe(item));
