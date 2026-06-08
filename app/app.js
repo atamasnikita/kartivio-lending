@@ -3853,12 +3853,26 @@ function filteredTemplateItems() {
 }
 
 function compareTemplatesByFreshness(left, right) {
-  const leftCreatedAt = Number(left?.created_at_ts || 0);
-  const rightCreatedAt = Number(right?.created_at_ts || 0);
+  const leftCreatedAt = templateFreshnessTimestamp(left);
+  const rightCreatedAt = templateFreshnessTimestamp(right);
   if (leftCreatedAt !== rightCreatedAt) {
     return rightCreatedAt - leftCreatedAt;
   }
   return String(right?.id || "").localeCompare(String(left?.id || ""), "ru");
+}
+
+function templateFreshnessTimestamp(item) {
+  const createdAtTs = Number(item?.created_at_ts || 0);
+  if (createdAtTs > 0) {
+    return createdAtTs;
+  }
+  const match = String(item?.id || "").match(/^(\d{4})(\d{2})(\d{2})(?:[-_]|$)/);
+  if (!match) {
+    return 0;
+  }
+  const [, year, month, day] = match;
+  const derivedTs = Date.UTC(Number(year), Number(month) - 1, Number(day));
+  return Number.isFinite(derivedTs) ? derivedTs : 0;
 }
 
 function templateRenderKey(items) {
