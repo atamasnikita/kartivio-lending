@@ -14,16 +14,12 @@ const GOOGLE_CLIENT_ID_META_NAME = "kartivio-google-client-id";
 const YANDEX_CLIENT_ID_META_NAME = "kartivio-yandex-client-id";
 const GOOGLE_OIDC_AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const YANDEX_OAUTH_AUTHORIZE_URL = "https://oauth.yandex.com/authorize";
-const GOOGLE_OIDC_STORAGE_KEYS = {
-  state: "kartivio.google_oidc_state",
-  nonce: "kartivio.google_oidc_nonce",
-  returnTo: "kartivio.google_oidc_return_to",
-};
 const YANDEX_OAUTH_STORAGE_KEYS = {
   state: "kartivio.yandex_oauth_state",
   verifier: "kartivio.yandex_oauth_verifier",
   returnTo: "kartivio.yandex_oauth_return_to",
 };
+const GOOGLE_OIDC_STATE_MAX_AGE_MS = 30 * 60 * 1000;
 const MAX_SOURCE_IMAGES = 3;
 const PROMPT_MAX_LENGTH = 3000;
 const TEMPLATE_SKELETON_RATIOS = ["1 / 1", "4 / 5", "3 / 4", "5 / 4", "2 / 3", "3 / 2"];
@@ -747,12 +743,6 @@ function googleClientIdFromMeta() {
   return String(tag.getAttribute("content") || "").trim();
 }
 
-function googleAuthLaunchUrl() {
-  const url = new URL(window.location.href);
-  url.searchParams.set("google_auto", "1");
-  return url.toString();
-}
-
 function yandexAuthLaunchUrl() {
   const url = new URL(window.location.href);
   url.searchParams.set("yandex_auto", "1");
@@ -905,40 +895,70 @@ function oauthRedirectUri() {
   return url.toString();
 }
 
-function readSessionValue(key) {
+function readTransientValue(key) {
+  const normalizedKey = String(key || "").trim();
+  if (!normalizedKey) {
+    return "";
+  }
   try {
-    return String(window.sessionStorage.getItem(key) || "").trim();
+    const sessionValue = String(window.sessionStorage.getItem(normalizedKey) || "").trim();
+    if (sessionValue) {
+      return sessionValue;
+    }
+  } catch (_error) {
+    // noop
+  }
+  try {
+    return String(window.localStorage.getItem(normalizedKey) || "").trim();
   } catch (_error) {
     return "";
   }
 }
 
-function writeSessionValue(key, value) {
+function writeTransientValue(key, value) {
+  const normalizedKey = String(key || "").trim();
+  if (!normalizedKey) {
+    return;
+  }
+  const normalizedValue = String(value || "");
   try {
-    window.sessionStorage.setItem(key, String(value || ""));
+    window.sessionStorage.setItem(normalizedKey, normalizedValue);
+  } catch (_error) {
+    // noop
+  }
+  try {
+    window.localStorage.setItem(normalizedKey, normalizedValue);
   } catch (_error) {
     // noop
   }
 }
 
-function clearGoogleOidcSession() {
-  try {
-    window.sessionStorage.removeItem(GOOGLE_OIDC_STORAGE_KEYS.state);
-    window.sessionStorage.removeItem(GOOGLE_OIDC_STORAGE_KEYS.nonce);
-    window.sessionStorage.removeItem(GOOGLE_OIDC_STORAGE_KEYS.returnTo);
-  } catch (_error) {
-    // noop
+function clearTransientValues(keys) {
+  const items = Array.isArray(keys) ? keys : [keys];
+  for (const key of items) {
+    const normalizedKey = String(key || "").trim();
+    if (!normalizedKey) {
+      continue;
+    }
+    try {
+      window.sessionStorage.removeItem(normalizedKey);
+    } catch (_error) {
+      // noop
+    }
+    try {
+      window.localStorage.removeItem(normalizedKey);
+    } catch (_error) {
+      // noop
+    }
   }
 }
 
 function clearYandexOauthSession() {
-  try {
-    window.sessionStorage.removeItem(YANDEX_OAUTH_STORAGE_KEYS.state);
-    window.sessionStorage.removeItem(YANDEX_OAUTH_STORAGE_KEYS.verifier);
-    window.sessionStorage.removeItem(YANDEX_OAUTH_STORAGE_KEYS.returnTo);
-  } catch (_error) {
-    // noop
-  }
+  clearTransientValues([
+    YANDEX_OAUTH_STORAGE_KEYS.state,
+    YANDEX_OAUTH_STORAGE_KEYS.verifier,
+    YANDEX_OAUTH_STORAGE_KEYS.returnTo,
+  ]);
 }
 
 function randomBase64Url(byteLength = 24) {
@@ -949,6 +969,38 @@ function randomBase64Url(byteLength = 24) {
     binary += String.fromCharCode(byte);
   }
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function encodeBase64UrlJson(value) {
+  try {
+    const json = JSON.stringify(value);
+    const bytes = new TextEncoder().encode(json);
+    let binary = "";
+    for (const byte of bytes) {
+      binary += String.fromCharCode(byte);
+    }
+    return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+  } catch (_error) {
+    return "";
+  }
+}
+
+function decodeBase64UrlJson(raw) {
+  const value = String(raw || "").trim();
+  if (!value) {
+    return null;
+  }
+  try {
+    const padded = value.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(value.length / 4) * 4, "=");
+    const binary = atob(padded);
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) {
+      bytes[index] = binary.charCodeAt(index);
+    }
+    return JSON.parse(new TextDecoder().decode(bytes));
+  } catch (_error) {
+    return null;
+  }
 }
 
 function decodeJwtPayload(token) {
@@ -971,11 +1023,15 @@ function googleOidcAuthorizeUrl() {
   if (!clientId) {
     return "";
   }
-  const stateToken = randomBase64Url(24);
   const nonceToken = randomBase64Url(24);
-  writeSessionValue(GOOGLE_OIDC_STORAGE_KEYS.state, stateToken);
-  writeSessionValue(GOOGLE_OIDC_STORAGE_KEYS.nonce, nonceToken);
-  writeSessionValue(GOOGLE_OIDC_STORAGE_KEYS.returnTo, currentReturnToUrl());
+  const stateToken = encodeBase64UrlJson({
+    nonce: nonceToken,
+    return_to: currentReturnToUrl(),
+    issued_at: Date.now(),
+  });
+  if (!stateToken) {
+    return "";
+  }
 
   const url = new URL(GOOGLE_OIDC_AUTHORIZE_URL);
   url.searchParams.set("client_id", clientId);
@@ -1018,9 +1074,9 @@ async function yandexOauthAuthorizeUrl() {
   const stateToken = randomBase64Url(24);
   const verifier = randomBase64Url(48);
   const challenge = await sha256Base64Url(verifier);
-  writeSessionValue(YANDEX_OAUTH_STORAGE_KEYS.state, stateToken);
-  writeSessionValue(YANDEX_OAUTH_STORAGE_KEYS.verifier, verifier);
-  writeSessionValue(YANDEX_OAUTH_STORAGE_KEYS.returnTo, currentReturnToUrl());
+  writeTransientValue(YANDEX_OAUTH_STORAGE_KEYS.state, stateToken);
+  writeTransientValue(YANDEX_OAUTH_STORAGE_KEYS.verifier, verifier);
+  writeTransientValue(YANDEX_OAUTH_STORAGE_KEYS.returnTo, currentReturnToUrl());
 
   const url = new URL(YANDEX_OAUTH_AUTHORIZE_URL);
   url.searchParams.set("response_type", "code");
@@ -1061,14 +1117,18 @@ async function consumeGoogleOidcCallback() {
   const idToken = String(params.get("id_token") || "").trim();
   const oauthError = String(params.get("error") || "").trim();
   const oauthErrorDescription = String(params.get("error_description") || "").trim();
-  const expectedState = readSessionValue(GOOGLE_OIDC_STORAGE_KEYS.state);
-  const expectedNonce = readSessionValue(GOOGLE_OIDC_STORAGE_KEYS.nonce);
-  const returnTo = readSessionValue(GOOGLE_OIDC_STORAGE_KEYS.returnTo) || currentReturnToUrl();
+  const decodedState = decodeBase64UrlJson(returnedState);
+  const expectedNonce = decodedState && typeof decodedState.nonce === "string" ? decodedState.nonce.trim() : "";
+  const returnTo =
+    decodedState && typeof decodedState.return_to === "string" && decodedState.return_to.trim()
+      ? decodedState.return_to.trim()
+      : currentReturnToUrl();
+  const issuedAt = decodedState && Number.isFinite(decodedState.issued_at) ? Number(decodedState.issued_at) : 0;
+  const stateExpired = !issuedAt || Math.abs(Date.now() - issuedAt) > GOOGLE_OIDC_STATE_MAX_AGE_MS;
 
-  if (!returnedState || !expectedState || returnedState !== expectedState) {
+  if (!returnedState || !decodedState || !expectedNonce || stateExpired) {
     if (oauthError || idToken) {
       stripGoogleCallbackArtifacts();
-      clearGoogleOidcSession();
       setNote("Сессия входа через Google устарела. Запусти вход заново.", true);
       return true;
     }
@@ -1076,7 +1136,6 @@ async function consumeGoogleOidcCallback() {
   }
 
   stripGoogleCallbackArtifacts();
-  clearGoogleOidcSession();
 
   if (oauthError) {
     const description = oauthErrorDescription ? decodeURIComponent(oauthErrorDescription.replace(/\+/g, " ")) : "";
@@ -1112,9 +1171,9 @@ async function consumeYandexOauthCallback() {
     return false;
   }
 
-  const expectedState = readSessionValue(YANDEX_OAUTH_STORAGE_KEYS.state);
-  const verifier = readSessionValue(YANDEX_OAUTH_STORAGE_KEYS.verifier);
-  const returnTo = readSessionValue(YANDEX_OAUTH_STORAGE_KEYS.returnTo) || currentReturnToUrl();
+  const expectedState = readTransientValue(YANDEX_OAUTH_STORAGE_KEYS.state);
+  const verifier = readTransientValue(YANDEX_OAUTH_STORAGE_KEYS.verifier);
+  const returnTo = readTransientValue(YANDEX_OAUTH_STORAGE_KEYS.returnTo) || currentReturnToUrl();
 
   if (!returnedState || !expectedState || returnedState !== expectedState) {
     stripYandexCallbackArtifacts();
@@ -1419,12 +1478,12 @@ function saveState() {
   } else {
     localStorage.removeItem(STORAGE_KEYS.apiBase);
   }
-  if (prefersCookieAuth()) {
-    localStorage.removeItem(STORAGE_KEYS.accessToken);
-    localStorage.removeItem(STORAGE_KEYS.refreshToken);
-  } else {
+  if (!state.isCookieSession && state.accessToken && state.refreshToken) {
     localStorage.setItem(STORAGE_KEYS.accessToken, state.accessToken);
     localStorage.setItem(STORAGE_KEYS.refreshToken, state.refreshToken);
+  } else {
+    localStorage.removeItem(STORAGE_KEYS.accessToken);
+    localStorage.removeItem(STORAGE_KEYS.refreshToken);
   }
   localStorage.setItem(STORAGE_KEYS.lastAuthProvider, state.lastAuthProvider);
   if (state.telegramWebLoginToken && !hasActiveSession()) {
@@ -1443,15 +1502,8 @@ function loadState() {
   if (!canOverrideApiBase()) {
     localStorage.removeItem(STORAGE_KEYS.apiBase);
   }
-  if (prefersCookieAuth()) {
-    state.accessToken = "";
-    state.refreshToken = "";
-    localStorage.removeItem(STORAGE_KEYS.accessToken);
-    localStorage.removeItem(STORAGE_KEYS.refreshToken);
-  } else {
-    state.accessToken = localStorage.getItem(STORAGE_KEYS.accessToken) || "";
-    state.refreshToken = localStorage.getItem(STORAGE_KEYS.refreshToken) || "";
-  }
+  state.accessToken = localStorage.getItem(STORAGE_KEYS.accessToken) || "";
+  state.refreshToken = localStorage.getItem(STORAGE_KEYS.refreshToken) || "";
   state.isCookieSession = false;
   state.lastAuthProvider = String(localStorage.getItem(STORAGE_KEYS.lastAuthProvider) || "").trim().toLowerCase();
   state.telegramWebLoginToken = String(localStorage.getItem(STORAGE_KEYS.telegramWebLoginToken) || "").trim();
@@ -3196,7 +3248,7 @@ async function refreshSession() {
       method: "POST",
       body,
     });
-    if (prefersCookieAuth()) {
+    if (prefersCookieAuth() && !state.refreshToken) {
       state.accessToken = "";
       state.refreshToken = "";
       state.isCookieSession = true;
@@ -4501,13 +4553,34 @@ async function loadPrivateData({ forceServerCheck = false } = {}) {
     authorizedGetWithRetry("/v1/me", 1),
     authorizedGetWithRetry("/v1/wallet?limit=1", 1),
   ]);
-  if (prefersCookieAuth()) {
-    state.isCookieSession = true;
-  } else {
-    state.isCookieSession = false;
-  }
+  state.isCookieSession = Boolean(prefersCookieAuth() && !state.accessToken);
   await loadIdentities();
   renderUser(me, wallet);
+}
+
+async function finalizeAuthSession(payload, provider) {
+  const accessToken = String(payload && payload.access_token ? payload.access_token : "").trim();
+  const refreshToken = String(payload && payload.refresh_token ? payload.refresh_token : "").trim();
+
+  state.telegramWebLoginToken = "";
+  clearTelegramWebLoginPolling();
+  state.lastAuthProvider = provider;
+  state.accessToken = accessToken;
+  state.refreshToken = refreshToken;
+  state.isCookieSession = false;
+  saveState();
+
+  if (prefersCookieAuth()) {
+    try {
+      await apiFetch("/v1/me");
+      state.accessToken = "";
+      state.refreshToken = "";
+      state.isCookieSession = true;
+      saveState();
+    } catch (_error) {
+      // Cookie session did not come up. Keep bearer tokens as a fallback.
+    }
+  }
 }
 
 function ensureAuthorizedForCreate() {
@@ -4684,21 +4757,10 @@ async function pollTelegramWebLoginStatus() {
       return;
     }
     if (status === "linked") {
-      if (prefersCookieAuth()) {
-        state.accessToken = "";
-        state.refreshToken = "";
-        state.isCookieSession = true;
-      } else if (payload.access_token && payload.refresh_token) {
-        state.accessToken = payload.access_token;
-        state.refreshToken = payload.refresh_token;
-        state.isCookieSession = false;
-      } else {
+      if (!payload.access_token || !payload.refresh_token) {
         throw new Error("Не удалось получить токены входа.");
       }
-      state.lastAuthProvider = "telegram";
-      state.telegramWebLoginToken = "";
-      clearTelegramWebLoginPolling();
-      saveState();
+      await finalizeAuthSession(payload, "telegram");
       renderAuthGateActions();
       setAuthGateVisible(false);
       setNote(payload.message || "Вход через Telegram выполнен.");
@@ -4878,9 +4940,7 @@ async function hydrateAuthorizedSession() {
       loadPrivateData({ forceServerCheck: prefersCookieAuth() }),
       loadTemplates(),
     ]);
-    if (prefersCookieAuth()) {
-      state.isCookieSession = true;
-    }
+    state.isCookieSession = Boolean(prefersCookieAuth() && !state.accessToken);
     return true;
   } catch (_error) {
     state.accessToken = "";
@@ -4908,19 +4968,7 @@ async function loginViaTelegram(options = {}) {
       method: "POST",
       body: { init_data: tg.initData },
     });
-    state.telegramWebLoginToken = "";
-    clearTelegramWebLoginPolling();
-    if (prefersCookieAuth()) {
-      state.accessToken = "";
-      state.refreshToken = "";
-      state.isCookieSession = true;
-    } else {
-      state.accessToken = payload.access_token;
-      state.refreshToken = payload.refresh_token;
-      state.isCookieSession = false;
-    }
-    state.lastAuthProvider = "telegram";
-    saveState();
+    await finalizeAuthSession(payload, "telegram");
     try {
       await syncAcquisitionTouch({ auth: true });
     } catch (_error) {
@@ -4968,19 +5016,7 @@ async function loginViaGoogleCredential(idToken) {
     method: "POST",
     body: { id_token: idToken },
   });
-  state.telegramWebLoginToken = "";
-  clearTelegramWebLoginPolling();
-  if (prefersCookieAuth()) {
-    state.accessToken = "";
-    state.refreshToken = "";
-    state.isCookieSession = true;
-  } else {
-    state.accessToken = payload.access_token;
-    state.refreshToken = payload.refresh_token;
-    state.isCookieSession = false;
-  }
-  state.lastAuthProvider = "google";
-  saveState();
+  await finalizeAuthSession(payload, "google");
   try {
     await syncAcquisitionTouch({ auth: true });
   } catch (_error) {
@@ -4998,19 +5034,7 @@ async function loginViaYandexCode(code, codeVerifier) {
     method: "POST",
     body: { code, code_verifier: codeVerifier },
   });
-  state.telegramWebLoginToken = "";
-  clearTelegramWebLoginPolling();
-  if (prefersCookieAuth()) {
-    state.accessToken = "";
-    state.refreshToken = "";
-    state.isCookieSession = true;
-  } else {
-    state.accessToken = payload.access_token;
-    state.refreshToken = payload.refresh_token;
-    state.isCookieSession = false;
-  }
-  state.lastAuthProvider = "yandex";
-  saveState();
+  await finalizeAuthSession(payload, "yandex");
   try {
     await syncAcquisitionTouch({ auth: true });
   } catch (_error) {
@@ -5035,9 +5059,13 @@ async function loginViaGoogle() {
     setNote("Google Client ID не задан в мета-теге kartivio-google-client-id.", true);
     return;
   }
+  const url = googleOidcAuthorizeUrl();
+  if (!url) {
+    setNote("Google login недоступен для этого окружения.", true);
+    return;
+  }
   if (isTelegramMiniAppRuntime()) {
-    const url = googleAuthLaunchUrl();
-    setNote("Открываю внешний браузер для входа через Google.");
+    setNote("Открываю Google во внешнем браузере.");
     if (tg && typeof tg.openLink === "function") {
       tg.openLink(url);
       return;
@@ -5048,12 +5076,6 @@ async function loginViaGoogle() {
 
   googleAuthPending = true;
   googleAuthButton.disabled = true;
-  const url = googleOidcAuthorizeUrl();
-  if (!url) {
-    setGoogleAuthButtonIdle();
-    setNote("Google login недоступен для этого окружения.", true);
-    return;
-  }
   setNote("Открываю Google...");
   window.location.assign(url);
 }
@@ -5572,7 +5594,6 @@ async function bootstrap() {
     state.refreshToken = "";
     state.isCookieSession = false;
     state.lastAuthProvider = "";
-    clearGoogleOidcSession();
     saveState();
     setNote(userFacingErrorMessage(error, "Не удалось выполнить вход через Google."), true);
   }
