@@ -14,6 +14,7 @@ const GOOGLE_CLIENT_ID_META_NAME = "kartivio-google-client-id";
 const YANDEX_CLIENT_ID_META_NAME = "kartivio-yandex-client-id";
 const GOOGLE_OIDC_AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const YANDEX_OAUTH_AUTHORIZE_URL = "https://oauth.yandex.com/authorize";
+const AUTH_BRIDGE_HASH_KEY = "auth_bridge";
 const YANDEX_OAUTH_STORAGE_KEYS = {
   state: "kartivio.yandex_oauth_state",
   verifier: "kartivio.yandex_oauth_verifier",
@@ -895,6 +896,10 @@ function oauthRedirectUri() {
   return url.toString();
 }
 
+function googleRedirectCallbackUrl() {
+  return `${state.apiBase}/v1/auth/google/redirect`;
+}
+
 function readTransientValue(key) {
   const normalizedKey = String(key || "").trim();
   if (!normalizedKey) {
@@ -1035,8 +1040,9 @@ function googleOidcAuthorizeUrl() {
 
   const url = new URL(GOOGLE_OIDC_AUTHORIZE_URL);
   url.searchParams.set("client_id", clientId);
-  url.searchParams.set("redirect_uri", oauthRedirectUri());
+  url.searchParams.set("redirect_uri", googleRedirectCallbackUrl());
   url.searchParams.set("response_type", "id_token");
+  url.searchParams.set("response_mode", "form_post");
   url.searchParams.set("scope", "openid email profile");
   url.searchParams.set("state", stateToken);
   url.searchParams.set("nonce", nonceToken);
@@ -1095,6 +1101,72 @@ function stripGoogleCallbackArtifacts() {
   url.hash = "";
   url.searchParams.delete("google_auto");
   window.history.replaceState({}, document.title, url.toString());
+}
+
+function stripAuthBridgeArtifact() {
+  const url = new URL(window.location.href);
+  const hashParams = new URLSearchParams(String(url.hash || "").replace(/^#/, ""));
+  if (!hashParams.has(AUTH_BRIDGE_HASH_KEY)) {
+    return;
+  }
+  hashParams.delete(AUTH_BRIDGE_HASH_KEY);
+  const nextHash = hashParams.toString();
+  url.hash = nextHash ? `#${nextHash}` : "";
+  window.history.replaceState({}, document.title, url.toString());
+}
+
+function consumeAuthBridgeResult() {
+  const hash = String(window.location.hash || "").replace(/^#/, "").trim();
+  if (!hash) {
+    return { consumed: false, success: false };
+  }
+  const params = new URLSearchParams(hash);
+  const rawBridge = String(params.get(AUTH_BRIDGE_HASH_KEY) || "").trim();
+  if (!rawBridge) {
+    return { consumed: false, success: false };
+  }
+
+  stripAuthBridgeArtifact();
+  const payload = decodeBase64UrlJson(rawBridge);
+  if (!payload || typeof payload !== "object") {
+    setNote("Не удалось завершить вход через Google. Повтори попытку.", true);
+    return { consumed: true, success: false };
+  }
+
+  const provider = String(payload.provider || "").trim().toLowerCase() || "google";
+  const errorCode = String(payload.error_code || "").trim();
+  const errorMessage = String(payload.error_message || "").trim();
+  if (errorCode) {
+    state.accessToken = "";
+    state.refreshToken = "";
+    state.isCookieSession = false;
+    state.lastAuthProvider = "";
+    saveState();
+    setNote(
+      userFacingErrorMessage(
+        { code: errorCode, rawMessage: errorMessage },
+        errorMessage || "Не удалось выполнить вход через Google."
+      ),
+      true
+    );
+    return { consumed: true, success: false };
+  }
+
+  const accessToken = String(payload.access_token || "").trim();
+  const refreshToken = String(payload.refresh_token || "").trim();
+  if (!accessToken || !refreshToken) {
+    setNote("Не удалось завершить вход через Google. Повтори попытку.", true);
+    return { consumed: true, success: false };
+  }
+
+  state.telegramWebLoginToken = "";
+  clearTelegramWebLoginPolling();
+  state.accessToken = accessToken;
+  state.refreshToken = refreshToken;
+  state.isCookieSession = false;
+  state.lastAuthProvider = provider;
+  saveState();
+  return { consumed: true, success: true };
 }
 
 function stripYandexCallbackArtifacts() {
@@ -5568,6 +5640,17 @@ async function bootstrap() {
   resetOfferDraft();
   renderCampaignPreviewStats(null);
   renderAuthGateActions();
+
+  try {
+    consumeAuthBridgeResult();
+  } catch (error) {
+    state.accessToken = "";
+    state.refreshToken = "";
+    state.isCookieSession = false;
+    state.lastAuthProvider = "";
+    saveState();
+    setNote(userFacingErrorMessage(error, "Не удалось завершить вход через Google."), true);
+  }
 
   try {
     await resolveApiBase();
