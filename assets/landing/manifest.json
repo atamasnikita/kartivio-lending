@@ -10,8 +10,196 @@
     { "src": "/assets/landing/hero/hero_08.jpg", "alt": "Пример ИИ-фотосессии 8" },
     { "src": "/assets/landing/hero/hero_11.jpg", "alt": "Пример ИИ-фотосессии 9" }
   ],
+  "showcase": {
+    "groups": [
+      {
+        "id": "women",
+        "label": "Женские",
+        "eyebrow": "Женские образы",
+        "title": "Цветы, природа и мягкий editorial",
+        "description": "Весенние сцены, студийные портреты и спокойные outdoor-образы, которые хорошо заходят под аватарки, соцсети и личный контент.",
+        "items": [
+          {
+            "src": "https://api.kartivio-ai.ru/media/public/templates/feed/20260525/spring-tree-editorial_preview.jpg",
+            "alt": "Цветущий сад",
+            "title": "Цветущий сад",
+            "badge": "Цветы"
+          },
+          {
+            "src": "https://api.kartivio-ai.ru/media/public/templates/feed/20260529-075617/20260525-0a4f3cf8_preview.jpg",
+            "alt": "Белый костюм и пионы",
+            "title": "Белый костюм и пионы",
+            "badge": "Цветы"
+          },
+          {
+            "src": "https://api.kartivio-ai.ru/media/public/templates/feed/20260529-075617/20260525-3bb22fce_preview.jpg",
+            "alt": "Белое платье в поле",
+            "title": "Белое платье в поле",
+            "badge": "Природа"
+          },
+          {
+            "src": "https://api.kartivio-ai.ru/media/public/templates/feed/20260529-075617/20260525-914a9a7c_preview.jpg",
+            "alt": "Лесной закат",
+            "title": "Лесной закат",
+            "badge": "Природа"
+          },
+          {
+            "src": "https://api.kartivio-ai.ru/media/public/templates/feed/20260605-user-a4688771/20260605-712582c6_preview.jpg",
+            "alt": "Бордовый кардиган",
+            "title": "Бордовый кардиган",
+            "badge": "Студия"
+          },
+          {
+            "src": "https://api.kartivio-ai.ru/media/public/templates/feed/20260612-manual-jobs/20260611-b48899ea_preview.jpg",
+            "alt": "Яблоня и красные яблоки",
+            "title": "Яблоня и красные яблоки",
+            "badge": "Лето"
+          }
+        ]
+      },
+      {
+        "id": "men",
+        "label": "Мужские",
+        "eyebrow": "Мужские сцены",
+        "title": "Город, smart casual и темные портреты",
+        "description": "Мужские подборки для профиля, дейтинга, личного бренда и более собранного визуального образа без отдельной съемки.",
+        "items": [
+          {
+            "src": "https://api.kartivio-ai.ru/media/public/templates/feed/20260612-manual-jobs/20260611-5c37817a_preview.jpg",
+            "alt": "Белая рубашка в цветах",
+            "title": "Белая рубашка в цветах",
+            "badge": "Мужское"
+          },
+          {
+            "src": "https://api.kartivio-ai.ru/media/public/templates/feed/20260612-manual-jobs/20260611-46a0e2e6_preview.jpg",
+            "alt": "Профиль на стуле",
+            "title": "Профиль на стуле",
+            "badge": "Мужское"
+          },
+          {
+            "src": "https://api.kartivio-ai.ru/media/public/templates/feed/20260612-manual-jobs/20260611-a0c13051_preview.jpg",
+            "alt": "Красная лестница и небо",
+            "title": "Красная лестница и небо",
+            "badge": "Город"
+          },
+          {
+            "src": "https://api.kartivio-ai.ru/media/public/templates/feed/20260612-manual-jobs/20260611-4dc6545a_preview.jpg",
+            "alt": "Черные очки с кофе",
+            "title": "Черные очки с кофе",
+            "badge": "Город"
+          },
+          {
+            "src": "https://api.kartivio-ai.ru/media/public/templates/feed/20260612-manual-jobs/20260611-9a300270_preview.jpg",
+            "alt": "Один в поле",
+            "title": "Один в поле",
+            "badge": "Природа"
+          },
+          {
+            "src": "https://api.kartivio-ai.ru/media/public/templates/feed/20260602-user-a4688771/20260602-dc51f99a_preview.jpg",
+            "alt": "Терраса smart casual",
+            "title": "Терраса smart casual",
+            "badge": "Smart casual"
+          }
+        ]
+      },
+      {
+        "id": "family",
+        "label": "Семейные",
+        "eyebrow": "Семейные сцены",
+        "title": "Пары, объятия и теплые семейные кадры",
+        "description": "Подборки для пары, семейного альбома и теплых портретов без студии, фотографа и отдельной организации съемки.",
+        "items": [
+          {
+            "src": "https://api.kartivio-ai.ru/media/public/templates/feed/20260612-manual-jobs-b/20260612-03ac8cc0_preview.jpg",
+            "alt": "Семья в студии",
+            "title": "Семья в студии",
+            "badge": "Семейные"
+          },
+          {
+            "src": "https://api.kartivio-ai.ru/media/public/templates/feed/20260612-manual-jobs-b/20260612-1ce673e7_preview.jpg",
+            "alt": "Объятия в золотом свете",
+            "title": "Объятия в золотом свете",
+            "badge": "Семейные"
+          },
+          {
+            "src": "https://api.kartivio-ai.ru/media/public/templates/feed/20260612-manual-jobs-b/20260612-4f5f2c72_preview.jpg",
+            "alt": "Теплое объятие со спины",
+            "title": "Теплое объятие со спины",
+            "badge": "Семейные"
+          },
+          {
+            "src": "https://api.kartivio-ai.ru/media/public/templates/feed/20260612-manual-jobs-b/20260612-66de95d0_preview.jpg",
+            "alt": "Объятие на траве",
+            "title": "Объятие на траве",
+            "badge": "Семейные"
+          },
+          {
+            "src": "https://api.kartivio-ai.ru/media/public/templates/feed/20260602-user-a4688771/20260602-1562d27f_preview.jpg",
+            "alt": "Семья в поле",
+            "title": "Семья в поле",
+            "badge": "Семейные"
+          },
+          {
+            "src": "https://api.kartivio-ai.ru/media/public/templates/feed/20260612-manual-jobs-b/20260612-28612344_preview.jpg",
+            "alt": "Семья на дорожке",
+            "title": "Семья на дорожке",
+            "badge": "Семейные"
+          }
+        ]
+      }
+    ]
+  },
   "how": {
     "before": { "src": "/assets/landing/how/how_before.jpg", "alt": "Исходное фото пользователя" },
-    "after": { "src": "/assets/landing/how/how_after.jpg", "alt": "Результат ИИ-фотосессии" }
+    "after": {
+      "src": "https://api.kartivio-ai.ru/media/public/templates/feed/20260612-manual-jobs-b/20260612-60bcaa41_preview.jpg",
+      "alt": "Результат ИИ-фотосессии"
+    },
+    "templates": [
+      {
+        "title": "Букет сирени",
+        "badge": "Весна",
+        "src": "https://api.kartivio-ai.ru/media/public/templates/feed/20260612-manual-jobs-b/20260612-a6ac76b8_preview.jpg",
+        "alt": "Букет сирени",
+        "prompt": "Сохрани лицо, волосы и естественные черты. Собери мягкий весенний портрет с букетом сирени, натуральной кожей и спокойным живым взглядом."
+      },
+      {
+        "title": "Белые лилии в ч/б",
+        "badge": "Ч/Б",
+        "src": "https://api.kartivio-ai.ru/media/public/templates/feed/20260612-manual-jobs-b/20260612-3dea5700_preview.jpg",
+        "alt": "Белые лилии в ч/б",
+        "prompt": "Сохрани лицо и волосы, переведи сцену в мягкий черно-белый портрет с белыми лилиями, пленочной фактурой и аккуратным спокойным контрастом."
+      },
+      {
+        "title": "Полевые цветы",
+        "badge": "Природа",
+        "src": "https://api.kartivio-ai.ru/media/public/templates/feed/20260605-user-a4688771/20260605-2c1972bc_preview.jpg",
+        "alt": "Портрет в полевых цветах",
+        "prompt": "Сохрани лицо, волосы и черты. Сделай теплый портрет среди полевых цветов, с мягким солнцем, естественной кожей и живым спокойным выражением."
+      }
+    ],
+    "prompt": "Сохрани лицо, волосы и естественные черты. Собери мягкий портретный образ с весенним светом, цветами и натуральной кожей без перегруженной ретуши.",
+    "results": [
+      {
+        "src": "https://api.kartivio-ai.ru/media/public/templates/feed/20260612-manual-jobs-b/20260612-60bcaa41_preview.jpg",
+        "alt": "Мягкий черно-белый портрет",
+        "title": "Мягкий черно-белый портрет"
+      },
+      {
+        "src": "https://api.kartivio-ai.ru/media/public/templates/feed/20260612-manual-jobs-b/20260612-a6ac76b8_preview.jpg",
+        "alt": "Букет сирени",
+        "title": "Букет сирени"
+      },
+      {
+        "src": "https://api.kartivio-ai.ru/media/public/templates/feed/20260612-manual-jobs-b/20260612-3dea5700_preview.jpg",
+        "alt": "Белые лилии в ч/б",
+        "title": "Белые лилии в ч/б"
+      },
+      {
+        "src": "https://api.kartivio-ai.ru/media/public/templates/feed/20260605-user-a4688771/20260605-2c1972bc_preview.jpg",
+        "alt": "Портрет в полевых цветах",
+        "title": "Портрет в полевых цветах"
+      }
+    ]
   }
 }

@@ -10,7 +10,7 @@
     />
     <meta name="theme-color" content="#050507" />
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=20260603-2" />
+    <link rel="stylesheet" href="./styles.css?v=20260612-landing-4" />
   </head>
   <body>
     <!-- Yandex.Metrika counter -->
@@ -56,6 +56,7 @@
         </a>
         <nav class="nav" aria-label="Навигация по лендингу">
           <a href="/app/">Приложение</a>
+          <a href="#showcase">Примеры</a>
           <a href="#how">Как это работает</a>
           <a href="#pricing">Тарифы</a>
           <a href="#faq">Вопросы</a>
@@ -213,11 +214,38 @@
         </div>
       </section>
 
+      <section id="showcase" class="section section-showcase">
+        <div class="container">
+          <div class="section-head showcase-head">
+            <div>
+              <h2>Что можно получить</h2>
+              <p>Реальные сцены из ленты Kartivio: женские, мужские и семейные подборки без мокапов и абстрактных примеров.</p>
+            </div>
+            <a class="btn btn-ghost btn-sm showcase-cta" href="/app/">Открыть все шаблоны</a>
+          </div>
+
+          <div id="showcaseTabs" class="showcase-tabs" role="tablist" aria-label="Подборки кадров"></div>
+
+          <div class="showcase-shell">
+            <div class="showcase-copy">
+              <span id="showcaseEyebrow" class="showcase-eyebrow">Подборка</span>
+              <h3 id="showcaseTitle">Актуальные сцены</h3>
+              <p id="showcaseDescription">
+                Показываем не случайные картинки, а те же типы кадров, которые пользователь может повторить в приложении под себя.
+              </p>
+            </div>
+            <div id="showcaseGrid" class="showcase-grid" aria-live="polite"></div>
+          </div>
+
+          <p class="showcase-footnote">Все примеры ниже взяты из актуальной ленты сервиса и доступны внутри приложения.</p>
+        </div>
+      </section>
+
       <section id="how" class="section">
         <div class="container">
           <div class="section-head">
             <h2>Как это работает</h2>
-            <p>Пошаговый сценарий: загрузил фото, задал задачу и получил готовый кадр.</p>
+            <p>Показываем на реальном сценарии: одно исходное фото, выбранный стиль и несколько готовых кадров на выходе.</p>
           </div>
           <div class="how-flow" id="howFlow">
             <div class="how-step-list" role="tablist" aria-label="Шаги генерации">
@@ -248,7 +276,7 @@
                 <span class="how-step-index">02</span>
                 <span class="how-step-text">
                   <strong>Выбираешь шаблон или пишешь промпт</strong>
-                  <span>Берешь готовую идею из ленты или задаешь свой стиль и задачу.</span>
+                  <span>Берешь готовую сцену из ленты и при необходимости уточняешь ее своим описанием.</span>
                 </span>
               </button>
               <button
@@ -277,8 +305,8 @@
               >
                 <span class="how-step-index">04</span>
                 <span class="how-step-text">
-                  <strong>Получаешь результат и скачиваешь</strong>
-                  <span>Готовый кадр приходит в приложение и сохраняется в пару кликов.</span>
+                  <strong>Получаешь готовые кадры</strong>
+                  <span>Из одного фото можно собрать несколько образов и сохранить нужный вариант.</span>
                 </span>
               </button>
             </div>
@@ -306,11 +334,9 @@
               <section class="how-scene" role="tabpanel" id="howScene2" aria-labelledby="howTab2" data-how-scene="2">
                 <span class="how-scene-title">Шаг 2 · Шаблон или свой промпт</span>
                 <div class="how-prompt-layout">
-                  <div class="how-template-chip is-active">Портрет со студийным светом</div>
-                  <div class="how-template-chip">Бизнес-образ в офисе</div>
-                  <div class="how-template-chip">Fashion на улице</div>
+                  <div id="howTemplateList" class="how-template-list" aria-label="Примеры сцен"></div>
                   <div class="how-prompt-box">
-                    <p>Сделай аккуратный портрет в мягком студийном свете, сохрани черты лица, естественный тон кожи и выразительный взгляд.</p>
+                    <p id="howPromptText">Сохрани лицо и волосы, мягкий весенний свет, натуральную кожу и спокойный взгляд. Собери нежный портретный образ без лишней ретуши.</p>
                   </div>
                 </div>
               </section>
@@ -338,14 +364,20 @@
               </section>
 
               <section class="how-scene" role="tabpanel" id="howScene4" aria-labelledby="howTab4" data-how-scene="4">
-                <span class="how-scene-title">Шаг 4 · Готовый результат</span>
-                <figure class="how-result-shot">
-                  <img id="howAfterImage" class="how-result-image is-hidden" src="" alt="Результат фотосессии" loading="eager" decoding="async" />
-                  <div id="howAfterPlaceholder" class="how-result-placeholder">Итоговый кадр</div>
-                </figure>
+                <span class="how-scene-title">Шаг 4 · Готовые кадры</span>
+                <div class="how-results-layout">
+                  <figure class="how-result-shot">
+                    <div id="howAfterStack" class="how-result-stack" aria-hidden="true"></div>
+                    <div id="howAfterPlaceholder" class="how-result-placeholder">Итоговый кадр</div>
+                  </figure>
+                  <div id="howAfterGallery" class="how-after-grid" aria-label="Дополнительные результаты"></div>
+                </div>
                 <div class="how-result-actions">
-                  <span class="how-ready-badge">Готово</span>
-                  <button class="how-download-btn" type="button">Скачать</button>
+                  <div class="how-result-meta">
+                    <span class="how-ready-badge">Готово</span>
+                    <span class="how-result-note">Из одного фото можно собрать несколько разных сцен.</span>
+                  </div>
+                  <a class="how-open-btn" href="/app/">Открыть приложение</a>
                 </div>
               </section>
             </article>
@@ -500,7 +532,7 @@
         </div>
       </div>
     </footer>
-    <script src="/landing-media.js?v=20260531a"></script>
+    <script src="/landing-media.js?v=20260612-landing-4"></script>
     <script>
       (function () {
         const keys = [
