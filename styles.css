@@ -664,6 +664,8 @@ a {
   gap: 12px;
   cursor: pointer;
   color: inherit;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
   transition: border-color 220ms ease, background 220ms ease, transform 180ms ease;
 }
 
@@ -716,6 +718,7 @@ a {
 .how-stage {
   position: relative;
   overflow: hidden;
+  transition: min-height 220ms var(--ease-out);
 }
 
 .how-scene {
@@ -727,10 +730,6 @@ a {
 .how-scene.is-active {
   display: grid;
   animation: howSceneIn 240ms ease both;
-}
-
-.how-flow.is-measuring .how-scene.is-active {
-  animation: none !important;
 }
 
 .how-scene-title {
@@ -835,7 +834,7 @@ a {
 
 .how-template-list {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -850,6 +849,8 @@ a {
   background: #0d1420;
   cursor: pointer;
   text-align: left;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
   transition:
     transform 180ms var(--ease-out),
     border-color 220ms var(--ease-out),
@@ -1107,6 +1108,8 @@ a {
   padding: 0;
   cursor: pointer;
   aspect-ratio: 4 / 5;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
   transition:
     transform 160ms var(--ease-out),
     border-color 220ms var(--ease-out),
@@ -1208,6 +1211,8 @@ a {
   justify-content: center;
   text-decoration: none;
   white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
   transition:
     transform 160ms var(--ease-out),
     border-color 220ms var(--ease-out),
@@ -1694,6 +1699,12 @@ a {
 
   .how-stage {
     overflow: hidden;
+    min-height: 0 !important;
+    transition: none;
+  }
+
+  .how-result-shot {
+    display: none;
   }
 
   .how-upload-layout {

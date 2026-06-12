@@ -1,5 +1,5 @@
 (function () {
-  const MANIFEST_URL = "/assets/landing/manifest.json?v=20260612-landing-4";
+  const MANIFEST_URL = "/assets/landing/manifest.json?v=20260612-landing-5";
 
   const HERO_FALLBACK = [
     { src: "https://picsum.photos/seed/kartivio-1/420/560", alt: "Пример генерации 1" },
@@ -61,6 +61,12 @@
         badge: "Ч/Б",
         prompt:
           "Сохрани лицо и волосы, переведи сцену в мягкий черно-белый портрет с пленочной фактурой, спокойным светом и аккуратным контрастом.",
+      },
+      {
+        title: "Крупный портрет",
+        badge: "Портрет",
+        prompt:
+          "Сохрани лицо, волосы и естественные черты. Сделай спокойный крупный портрет с мягким светом, чистой кожей и деликатной глубиной резкости.",
       },
     ],
     prompt:
@@ -660,7 +666,7 @@
         const image = document.createElement("img");
         image.src = item.src;
         image.alt = item.alt;
-        image.loading = idx < 3 ? "eager" : "lazy";
+        image.loading = idx < 4 ? "eager" : "lazy";
         image.fetchPriority = idx === 0 ? "high" : "auto";
         image.decoding = "async";
         button.appendChild(image);
@@ -752,29 +758,34 @@
 
       const mainImage = document.createElement("img");
       mainImage.className = "how-result-image";
-      mainImage.src = item.src;
       mainImage.alt = item.alt;
       mainImage.loading = "eager";
       mainImage.fetchPriority = idx === 0 ? "high" : "auto";
       mainImage.decoding = "async";
       mainImage.setAttribute("aria-hidden", idx === 0 ? "false" : "true");
-      mainImage.addEventListener("load", () => {
+      const handleMainImageReady = () => {
         updateHowResultOrientation(mainImage);
         loadedMediaSources.add(item.src);
         if (idx === 0) {
           placeholderEl.classList.add("is-hidden");
         }
-      });
+      };
+      mainImage.addEventListener("load", handleMainImageReady);
       mainImage.addEventListener("error", () => {
         if (item.src !== mainFallback.src) {
           mainImage.src = mainFallback.src;
         }
       });
+      mainImage.src = item.src;
       if (idx === 0) {
         mainImage.classList.add("is-visible");
       }
+      if (mainImage.complete && mainImage.naturalWidth > 0) {
+        handleMainImageReady();
+      }
       mainImages.push(mainImage);
       stackRoot.appendChild(mainImage);
+      preloadImageSource(item.src).catch(() => {});
 
       const button = document.createElement("button");
       button.type = "button";
@@ -818,11 +829,17 @@
     }
 
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const compactLayout = window.matchMedia("(max-width: 920px)");
     let currentStep = Number(stepButtons.find((button) => button.classList.contains("is-active"))?.dataset.howStep || 1);
     let autoplayTimer = null;
     let stageMeasureRaf = 0;
     let resizeDebounceTimer = 0;
     let autoplayStoppedByUser = false;
+    let activeSceneObserver = null;
+
+    function getActiveScene(step = currentStep) {
+      return scenes.find((scene) => Number(scene.dataset.howScene) === step) || null;
+    }
 
     function syncState(step) {
       currentStep = step;
@@ -842,59 +859,25 @@
           scene.setAttribute("hidden", "");
         }
       }
-    }
-
-    function measureSceneHeight(scene) {
-      const wasActive = scene.classList.contains("is-active");
-      const wasHidden = scene.hasAttribute("hidden");
-      const prevDisplay = scene.style.display;
-      const prevPosition = scene.style.position;
-      const prevInset = scene.style.inset;
-      const prevVisibility = scene.style.visibility;
-      const prevPointerEvents = scene.style.pointerEvents;
-      const prevZIndex = scene.style.zIndex;
-
-      scene.classList.add("is-active");
-      scene.removeAttribute("hidden");
-      scene.style.display = "grid";
-      scene.style.position = "absolute";
-      scene.style.inset = "0";
-      scene.style.visibility = "hidden";
-      scene.style.pointerEvents = "none";
-      scene.style.zIndex = "-1";
-
-      const measuredHeight = scene.offsetHeight;
-
-      if (!wasActive) {
-        scene.classList.remove("is-active");
-      }
-      if (wasHidden) {
-        scene.setAttribute("hidden", "");
-      }
-      scene.style.display = prevDisplay;
-      scene.style.position = prevPosition;
-      scene.style.inset = prevInset;
-      scene.style.visibility = prevVisibility;
-      scene.style.pointerEvents = prevPointerEvents;
-      scene.style.zIndex = prevZIndex;
-
-      return measuredHeight;
+      observeActiveScene();
+      scheduleStageMeasure();
     }
 
     function recalculateStageMinHeight() {
       if (!stageCard) {
         return;
       }
-      const previousStep = currentStep;
-      root.classList.add("is-measuring");
-      let maxHeight = 0;
-      for (const scene of scenes) {
-        maxHeight = Math.max(maxHeight, measureSceneHeight(scene));
+      if (compactLayout.matches) {
+        stageCard.style.minHeight = "";
+        return;
       }
-      syncState(previousStep);
-      root.classList.remove("is-measuring");
-      if (maxHeight > 0) {
-        stageCard.style.minHeight = `${Math.ceil(maxHeight)}px`;
+      const activeScene = getActiveScene();
+      if (!activeScene) {
+        return;
+      }
+      const nextHeight = Math.ceil(activeScene.offsetHeight);
+      if (nextHeight > 0) {
+        stageCard.style.minHeight = `${nextHeight}px`;
       }
     }
 
@@ -909,6 +892,24 @@
         stageMeasureRaf = 0;
         recalculateStageMinHeight();
       });
+    }
+
+    function observeActiveScene() {
+      if (activeSceneObserver) {
+        activeSceneObserver.disconnect();
+        activeSceneObserver = null;
+      }
+      if (typeof window.ResizeObserver !== "function") {
+        return;
+      }
+      const activeScene = getActiveScene();
+      if (!activeScene) {
+        return;
+      }
+      activeSceneObserver = new window.ResizeObserver(() => {
+        scheduleStageMeasure();
+      });
+      activeSceneObserver.observe(activeScene);
     }
 
     function stopAutoplay() {
@@ -940,7 +941,6 @@
         autoplayStoppedByUser = true;
         stopAutoplay();
         syncState(step);
-        scheduleStageMeasure();
       });
     }
 
@@ -962,12 +962,13 @@
     };
     window.addEventListener("resize", onResize, { passive: true });
 
-    for (const image of root.querySelectorAll("img")) {
-      image.addEventListener("load", scheduleStageMeasure);
+    if (typeof window.ResizeObserver !== "function") {
+      for (const image of root.querySelectorAll("img")) {
+        image.addEventListener("load", scheduleStageMeasure);
+      }
     }
 
     syncState(currentStep);
-    scheduleStageMeasure();
     startAutoplay();
   }
 

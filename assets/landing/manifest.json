@@ -1,14 +1,41 @@
 {
   "hero": [
-    { "src": "/assets/landing/hero/hero_01.jpg", "alt": "Пример ИИ-фотосессии 1" },
-    { "src": "/assets/landing/hero/hero_02.jpg", "alt": "Пример ИИ-фотосессии 2" },
-    { "src": "/assets/landing/hero/hero_09.jpg", "alt": "Пример ИИ-фотосессии 3" },
-    { "src": "/assets/landing/hero/hero_04.jpg", "alt": "Пример ИИ-фотосессии 4" },
-    { "src": "/assets/landing/hero/hero_10.jpg", "alt": "Пример ИИ-фотосессии 5" },
-    { "src": "/assets/landing/hero/hero_06.jpg", "alt": "Пример ИИ-фотосессии 6" },
-    { "src": "/assets/landing/hero/hero_07.jpg", "alt": "Пример ИИ-фотосессии 7" },
-    { "src": "/assets/landing/hero/hero_08.jpg", "alt": "Пример ИИ-фотосессии 8" },
-    { "src": "/assets/landing/hero/hero_11.jpg", "alt": "Пример ИИ-фотосессии 9" }
+    {
+      "src": "/assets/landing/hero/hero_01.jpg",
+      "alt": "Пример ИИ-фотосессии 1"
+    },
+    {
+      "src": "/assets/landing/hero/hero_02.jpg",
+      "alt": "Пример ИИ-фотосессии 2"
+    },
+    {
+      "src": "/assets/landing/hero/hero_09.jpg",
+      "alt": "Пример ИИ-фотосессии 3"
+    },
+    {
+      "src": "/assets/landing/hero/hero_04.jpg",
+      "alt": "Пример ИИ-фотосессии 4"
+    },
+    {
+      "src": "/assets/landing/hero/hero_10.jpg",
+      "alt": "Пример ИИ-фотосессии 5"
+    },
+    {
+      "src": "/assets/landing/hero/hero_06.jpg",
+      "alt": "Пример ИИ-фотосессии 6"
+    },
+    {
+      "src": "/assets/landing/hero/hero_07.jpg",
+      "alt": "Пример ИИ-фотосессии 7"
+    },
+    {
+      "src": "/assets/landing/hero/hero_08.jpg",
+      "alt": "Пример ИИ-фотосессии 8"
+    },
+    {
+      "src": "/assets/landing/hero/hero_11.jpg",
+      "alt": "Пример ИИ-фотосессии 9"
+    }
   ],
   "showcase": {
     "groups": [
@@ -150,7 +177,10 @@
     ]
   },
   "how": {
-    "before": { "src": "/assets/landing/how/how_before.jpg", "alt": "Исходное фото пользователя" },
+    "before": {
+      "src": "/assets/landing/how/how_before.jpg",
+      "alt": "Исходное фото пользователя"
+    },
     "after": {
       "src": "https://api.kartivio-ai.ru/media/public/templates/feed/20260612-manual-jobs-b/20260612-60bcaa41_preview.jpg",
       "alt": "Результат ИИ-фотосессии"
@@ -176,6 +206,13 @@
         "src": "https://api.kartivio-ai.ru/media/public/templates/feed/20260605-user-a4688771/20260605-2c1972bc_preview.jpg",
         "alt": "Портрет в полевых цветах",
         "prompt": "Сохрани лицо, волосы и черты. Сделай теплый портрет среди полевых цветов, с мягким солнцем, естественной кожей и живым спокойным выражением."
+      },
+      {
+        "title": "Мягкий портрет",
+        "badge": "Портрет",
+        "src": "https://api.kartivio-ai.ru/media/public/templates/feed/20260612-manual-jobs-b/20260612-60bcaa41_preview.jpg",
+        "alt": "Мягкий портрет",
+        "prompt": "Сохрани лицо, волосы и естественные черты. Сделай спокойный крупный портрет с мягким светом, чистой кожей и деликатной глубиной резкости."
       }
     ],
     "prompt": "Сохрани лицо, волосы и естественные черты. Собери мягкий портретный образ с весенним светом, цветами и натуральной кожей без перегруженной ретуши.",
