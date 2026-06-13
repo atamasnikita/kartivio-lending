@@ -15,6 +15,9 @@ const YANDEX_CLIENT_ID_META_NAME = "kartivio-yandex-client-id";
 const GOOGLE_OIDC_AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const YANDEX_OAUTH_AUTHORIZE_URL = "https://oauth.yandex.com/authorize";
 const AUTH_BRIDGE_HASH_KEY = "auth_bridge";
+const API_HEALTHCHECK_TIMEOUT_MS = 2500;
+const API_FETCH_TIMEOUT_MS = 12000;
+const API_MULTIPART_TIMEOUT_MS = 20000;
 const YANDEX_OAUTH_STORAGE_KEYS = {
   state: "kartivio.yandex_oauth_state",
   verifier: "kartivio.yandex_oauth_verifier",
@@ -289,6 +292,10 @@ const state = {
   currentScreen: "feed",
   templates: [],
   templatesLoading: false,
+  publicDataLoadPromise: null,
+  publicDataLoadContext: "",
+  publicDataLoadedContext: "",
+  publicDataRequestToken: 0,
   selectedTemplateFilter: "all",
   templateVisibleCount: 0,
   templateRenderKey: "",
@@ -653,6 +660,18 @@ function prefersCookieAuth() {
 
 function hasActiveSession() {
   return Boolean(state.accessToken || state.isCookieSession);
+}
+
+function hasSessionBootstrapHint() {
+  return Boolean(
+    String(state.accessToken || "").trim() ||
+      String(state.refreshToken || "").trim() ||
+      String(state.lastAuthProvider || "").trim()
+  );
+}
+
+function currentPublicDataContext() {
+  return hasActiveSession() ? "auth" : "anon";
 }
 
 function isLocalRuntime() {
@@ -3211,6 +3230,28 @@ function isUnauthorizedError(error) {
   return /401|unauthorized|token/i.test(message);
 }
 
+async function fetchWithTimeout(url, options = {}, timeoutMs = API_FETCH_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => {
+    controller.abort();
+  }, timeoutMs);
+  try {
+    return await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error && error.name === "AbortError") {
+      const timeoutError = new Error("Request timed out.");
+      timeoutError.code = "request_timeout";
+      throw timeoutError;
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
 async function apiFetch(path, { method = "GET", body, auth = false, idempotencyKey } = {}) {
   const headers = headersForApiBase(state.apiBase);
   if (body !== undefined) {
@@ -3223,12 +3264,16 @@ async function apiFetch(path, { method = "GET", body, auth = false, idempotencyK
     headers["Idempotency-Key"] = idempotencyKey;
   }
 
-  const response = await fetch(`${state.apiBase}${path}`, {
-    method,
-    credentials: "include",
-    headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
+  const response = await fetchWithTimeout(
+    `${state.apiBase}${path}`,
+    {
+      method,
+      credentials: "include",
+      headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    },
+    API_FETCH_TIMEOUT_MS
+  );
   const payload = await parseJsonResponse(response);
   if (!response.ok) {
     const rawMessage = extractErrorMessage(payload, `HTTP ${response.status}`);
@@ -3258,12 +3303,16 @@ async function apiMultipart(path, formData, { auth = false, idempotencyKey } = {
     headers["Idempotency-Key"] = idempotencyKey;
   }
 
-  const response = await fetch(`${state.apiBase}${path}`, {
-    method: "POST",
-    credentials: "include",
-    headers,
-    body: formData,
-  });
+  const response = await fetchWithTimeout(
+    `${state.apiBase}${path}`,
+    {
+      method: "POST",
+      credentials: "include",
+      headers,
+      body: formData,
+    },
+    API_MULTIPART_TIMEOUT_MS
+  );
   const payload = await parseJsonResponse(response);
   if (!response.ok) {
     const rawMessage = extractErrorMessage(payload, `HTTP ${response.status}`);
@@ -3290,10 +3339,14 @@ async function resolveApiBase() {
 
   for (const candidate of candidates) {
     try {
-      const response = await fetch(`${candidate}/healthz`, {
-        method: "GET",
-        headers: headersForApiBase(candidate),
-      });
+      const response = await fetchWithTimeout(
+        `${candidate}/healthz`,
+        {
+          method: "GET",
+          headers: headersForApiBase(candidate),
+        },
+        API_HEALTHCHECK_TIMEOUT_MS
+      );
       if (!response.ok) {
         continue;
       }
@@ -4572,14 +4625,57 @@ async function loadHistory({ forceServerCheck = false, append = false } = {}) {
   return requestPromise;
 }
 
-async function loadPublicData() {
+async function loadPublicData({ requestToken = 0, auth = hasActiveSession() } = {}) {
   const [plansPayload, templatesPayload] = await Promise.all([
     apiFetch("/v1/plans"),
-    apiFetch("/v1/templates", { auth: Boolean(state.accessToken) }),
+    apiFetch("/v1/templates", { auth }),
   ]);
+  if (requestToken && requestToken !== state.publicDataRequestToken) {
+    return false;
+  }
   renderPlans(plansPayload);
   renderTemplates(templatesPayload);
+  state.publicDataLoadedContext = auth ? "auth" : "anon";
   setNote("");
+  return true;
+}
+
+function ensurePublicDataLoaded({ notifyOnError = false, force = false } = {}) {
+  const context = currentPublicDataContext();
+  if (!force && state.publicDataLoadPromise && state.publicDataLoadContext === context) {
+    return state.publicDataLoadPromise;
+  }
+  if (!force && state.publicDataLoadedContext === context) {
+    return Promise.resolve(false);
+  }
+  if (!state.templates.length) {
+    state.templatesLoading = true;
+    renderTemplateCards();
+  }
+  const requestToken = state.publicDataRequestToken + 1;
+  state.publicDataRequestToken = requestToken;
+  state.publicDataLoadContext = context;
+  const requestPromise = loadPublicData({ requestToken, auth: context === "auth" })
+    .catch((error) => {
+      if (requestToken === state.publicDataRequestToken) {
+        state.templatesLoading = false;
+        renderTemplateCards();
+        if (notifyOnError) {
+          setNote(userFacingErrorMessage(error, "Не удалось загрузить данные приложения."), true);
+        } else {
+          console.warn("Public data warmup failed", error);
+        }
+      }
+      throw error;
+    })
+    .finally(() => {
+      if (state.publicDataLoadPromise === requestPromise) {
+        state.publicDataLoadPromise = null;
+        state.publicDataLoadContext = "";
+      }
+    });
+  state.publicDataLoadPromise = requestPromise;
+  return requestPromise;
 }
 
 async function loadIdentities() {
@@ -4621,12 +4717,12 @@ async function loadPrivateData({ forceServerCheck = false } = {}) {
     renderAdminAccess();
     return;
   }
-  const [me, wallet] = await Promise.all([
-    authorizedGetWithRetry("/v1/me", 1),
-    authorizedGetWithRetry("/v1/wallet?limit=1", 1),
-  ]);
+  const mePromise = authorizedGetWithRetry("/v1/me", 1);
+  const walletPromise = authorizedGetWithRetry("/v1/wallet?limit=1", 1);
+  const identitiesPromise = loadIdentities();
+  const [me, wallet] = await Promise.all([mePromise, walletPromise]);
+  await identitiesPromise;
   state.isCookieSession = Boolean(prefersCookieAuth() && !state.accessToken);
-  await loadIdentities();
   renderUser(me, wallet);
 }
 
@@ -4643,15 +4739,19 @@ async function finalizeAuthSession(payload, provider) {
   saveState();
 
   if (prefersCookieAuth()) {
-    try {
-      await apiFetch("/v1/me");
-      state.accessToken = "";
-      state.refreshToken = "";
-      state.isCookieSession = true;
-      saveState();
-    } catch (_error) {
-      // Cookie session did not come up. Keep bearer tokens as a fallback.
-    }
+    apiFetch("/v1/me")
+      .then(() => {
+        if (state.accessToken !== accessToken || state.refreshToken !== refreshToken) {
+          return;
+        }
+        state.accessToken = "";
+        state.refreshToken = "";
+        state.isCookieSession = true;
+        saveState();
+      })
+      .catch(() => {
+        // Cookie session did not come up. Keep bearer tokens as a fallback.
+      });
   }
 }
 
@@ -4833,10 +4933,11 @@ async function pollTelegramWebLoginStatus() {
         throw new Error("Не удалось получить токены входа.");
       }
       await finalizeAuthSession(payload, "telegram");
+      ensurePublicDataLoaded().catch(() => {});
       renderAuthGateActions();
       setAuthGateVisible(false);
       setNote(payload.message || "Вход через Telegram выполнен.");
-      await Promise.all([loadPrivateData(), loadTemplates()]);
+      await loadPrivateData();
       markHistoryCacheStale();
       switchScreen("feed");
       return;
@@ -5008,10 +5109,8 @@ async function hydrateAuthorizedSession() {
     return false;
   }
   try {
-    await Promise.all([
-      loadPrivateData({ forceServerCheck: prefersCookieAuth() }),
-      loadTemplates(),
-    ]);
+    ensurePublicDataLoaded().catch(() => {});
+    await loadPrivateData({ forceServerCheck: prefersCookieAuth() });
     state.isCookieSession = Boolean(prefersCookieAuth() && !state.accessToken);
     return true;
   } catch (_error) {
@@ -5041,16 +5140,13 @@ async function loginViaTelegram(options = {}) {
       body: { init_data: tg.initData },
     });
     await finalizeAuthSession(payload, "telegram");
-    try {
-      await syncAcquisitionTouch({ auth: true });
-    } catch (_error) {
-      // noop
-    }
+    syncAcquisitionTouch({ auth: true }).catch(() => {});
+    ensurePublicDataLoaded().catch(() => {});
     setAuthGateVisible(false);
     if (!silent) {
       setNote("Авторизация успешна.");
     }
-    await Promise.all([loadPrivateData(), loadTemplates()]);
+    await loadPrivateData();
     markHistoryCacheStale();
     switchScreen(targetScreen);
     return true;
@@ -5089,14 +5185,11 @@ async function loginViaGoogleCredential(idToken) {
     body: { id_token: idToken },
   });
   await finalizeAuthSession(payload, "google");
-  try {
-    await syncAcquisitionTouch({ auth: true });
-  } catch (_error) {
-    // noop
-  }
+  syncAcquisitionTouch({ auth: true }).catch(() => {});
+  ensurePublicDataLoaded().catch(() => {});
   setAuthGateVisible(false);
   setNote("Авторизация через Google успешна.");
-  await Promise.all([loadPrivateData(), loadTemplates()]);
+  await loadPrivateData();
   markHistoryCacheStale();
   switchScreen("feed");
 }
@@ -5107,14 +5200,11 @@ async function loginViaYandexCode(code, codeVerifier) {
     body: { code, code_verifier: codeVerifier },
   });
   await finalizeAuthSession(payload, "yandex");
-  try {
-    await syncAcquisitionTouch({ auth: true });
-  } catch (_error) {
-    // noop
-  }
+  syncAcquisitionTouch({ auth: true }).catch(() => {});
+  ensurePublicDataLoaded().catch(() => {});
   setAuthGateVisible(false);
   setNote("Авторизация через Яндекс успешна.");
-  await Promise.all([loadPrivateData(), loadTemplates()]);
+  await loadPrivateData();
   markHistoryCacheStale();
   switchScreen("feed");
 }
@@ -5615,9 +5705,19 @@ async function bootstrap() {
   unlockTemplateModalScroll();
   loadState();
   captureFirstAcquisitionTouch();
+  const telegramSdkPromise = ensureTelegramSdkLoaded();
+  const apiBasePromise = (async () => {
+    try {
+      await resolveApiBase();
+      syncAcquisitionTouch().catch(() => {});
+      refreshAuthButtons();
+    } catch (error) {
+      setNote(userFacingErrorMessage(error, "Не удалось загрузить данные приложения."), true);
+    }
+  })();
   promptInput.maxLength = PROMPT_MAX_LENGTH;
   setDevPanelVisibility();
-  await ensureTelegramSdkLoaded();
+  await telegramSdkPromise;
   syncRuntimeClasses();
   initTelegramViewport();
   initMobileWebBottomNavBehavior();
@@ -5652,18 +5752,7 @@ async function bootstrap() {
     setNote(userFacingErrorMessage(error, "Не удалось завершить вход через Google."), true);
   }
 
-  try {
-    await resolveApiBase();
-    try {
-      await syncAcquisitionTouch();
-    } catch (_error) {
-      // noop
-    }
-    refreshAuthButtons();
-    await loadPublicData();
-  } catch (error) {
-    setNote(userFacingErrorMessage(error, "Не удалось загрузить данные приложения."), true);
-  }
+  await apiBasePromise;
 
   try {
     const consumedGoogleCallback = await consumeGoogleOidcCallback();
@@ -5699,7 +5788,7 @@ async function bootstrap() {
   }
 
   let authorized = false;
-  if (state.accessToken || prefersCookieAuth()) {
+  if (state.accessToken || (prefersCookieAuth() && hasSessionBootstrapHint())) {
     authorized = await hydrateAuthorizedSession();
   }
 
@@ -5712,12 +5801,9 @@ async function bootstrap() {
   }
 
   if (authorized) {
-    try {
-      await syncAcquisitionTouch({ auth: true });
-    } catch (_error) {
-      // noop
-    }
+    syncAcquisitionTouch({ auth: true }).catch(() => {});
     setAuthGateVisible(false);
+    ensurePublicDataLoaded({ notifyOnError: true }).catch(() => {});
   } else {
     state.accessToken = "";
     state.refreshToken = "";
@@ -5727,6 +5813,7 @@ async function bootstrap() {
     await loadPrivateData();
     await loadHistory();
     resumePendingTelegramWebLogin();
+    ensurePublicDataLoaded({ notifyOnError: true }).catch(() => {});
   }
 
   const autoGoogle = new URLSearchParams(window.location.search).get("google_auto");
