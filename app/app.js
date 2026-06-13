@@ -12,8 +12,10 @@ const DEFAULT_PROD_API_BASE = "https://api.kartivio-ai.ru";
 const DEFAULT_LOCAL_API_BASE = "http://127.0.0.1:8093";
 const GOOGLE_CLIENT_ID_META_NAME = "kartivio-google-client-id";
 const YANDEX_CLIENT_ID_META_NAME = "kartivio-yandex-client-id";
+const YANDEX_METRIKA_ID_META_NAME = "kartivio-yandex-metrika-id";
 const GOOGLE_OIDC_AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const YANDEX_OAUTH_AUTHORIZE_URL = "https://oauth.yandex.com/authorize";
+const TELEGRAM_WEB_APP_SDK_SRC = "./vendor/telegram-web-app.js?v=62";
 const AUTH_BRIDGE_HASH_KEY = "auth_bridge";
 const API_HEALTHCHECK_TIMEOUT_MS = 2500;
 const API_FETCH_TIMEOUT_MS = 12000;
@@ -477,6 +479,7 @@ let mobileWebNavListenerAttached = false;
 let lastAppMainScrollTop = 0;
 let templatePromptExpanded = false;
 let templateFilterScrollerBound = false;
+let deferredStartupScheduled = false;
 
 const TEMPLATE_FILTER_NEW = "new";
 const TEMPLATE_FILTER_PRIORITY = ["Полезности", "Мужское", "Семейные"];
@@ -510,6 +513,76 @@ function refreshIcons() {
       refreshIcons();
     }, 800);
   }
+}
+
+function yandexMetrikaIdFromMeta() {
+  const tag = document.querySelector(`meta[name="${YANDEX_METRIKA_ID_META_NAME}"]`);
+  if (!tag) {
+    return "";
+  }
+  return String(tag.getAttribute("content") || "").trim();
+}
+
+function shouldLoadDeferredAnalytics() {
+  return !isTelegramContextHint();
+}
+
+function loadYandexMetrika() {
+  if (!shouldLoadDeferredAnalytics()) {
+    return;
+  }
+  const metrikaId = Number.parseInt(yandexMetrikaIdFromMeta(), 10);
+  if (!Number.isFinite(metrikaId) || metrikaId <= 0) {
+    return;
+  }
+  if (window.__kartivioMetrikaLoaded) {
+    return;
+  }
+  window.__kartivioMetrikaLoaded = true;
+  window.ym =
+    window.ym ||
+    function () {
+      (window.ym.a = window.ym.a || []).push(arguments);
+    };
+  window.ym.l = Number(window.ym.l || Date.now());
+
+  const existing = document.querySelector('script[data-kartivio-metrika="true"]');
+  if (!existing) {
+    const script = document.createElement("script");
+    script.async = true;
+    script.src = `https://mc.yandex.ru/metrika/tag.js?id=${metrikaId}`;
+    script.dataset.kartivioMetrika = "true";
+    document.head.appendChild(script);
+  }
+
+  window.ym(metrikaId, "init", {
+    ssr: true,
+    webvisor: true,
+    clickmap: true,
+    ecommerce: "dataLayer",
+    referrer: document.referrer,
+    url: location.href,
+    accurateTrackBounce: true,
+    trackLinks: true,
+  });
+}
+
+function scheduleDeferredStartup() {
+  if (deferredStartupScheduled) {
+    return;
+  }
+  deferredStartupScheduled = true;
+  if (!shouldLoadDeferredAnalytics()) {
+    return;
+  }
+  const run = () => {
+    loadYandexMetrika();
+  };
+  if (typeof window.requestIdleCallback === "function") {
+    window.requestIdleCallback(run, { timeout: 2000 });
+    return;
+  }
+  window.setTimeout(run, 1200);
 }
 
 function refreshTelegramWebAppHandle() {
@@ -552,7 +625,7 @@ function ensureTelegramSdkLoaded(timeoutMs = 5000) {
     let script = document.querySelector('script[data-telegram-sdk="true"]');
     if (!script) {
       script = document.createElement("script");
-      script.src = "https://telegram.org/js/telegram-web-app.js?62";
+      script.src = TELEGRAM_WEB_APP_SDK_SRC;
       script.async = true;
       script.dataset.telegramSdk = "true";
       document.head.append(script);
@@ -722,6 +795,9 @@ function setBootPending(pending) {
     return;
   }
   bootSplash.classList.toggle("is-hidden", !pending);
+  if (!pending) {
+    scheduleDeferredStartup();
+  }
 }
 
 function hasPendingTelegramWebLogin() {
