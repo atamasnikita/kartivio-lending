@@ -10,10 +10,8 @@ const STORAGE_KEYS = {
 
 const DEFAULT_PROD_API_BASE = "https://api.kartivio-ai.ru";
 const DEFAULT_LOCAL_API_BASE = "http://127.0.0.1:8093";
-const GOOGLE_CLIENT_ID_META_NAME = "kartivio-google-client-id";
 const YANDEX_CLIENT_ID_META_NAME = "kartivio-yandex-client-id";
 const YANDEX_METRIKA_ID_META_NAME = "kartivio-yandex-metrika-id";
-const GOOGLE_OIDC_AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const YANDEX_OAUTH_AUTHORIZE_URL = "https://oauth.yandex.com/authorize";
 const TELEGRAM_WEB_APP_SDK_SRC = "./vendor/telegram-web-app.js?v=62";
 const AUTH_BRIDGE_HASH_KEY = "auth_bridge";
@@ -25,7 +23,6 @@ const YANDEX_OAUTH_STORAGE_KEYS = {
   verifier: "kartivio.yandex_oauth_verifier",
   returnTo: "kartivio.yandex_oauth_return_to",
 };
-const GOOGLE_OIDC_STATE_MAX_AGE_MS = 30 * 60 * 1000;
 const MAX_SOURCE_IMAGES = 3;
 const PROMPT_MAX_LENGTH = 3000;
 const TEMPLATE_SKELETON_RATIOS = ["1 / 1", "4 / 5", "3 / 4", "5 / 4", "2 / 3", "3 / 2"];
@@ -345,7 +342,6 @@ const devPanel = document.getElementById("devPanel");
 const apiBaseInput = document.getElementById("apiBaseInput");
 const authButton = document.getElementById("authButton");
 const authCheckButton = document.getElementById("authCheckButton");
-const googleAuthButton = document.getElementById("googleAuthButton");
 const yandexAuthButton = document.getElementById("yandexAuthButton");
 const envHint = document.getElementById("envHint");
 const authNote = document.getElementById("authNote");
@@ -354,7 +350,6 @@ const userTgId = document.getElementById("userTgId");
 const creditsValue = document.getElementById("creditsValue");
 const creditsBadge = document.getElementById("creditsBadge");
 const profileAvatar = document.getElementById("profileAvatar");
-const identityGoogle = document.getElementById("identityGoogle");
 const identityYandex = document.getElementById("identityYandex");
 const identityTelegram = document.getElementById("identityTelegram");
 const linkTelegramButton = document.getElementById("linkTelegramButton");
@@ -466,7 +461,6 @@ let lastTemplateGridColumnCount = 0;
 const navButtons = Array.from(document.querySelectorAll("[data-nav]"));
 const jumpButtons = Array.from(document.querySelectorAll("[data-nav-target]"));
 const screens = Array.from(document.querySelectorAll("[data-screen]"));
-let googleAuthPending = false;
 let yandexAuthPending = false;
 let templateModalCloseTimer = null;
 let templateModalImageLoadToken = 0;
@@ -827,18 +821,6 @@ function pickDefaultApiBase() {
   return DEFAULT_PROD_API_BASE;
 }
 
-function googleClientIdFromMeta() {
-  const queryClientId = String(new URLSearchParams(window.location.search).get("google_client_id") || "").trim();
-  if (queryClientId && canOverrideApiBase()) {
-    return queryClientId;
-  }
-  const tag = document.querySelector(`meta[name="${GOOGLE_CLIENT_ID_META_NAME}"]`);
-  if (!tag) {
-    return "";
-  }
-  return String(tag.getAttribute("content") || "").trim();
-}
-
 function yandexAuthLaunchUrl() {
   const url = new URL(window.location.href);
   url.searchParams.set("yandex_auto", "1");
@@ -847,7 +829,6 @@ function yandexAuthLaunchUrl() {
 
 function currentReturnToUrl() {
   const url = new URL(window.location.href);
-  url.searchParams.delete("google_auto");
   url.searchParams.delete("yandex_auto");
   url.hash = "";
   return url.toString();
@@ -1118,33 +1099,6 @@ function decodeJwtPayload(token) {
   }
 }
 
-function googleOidcAuthorizeUrl() {
-  const clientId = googleClientIdFromMeta();
-  if (!clientId) {
-    return "";
-  }
-  const nonceToken = randomBase64Url(24);
-  const stateToken = encodeBase64UrlJson({
-    nonce: nonceToken,
-    return_to: currentReturnToUrl(),
-    issued_at: Date.now(),
-  });
-  if (!stateToken) {
-    return "";
-  }
-
-  const url = new URL(GOOGLE_OIDC_AUTHORIZE_URL);
-  url.searchParams.set("client_id", clientId);
-  url.searchParams.set("redirect_uri", googleRedirectCallbackUrl());
-  url.searchParams.set("response_type", "id_token");
-  url.searchParams.set("response_mode", "form_post");
-  url.searchParams.set("scope", "openid email profile");
-  url.searchParams.set("state", stateToken);
-  url.searchParams.set("nonce", nonceToken);
-  url.searchParams.set("prompt", "select_account");
-  return url.toString();
-}
-
 function yandexClientIdFromMeta() {
   const queryClientId = String(new URLSearchParams(window.location.search).get("yandex_client_id") || "").trim();
   if (queryClientId && canOverrideApiBase()) {
@@ -1194,7 +1148,6 @@ async function yandexOauthAuthorizeUrl() {
 function stripGoogleCallbackArtifacts() {
   const url = new URL(window.location.href);
   url.hash = "";
-  url.searchParams.delete("google_auto");
   window.history.replaceState({}, document.title, url.toString());
 }
 
@@ -1224,11 +1177,20 @@ function consumeAuthBridgeResult() {
   stripAuthBridgeArtifact();
   const payload = decodeBase64UrlJson(rawBridge);
   if (!payload || typeof payload !== "object") {
-    setNote("Не удалось завершить вход через Google. Повтори попытку.", true);
+    setNote("Не удалось завершить вход через внешний сервис. Повтори попытку.", true);
     return { consumed: true, success: false };
   }
 
   const provider = String(payload.provider || "").trim().toLowerCase() || "google";
+  if (provider === "google") {
+    state.accessToken = "";
+    state.refreshToken = "";
+    state.isCookieSession = false;
+    state.lastAuthProvider = "";
+    saveState();
+    setNote("Вход через Google больше не поддерживается. Используйте Яндекс или Telegram.", true);
+    return { consumed: true, success: false };
+  }
   const errorCode = String(payload.error_code || "").trim();
   const errorMessage = String(payload.error_message || "").trim();
   if (errorCode) {
@@ -1240,7 +1202,7 @@ function consumeAuthBridgeResult() {
     setNote(
       userFacingErrorMessage(
         { code: errorCode, rawMessage: errorMessage },
-        errorMessage || "Не удалось выполнить вход через Google."
+        errorMessage || "Не удалось выполнить вход через внешний сервис."
       ),
       true
     );
@@ -1250,7 +1212,7 @@ function consumeAuthBridgeResult() {
   const accessToken = String(payload.access_token || "").trim();
   const refreshToken = String(payload.refresh_token || "").trim();
   if (!accessToken || !refreshToken) {
-    setNote("Не удалось завершить вход через Google. Повтори попытку.", true);
+    setNote("Не удалось завершить вход через внешний сервис. Повтори попытку.", true);
     return { consumed: true, success: false };
   }
 
@@ -1280,51 +1242,13 @@ async function consumeGoogleOidcCallback() {
     return false;
   }
   const params = new URLSearchParams(hash);
-  const returnedState = String(params.get("state") || "").trim();
-  const idToken = String(params.get("id_token") || "").trim();
-  const oauthError = String(params.get("error") || "").trim();
-  const oauthErrorDescription = String(params.get("error_description") || "").trim();
-  const decodedState = decodeBase64UrlJson(returnedState);
-  const expectedNonce = decodedState && typeof decodedState.nonce === "string" ? decodedState.nonce.trim() : "";
-  const returnTo =
-    decodedState && typeof decodedState.return_to === "string" && decodedState.return_to.trim()
-      ? decodedState.return_to.trim()
-      : currentReturnToUrl();
-  const issuedAt = decodedState && Number.isFinite(decodedState.issued_at) ? Number(decodedState.issued_at) : 0;
-  const stateExpired = !issuedAt || Math.abs(Date.now() - issuedAt) > GOOGLE_OIDC_STATE_MAX_AGE_MS;
-
-  if (!returnedState || !decodedState || !expectedNonce || stateExpired) {
-    if (oauthError || idToken) {
-      stripGoogleCallbackArtifacts();
-      setNote("Сессия входа через Google устарела. Запусти вход заново.", true);
-      return true;
-    }
+  const hasLegacyGooglePayload =
+    params.has("state") || params.has("id_token") || params.has("error") || params.has("error_description");
+  if (!hasLegacyGooglePayload) {
     return false;
   }
-
   stripGoogleCallbackArtifacts();
-
-  if (oauthError) {
-    const description = oauthErrorDescription ? decodeURIComponent(oauthErrorDescription.replace(/\+/g, " ")) : "";
-    setNote(description || "Не удалось завершить вход через Google.", true);
-    return true;
-  }
-  if (!idToken) {
-    setNote("Google не вернул данные для входа. Повтори попытку.", true);
-    return true;
-  }
-
-  const tokenPayload = decodeJwtPayload(idToken);
-  if (!tokenPayload || String(tokenPayload.nonce || "").trim() !== expectedNonce) {
-    setNote("Не удалось подтвердить сессию Google. Повтори попытку.", true);
-    return true;
-  }
-
-  await loginViaGoogleCredential(idToken);
-  const url = new URL(returnTo);
-  url.hash = "";
-  url.searchParams.delete("google_auto");
-  window.history.replaceState({}, document.title, url.toString());
+  setNote("Вход через Google больше не поддерживается. Используйте Яндекс или Telegram.", true);
   return true;
 }
 
@@ -2454,10 +2378,6 @@ function attachTelegramImmersiveListeners() {
 }
 
 function refreshAuthButtons() {
-  if (googleAuthButton) {
-    googleAuthButton.textContent = "Войти через Google";
-    googleAuthButton.classList.toggle("is-hidden", !googleClientIdFromMeta());
-  }
   if (yandexAuthButton) {
     yandexAuthButton.textContent = "Войти через Яндекс";
     yandexAuthButton.classList.toggle("is-hidden", !yandexClientIdFromMeta());
@@ -2516,16 +2436,13 @@ async function logoutSession() {
   setAuthGateVisible(true);
   switchScreen("feed");
   await Promise.allSettled([loadPrivateData(), loadHistory(), loadTemplates()]);
-  setNote("Сессия завершена. Войди снова через Google, Яндекс или Telegram.");
+  setNote("Сессия завершена. Войди снова через Яндекс или Telegram.");
 }
 
 function renderIdentityActions() {
   const linkedTelegram = state.linkedProviders.has("telegram");
   if (identityTelegram) {
     identityTelegram.textContent = linkedTelegram ? "Подключен" : "Не подключен";
-  }
-  if (identityGoogle) {
-    identityGoogle.textContent = state.linkedProviders.has("google") ? "Подключен" : "Не подключен";
   }
   if (identityYandex) {
     identityYandex.textContent = state.linkedProviders.has("yandex") ? "Подключен" : "Не подключен";
@@ -5239,35 +5156,12 @@ async function loginViaTelegram(options = {}) {
   }
 }
 
-function setGoogleAuthButtonIdle() {
-  googleAuthPending = false;
-  if (googleAuthButton) {
-    googleAuthButton.disabled = false;
-  }
-  refreshAuthButtons();
-}
-
 function setYandexAuthButtonIdle() {
   yandexAuthPending = false;
   if (yandexAuthButton) {
     yandexAuthButton.disabled = false;
   }
   refreshAuthButtons();
-}
-
-async function loginViaGoogleCredential(idToken) {
-  const payload = await apiFetch("/v1/auth/google", {
-    method: "POST",
-    body: { id_token: idToken },
-  });
-  await finalizeAuthSession(payload, "google");
-  syncAcquisitionTouch({ auth: true }).catch(() => {});
-  ensurePublicDataLoaded().catch(() => {});
-  setAuthGateVisible(false);
-  setNote("Авторизация через Google успешна.");
-  await loadPrivateData();
-  markHistoryCacheStale();
-  switchScreen("feed");
 }
 
 async function loginViaYandexCode(code, codeVerifier) {
@@ -5283,39 +5177,6 @@ async function loginViaYandexCode(code, codeVerifier) {
   await loadPrivateData();
   markHistoryCacheStale();
   switchScreen("feed");
-}
-
-async function loginViaGoogle() {
-  if (!googleAuthButton) {
-    return;
-  }
-  if (googleAuthPending) {
-    return;
-  }
-  const clientId = googleClientIdFromMeta();
-  if (!clientId) {
-    setNote("Google Client ID не задан в мета-теге kartivio-google-client-id.", true);
-    return;
-  }
-  const url = googleOidcAuthorizeUrl();
-  if (!url) {
-    setNote("Google login недоступен для этого окружения.", true);
-    return;
-  }
-  if (isTelegramMiniAppRuntime()) {
-    setNote("Открываю Google во внешнем браузере.");
-    if (tg && typeof tg.openLink === "function") {
-      tg.openLink(url);
-      return;
-    }
-    window.open(url, "_blank", "noopener,noreferrer");
-    return;
-  }
-
-  googleAuthPending = true;
-  googleAuthButton.disabled = true;
-  setNote("Открываю Google...");
-  window.location.assign(url);
 }
 
 async function loginViaYandex() {
@@ -5383,9 +5244,6 @@ function bindEvents() {
     authCheckButton.addEventListener("click", () => {
       resumePendingTelegramWebLogin({ announce: true });
     });
-  }
-  if (googleAuthButton) {
-    googleAuthButton.addEventListener("click", loginViaGoogle);
   }
   if (yandexAuthButton) {
     yandexAuthButton.addEventListener("click", () => {
@@ -5817,23 +5675,41 @@ async function bootstrap() {
   renderCampaignPreviewStats(null);
   renderAuthGateActions();
 
+  let authBridgeResult = { consumed: false, success: false };
   try {
-    consumeAuthBridgeResult();
+    authBridgeResult = consumeAuthBridgeResult();
   } catch (error) {
     state.accessToken = "";
     state.refreshToken = "";
     state.isCookieSession = false;
     state.lastAuthProvider = "";
     saveState();
-    setNote(userFacingErrorMessage(error, "Не удалось завершить вход через Google."), true);
+    setNote(userFacingErrorMessage(error, "Не удалось завершить вход через внешний сервис."), true);
+  }
+
+  if (authBridgeResult.consumed && !authBridgeResult.success) {
+    await apiBasePromise;
+    setAuthGateVisible(true);
+    await loadPrivateData();
+    await loadHistory();
+    ensurePublicDataLoaded({ notifyOnError: true }).catch(() => {});
+    switchScreen("feed");
+    setBootPending(false);
+    return;
   }
 
   await apiBasePromise;
 
   try {
     const consumedGoogleCallback = await consumeGoogleOidcCallback();
-    if (consumedGoogleCallback && hasActiveSession()) {
-      setAuthGateVisible(false);
+    if (consumedGoogleCallback) {
+      setAuthGateVisible(hasActiveSession() ? false : true);
+      if (!hasActiveSession()) {
+        await loadPrivateData();
+        await loadHistory();
+        ensurePublicDataLoaded({ notifyOnError: true }).catch(() => {});
+        switchScreen("feed");
+      }
       setBootPending(false);
       return;
     }
@@ -5843,7 +5719,7 @@ async function bootstrap() {
     state.isCookieSession = false;
     state.lastAuthProvider = "";
     saveState();
-    setNote(userFacingErrorMessage(error, "Не удалось выполнить вход через Google."), true);
+    setNote(userFacingErrorMessage(error, "Вход через Google больше не поддерживается."), true);
   }
 
   try {
@@ -5896,9 +5772,7 @@ async function bootstrap() {
   if (autoGoogle === "1" && !isTelegramMiniAppRuntime() && !hasActiveSession()) {
     setAuthGateVisible(true);
     setBootPending(false);
-    window.setTimeout(() => {
-      loginViaGoogle().catch(() => {});
-    }, 150);
+    setNote("Вход через Google больше не поддерживается. Используйте Яндекс или Telegram.", true);
     return;
   }
 
@@ -5916,7 +5790,7 @@ async function bootstrap() {
     switchScreen("feed");
   } else {
     setAuthGateVisible(true);
-    setNote("Войди через Google, Яндекс или Telegram, чтобы начать.");
+    setNote("Войди через Яндекс или Telegram, чтобы начать.");
     switchScreen("feed");
   }
   setBootPending(false);
