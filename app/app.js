@@ -295,7 +295,7 @@ const state = {
   publicDataLoadContext: "",
   publicDataLoadedContext: "",
   publicDataRequestToken: 0,
-  selectedTemplateFilter: "all",
+  selectedTemplateFilter: "new",
   templateVisibleCount: 0,
   templateRenderKey: "",
   activeTemplateModalId: "",
@@ -317,12 +317,15 @@ const state = {
   historyNextOffset: 0,
   historyHasMore: false,
   adminTab: "campaigns",
+  adminTemplates: [],
   adminCampaigns: [],
   adminOffers: [],
+  selectedAdminTemplateId: "",
   selectedAdminCampaignId: "",
   adminCampaignPreview: null,
   adminCampaignDraftKind: "new_templates",
   adminCampaignAudienceMode: "auto",
+  adminTemplateLocalPreviewUrl: "",
 };
 
 let tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
@@ -332,6 +335,8 @@ const HISTORY_PAGE_SIZE = 12;
 const TEMPLATE_FEED_INCREMENTAL_THRESHOLD = 24;
 const TEMPLATE_FEED_INITIAL_BATCH_SIZE = 18;
 const TEMPLATE_FEED_BATCH_SIZE = 18;
+const ADMIN_TEMPLATE_FILE_NOTE_DEFAULT =
+  "PNG/JPG/WEBP до 10 MB. Превью и full соберутся автоматически. Файл нужен только для нового шаблона.";
 
 const bootSplash = document.getElementById("bootSplash");
 const appShell = document.getElementById("appShell");
@@ -362,8 +367,26 @@ const plansActionButton = document.getElementById("plansActionButton");
 const plansNote = document.getElementById("plansNote");
 const marketingBackButton = document.getElementById("marketingBackButton");
 const marketingAdminTabs = document.getElementById("marketingAdminTabs");
+const marketingTemplatesPanel = document.getElementById("marketingTemplatesPanel");
 const marketingCampaignsPanel = document.getElementById("marketingCampaignsPanel");
 const marketingOffersPanel = document.getElementById("marketingOffersPanel");
+const adminTemplateStateBadge = document.getElementById("adminTemplateStateBadge");
+const adminTemplateTitleInput = document.getElementById("adminTemplateTitleInput");
+const adminTemplateCategoryInput = document.getElementById("adminTemplateCategoryInput");
+const adminTemplatePromptInput = document.getElementById("adminTemplatePromptInput");
+const adminTemplateFileInput = document.getElementById("adminTemplateFileInput");
+const adminTemplatePickFileButton = document.getElementById("adminTemplatePickFileButton");
+const adminTemplateFileNote = document.getElementById("adminTemplateFileNote");
+const adminTemplatePreview = document.getElementById("adminTemplatePreview");
+const adminTemplatePreviewImage = document.getElementById("adminTemplatePreviewImage");
+const adminTemplateMeta = document.getElementById("adminTemplateMeta");
+const adminTemplateCreateButton = document.getElementById("adminTemplateCreateButton");
+const adminTemplateSaveButton = document.getElementById("adminTemplateSaveButton");
+const adminTemplateToggleButton = document.getElementById("adminTemplateToggleButton");
+const adminTemplateResetButton = document.getElementById("adminTemplateResetButton");
+const adminTemplateFormNote = document.getElementById("adminTemplateFormNote");
+const refreshAdminTemplatesButton = document.getElementById("refreshAdminTemplatesButton");
+const adminTemplatesList = document.getElementById("adminTemplatesList");
 const campaignKindSelect = document.getElementById("campaignKindSelect");
 const campaignTitleInput = document.getElementById("campaignTitleInput");
 const campaignMessageInput = document.getElementById("campaignMessageInput");
@@ -1865,7 +1888,12 @@ function switchScreen(nextScreen) {
     });
   } else if (target === "marketing") {
     loadAdminData().catch((error) => {
-      setCampaignFormNote(userFacingErrorMessage(error, "Не удалось загрузить кампании."), true);
+      const message = userFacingErrorMessage(
+        error,
+        "Не удалось загрузить админские данные.",
+      );
+      setCampaignFormNote(message, true);
+      setAdminTemplateFormNote(message, true);
     });
   } else if (target === "feed") {
     window.requestAnimationFrame(() => maybeAutoLoadMoreTemplates());
@@ -2427,8 +2455,11 @@ async function logoutSession() {
   state.me = null;
   state.telegramLinkToken = "";
   state.telegramWebLoginToken = "";
+  releaseAdminTemplateLocalPreview();
+  state.adminTemplates = [];
   state.adminCampaigns = [];
   state.adminOffers = [];
+  state.selectedAdminTemplateId = "";
   state.selectedAdminCampaignId = "";
   state.adminCampaignPreview = null;
   resetHistoryCache();
@@ -2527,6 +2558,193 @@ function renderAdminAccess() {
     return;
   }
   adminAccessCard.classList.toggle("is-hidden", !isAdminUser());
+}
+
+function setAdminTemplateFormNote(message, isError = false) {
+  if (!adminTemplateFormNote) {
+    return;
+  }
+  adminTemplateFormNote.textContent = String(message || "");
+  adminTemplateFormNote.style.color = isError ? "#ff8080" : "";
+}
+
+function setAdminTemplateFileStatus(message, isError = false) {
+  if (!adminTemplateFileNote) {
+    return;
+  }
+  adminTemplateFileNote.textContent = String(message || ADMIN_TEMPLATE_FILE_NOTE_DEFAULT);
+  adminTemplateFileNote.style.color = isError ? "#ff8080" : "";
+}
+
+function adminSelectedTemplate() {
+  return state.adminTemplates.find((item) => item.id === state.selectedAdminTemplateId) || null;
+}
+
+function releaseAdminTemplateLocalPreview() {
+  const current = String(state.adminTemplateLocalPreviewUrl || "").trim();
+  if (current && current.startsWith("blob:")) {
+    URL.revokeObjectURL(current);
+  }
+  state.adminTemplateLocalPreviewUrl = "";
+}
+
+function clearAdminTemplateFileSelection() {
+  releaseAdminTemplateLocalPreview();
+  if (adminTemplateFileInput) {
+    adminTemplateFileInput.value = "";
+  }
+  setAdminTemplateFileStatus(ADMIN_TEMPLATE_FILE_NOTE_DEFAULT);
+}
+
+function adminTemplateCurrentFile() {
+  return adminTemplateFileInput && adminTemplateFileInput.files
+    ? adminTemplateFileInput.files[0] || null
+    : null;
+}
+
+function setAdminTemplatePreview(url) {
+  if (!adminTemplatePreview || !adminTemplatePreviewImage) {
+    return;
+  }
+  const normalized = normalizeImageUrl(url);
+  if (!normalized) {
+    adminTemplatePreview.classList.add("is-hidden");
+    adminTemplatePreviewImage.removeAttribute("src");
+    return;
+  }
+  adminTemplatePreviewImage.src = normalized;
+  adminTemplatePreview.classList.remove("is-hidden");
+}
+
+function populateAdminTemplateDraft(item) {
+  if (!item) {
+    return;
+  }
+  if (adminTemplateTitleInput) {
+    adminTemplateTitleInput.value = String(item.title || "");
+  }
+  if (adminTemplateCategoryInput) {
+    adminTemplateCategoryInput.value = String(item.category || "");
+  }
+  if (adminTemplatePromptInput) {
+    adminTemplatePromptInput.value = String(item.prompt || "");
+  }
+}
+
+function resetAdminTemplateDraft() {
+  state.selectedAdminTemplateId = "";
+  clearAdminTemplateFileSelection();
+  if (adminTemplateTitleInput) {
+    adminTemplateTitleInput.value = "";
+  }
+  if (adminTemplateCategoryInput) {
+    adminTemplateCategoryInput.value = "";
+  }
+  if (adminTemplatePromptInput) {
+    adminTemplatePromptInput.value = "";
+  }
+  setAdminTemplatePreview("");
+  setAdminTemplateFormNote("");
+  renderAdminTemplateFormState();
+}
+
+function adminTemplateDraftBody() {
+  const title = String((adminTemplateTitleInput && adminTemplateTitleInput.value) || "").trim();
+  const category = String((adminTemplateCategoryInput && adminTemplateCategoryInput.value) || "").trim();
+  const prompt = String((adminTemplatePromptInput && adminTemplatePromptInput.value) || "").trim();
+  if (!title) {
+    throw new Error("Укажи название шаблона.");
+  }
+  if (!category) {
+    throw new Error("Укажи категорию шаблона.");
+  }
+  if (prompt.length < 10) {
+    throw new Error("Промпт должен быть не короче 10 символов.");
+  }
+  return { title, category, prompt };
+}
+
+function adminTemplateDraftDiffers() {
+  const selected = adminSelectedTemplate();
+  if (!selected) {
+    return false;
+  }
+  let draft;
+  try {
+    draft = adminTemplateDraftBody();
+  } catch (_error) {
+    return true;
+  }
+  return (
+    String(selected.title || "").trim() !== draft.title ||
+    String(selected.category || "").trim() !== draft.category ||
+    String(selected.prompt || "").trim() !== draft.prompt
+  );
+}
+
+function truncateAdminText(value, limit = 180) {
+  const normalized = String(value || "").trim().replace(/\s+/g, " ");
+  if (normalized.length <= limit) {
+    return normalized;
+  }
+  return `${normalized.slice(0, limit - 1).trimEnd()}…`;
+}
+
+function renderAdminTemplateFormState() {
+  const selected = adminSelectedTemplate();
+  const selectedFile = adminTemplateCurrentFile();
+  if (adminTemplateStateBadge) {
+    if (!selected) {
+      adminTemplateStateBadge.textContent = "Новый";
+    } else {
+      adminTemplateStateBadge.textContent = selected.is_active ? "Активен" : "Скрыт";
+    }
+  }
+  if (adminTemplateSaveButton) {
+    adminTemplateSaveButton.disabled = !selected;
+  }
+  if (adminTemplateToggleButton) {
+    adminTemplateToggleButton.disabled = !selected;
+    adminTemplateToggleButton.textContent = selected && !selected.is_active ? "Показать" : "Скрыть";
+  }
+  if (selectedFile) {
+    const localPreview = String(state.adminTemplateLocalPreviewUrl || "").trim();
+    if (localPreview) {
+      setAdminTemplatePreview(localPreview);
+    }
+  } else if (selected) {
+    setAdminTemplatePreview(selected.preview_image_url || selected.full_image_url || "");
+  } else {
+    setAdminTemplatePreview("");
+  }
+
+  if (!adminTemplateMeta) {
+    return;
+  }
+  if (!selected) {
+    adminTemplateMeta.textContent =
+      "Новый шаблон. Загрузи один файл, задай название, категорию и промпт.";
+    adminTemplateMeta.classList.remove("is-warning");
+    return;
+  }
+  const metaParts = [
+    selected.id,
+    selected.category,
+    `${selected.usage_count || 0} использований`,
+    `${selected.likes_count || 0} лайков`,
+    formatAdminDateTime(selected.created_at),
+  ];
+  let message = metaParts.join(" · ");
+  if (selectedFile) {
+    message += " · Загруженный файл создаст новый шаблон, текущий не заменится.";
+  } else if (adminTemplateDraftDiffers()) {
+    message += " · Есть несохраненные изменения.";
+  }
+  adminTemplateMeta.textContent = message;
+  adminTemplateMeta.classList.toggle(
+    "is-warning",
+    Boolean(selectedFile || adminTemplateDraftDiffers()),
+  );
 }
 
 function adminKindLabel(kind) {
@@ -2774,6 +2992,9 @@ function renderAdminTabs() {
   for (const button of buttons) {
     button.classList.toggle("is-active", button.dataset.adminTab === state.adminTab);
   }
+  if (marketingTemplatesPanel) {
+    marketingTemplatesPanel.classList.toggle("is-hidden", state.adminTab !== "templates");
+  }
   if (marketingCampaignsPanel) {
     marketingCampaignsPanel.classList.toggle("is-hidden", state.adminTab !== "campaigns");
   }
@@ -2906,6 +3127,51 @@ function renderOffersList() {
   }).join("");
 }
 
+function renderAdminTemplatesList() {
+  if (!adminTemplatesList) {
+    return;
+  }
+  if (!state.adminTemplates.length) {
+    adminTemplatesList.innerHTML =
+      '<article class="admin-list-empty">Шаблонов пока нет.</article>';
+    return;
+  }
+  adminTemplatesList.innerHTML = state.adminTemplates
+    .map((item) => {
+      const isSelected = item.id === state.selectedAdminTemplateId;
+      const statusBadge = item.is_active
+        ? '<span class="plan-badge">Активен</span>'
+        : '<span class="plan-badge plan-badge-muted">Скрыт</span>';
+      const previewUrl = normalizeImageUrl(item.preview_image_url || item.full_image_url || "");
+      return `
+        <article class="admin-record-card admin-template-card admin-template-card-static${isSelected ? " is-selected" : ""}" data-template-id="${escapeHtml(item.id)}">
+          <div class="admin-template-thumb">
+            ${previewUrl ? `<img src="${escapeHtml(previewUrl)}" alt="${escapeHtml(item.title || "Шаблон")}" loading="lazy" />` : ""}
+          </div>
+          <div class="admin-template-body">
+            <div class="admin-record-head">
+              <div>
+                <div class="admin-template-title-row">
+                  <strong>${escapeHtml(item.title || "Без названия")}</strong>
+                  ${statusBadge}
+                </div>
+                <p>${escapeHtml(item.id)} · ${escapeHtml(item.category || "Разное")}</p>
+              </div>
+              <span class="chip">${escapeHtml(String(item.usage_count || 0))} исп.</span>
+            </div>
+            <p class="admin-record-text">${escapeHtml(truncateAdminText(item.prompt))}</p>
+            <div class="admin-record-meta">
+              <span>${escapeHtml(formatAdminDateTime(item.created_at))}</span>
+              <span>${escapeHtml(String(item.likes_count || 0))} лайков</span>
+              <span>${escapeHtml(String(item.source_type || "upload"))}</span>
+            </div>
+          </div>
+        </article>
+      `;
+    })
+    .join("");
+}
+
 function resetOfferDraft() {
   if (offerCodeInput) {
     offerCodeInput.value = "personal_200_299";
@@ -3007,11 +3273,77 @@ async function loadAdminOffers() {
   renderPromoOfferOptions();
 }
 
+async function loadAdminTemplates() {
+  const payload = await authorizedFetch("/v1/admin/feed-templates?limit=200&offset=0");
+  state.adminTemplates = Array.isArray(payload.items) ? payload.items : [];
+  if (
+    state.selectedAdminTemplateId &&
+    !state.adminTemplates.some((item) => item.id === state.selectedAdminTemplateId)
+  ) {
+    state.selectedAdminTemplateId = "";
+  }
+  const selected = adminSelectedTemplate();
+  if (selected) {
+    populateAdminTemplateDraft(selected);
+  }
+  renderAdminTemplatesList();
+  renderAdminTemplateFormState();
+}
+
 async function loadAdminData() {
   if (!isAdminUser()) {
     return;
   }
-  await Promise.all([loadAdminCampaigns(), loadAdminOffers()]);
+  await Promise.all([loadAdminTemplates(), loadAdminCampaigns(), loadAdminOffers()]);
+}
+
+async function createAdminTemplate() {
+  const file = adminTemplateCurrentFile();
+  if (!(file instanceof File)) {
+    throw new Error("Сначала выбери файл шаблона.");
+  }
+  const draft = adminTemplateDraftBody();
+  const form = new FormData();
+  form.append("file", file);
+  form.append("title", draft.title);
+  form.append("category", draft.category);
+  form.append("prompt", draft.prompt);
+  const payload = await authorizedMultipart("/v1/admin/feed-templates", form);
+  clearAdminTemplateFileSelection();
+  state.selectedAdminTemplateId = String(payload.id || "").trim();
+  await loadAdminTemplates();
+  return payload;
+}
+
+async function updateAdminTemplate() {
+  const selected = adminSelectedTemplate();
+  if (!selected) {
+    throw new Error("Сначала выбери шаблон из списка.");
+  }
+  const payload = await authorizedFetch(`/v1/admin/feed-templates/${selected.id}`, {
+    method: "PATCH",
+    body: adminTemplateDraftBody(),
+  });
+  state.selectedAdminTemplateId = String(payload.id || selected.id).trim();
+  await loadAdminTemplates();
+  return payload;
+}
+
+async function toggleAdminTemplateVisibility() {
+  const selected = adminSelectedTemplate();
+  if (!selected) {
+    throw new Error("Сначала выбери шаблон из списка.");
+  }
+  const action = selected.is_active ? "hide" : "show";
+  const payload = await authorizedFetch(
+    `/v1/admin/feed-templates/${selected.id}/${action}`,
+    {
+      method: "POST",
+    },
+  );
+  state.selectedAdminTemplateId = String(payload.id || selected.id).trim();
+  await loadAdminTemplates();
+  return payload;
 }
 
 async function createAdminCampaign() {
@@ -3975,7 +4307,7 @@ function renderTemplateFilters() {
   bindTemplateFilterScroller();
   const filters = templateFilters();
   if (!filters.includes(state.selectedTemplateFilter)) {
-    state.selectedTemplateFilter = "all";
+    state.selectedTemplateFilter = TEMPLATE_FILTER_NEW;
   }
   templateFilterChips.innerHTML = "";
 
@@ -4024,6 +4356,13 @@ function filteredTemplateItems() {
 }
 
 function compareTemplatesByFreshness(left, right) {
+  const leftSortIndex = Number(left?.sort_index || 0);
+  const rightSortIndex = Number(right?.sort_index || 0);
+  if (leftSortIndex > 0 || rightSortIndex > 0) {
+    if (leftSortIndex !== rightSortIndex) {
+      return rightSortIndex - leftSortIndex;
+    }
+  }
   const leftCreatedAt = templateFreshnessTimestamp(left);
   const rightCreatedAt = templateFreshnessTimestamp(right);
   if (leftCreatedAt !== rightCreatedAt) {
@@ -4323,6 +4662,7 @@ function renderTemplates(payload) {
     title: String(item.title || "").trim() || "Шаблон",
     category: normalizeTemplateCategory(item.category),
     prompt: String(item.prompt || "").trim(),
+    sort_index: Number(item.sort_index || 0),
     created_at: String(item.created_at || "").trim(),
     preview_image_url: String(item.preview_image_url || "").trim(),
     full_image_url: String(item.full_image_url || "").trim(),
@@ -5412,6 +5752,123 @@ function bindEvents() {
       renderAdminTabs();
     });
   }
+  for (const input of [
+    adminTemplateTitleInput,
+    adminTemplateCategoryInput,
+    adminTemplatePromptInput,
+  ]) {
+    if (input) {
+      input.addEventListener("input", () => {
+        renderAdminTemplateFormState();
+      });
+    }
+  }
+  if (adminTemplatePickFileButton && adminTemplateFileInput) {
+    adminTemplatePickFileButton.addEventListener("click", () => {
+      adminTemplateFileInput.click();
+    });
+    adminTemplateFileInput.addEventListener("change", () => {
+      releaseAdminTemplateLocalPreview();
+      const file = adminTemplateCurrentFile();
+      if (!file) {
+        setAdminTemplateFileStatus(ADMIN_TEMPLATE_FILE_NOTE_DEFAULT);
+        renderAdminTemplateFormState();
+        return;
+      }
+      state.adminTemplateLocalPreviewUrl = URL.createObjectURL(file);
+      setAdminTemplateFileStatus(`Файл выбран: ${file.name}`);
+      renderAdminTemplateFormState();
+    });
+  }
+  if (adminTemplateCreateButton) {
+    adminTemplateCreateButton.addEventListener("click", async () => {
+      adminTemplateCreateButton.disabled = true;
+      setAdminTemplateFormNote("Загружаю шаблон...");
+      try {
+        const payload = await createAdminTemplate();
+        setAdminTemplateFormNote(`Шаблон создан: ${payload.title}`);
+      } catch (error) {
+        setAdminTemplateFormNote(
+          adminFormErrorMessage(error, "Не удалось загрузить шаблон."),
+          true,
+        );
+      } finally {
+        adminTemplateCreateButton.disabled = false;
+      }
+    });
+  }
+  if (adminTemplateSaveButton) {
+    adminTemplateSaveButton.addEventListener("click", async () => {
+      adminTemplateSaveButton.disabled = true;
+      setAdminTemplateFormNote("Сохраняю изменения...");
+      try {
+        const payload = await updateAdminTemplate();
+        setAdminTemplateFormNote(`Шаблон обновлен: ${payload.title}`);
+      } catch (error) {
+        setAdminTemplateFormNote(
+          adminFormErrorMessage(error, "Не удалось сохранить шаблон."),
+          true,
+        );
+      } finally {
+        adminTemplateSaveButton.disabled = false;
+      }
+    });
+  }
+  if (adminTemplateToggleButton) {
+    adminTemplateToggleButton.addEventListener("click", async () => {
+      adminTemplateToggleButton.disabled = true;
+      setAdminTemplateFormNote("Обновляю статус...");
+      try {
+        const payload = await toggleAdminTemplateVisibility();
+        setAdminTemplateFormNote(
+          payload.is_active
+            ? `Шаблон снова виден: ${payload.title}`
+            : `Шаблон скрыт: ${payload.title}`,
+        );
+      } catch (error) {
+        setAdminTemplateFormNote(
+          adminFormErrorMessage(error, "Не удалось обновить статус шаблона."),
+          true,
+        );
+      } finally {
+        adminTemplateToggleButton.disabled = false;
+      }
+    });
+  }
+  if (adminTemplateResetButton) {
+    adminTemplateResetButton.addEventListener("click", () => {
+      resetAdminTemplateDraft();
+    });
+  }
+  if (refreshAdminTemplatesButton) {
+    refreshAdminTemplatesButton.addEventListener("click", () => {
+      loadAdminTemplates().catch((error) => {
+        setAdminTemplateFormNote(
+          userFacingErrorMessage(error, "Не удалось обновить шаблоны."),
+          true,
+        );
+      });
+    });
+  }
+  if (adminTemplatesList) {
+    adminTemplatesList.addEventListener("click", (event) => {
+      const card = event.target instanceof Element ? event.target.closest("[data-template-id]") : null;
+      if (!(card instanceof HTMLElement)) {
+        return;
+      }
+      const templateId = String(card.dataset.templateId || "").trim();
+      const selected = state.adminTemplates.find((item) => item.id === templateId) || null;
+      if (!selected) {
+        return;
+      }
+      state.selectedAdminTemplateId = selected.id;
+      clearAdminTemplateFileSelection();
+      populateAdminTemplateDraft(selected);
+      renderAdminTemplatesList();
+      renderAdminTemplateFormState();
+      setAdminTemplateFormNote(`Шаблон выбран: ${selected.title}`);
+    });
+  }
   if (campaignKindSelect) {
     campaignKindSelect.addEventListener("change", () => {
       const nextKind = String(campaignKindSelect.value || "").trim() || "new_templates";
@@ -5669,6 +6126,7 @@ async function bootstrap() {
   renderIdentityActions();
   renderAdminAccess();
   renderAdminTabs();
+  resetAdminTemplateDraft();
   renderCampaignDraftVisibility();
   resetCampaignDraft();
   resetOfferDraft();

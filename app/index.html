@@ -11,7 +11,7 @@
     />
     <meta name="kartivio-yandex-metrika-id" content="109102691" />
     <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=20260606e" />
+    <link rel="stylesheet" href="./styles.css?v=20260617a" />
     <script src="./vendor/lucide.min.js?v=1.18.0" defer></script>
   </head>
   <body>
@@ -278,18 +278,68 @@
 
         <section class="screen" data-screen="marketing">
           <div class="section-row">
-            <h2>Рассылки</h2>
+            <h2>Управление</h2>
             <button id="marketingBackButton" class="icon-btn" type="button" aria-label="Вернуться в профиль">
               <i data-lucide="arrow-left"></i>
             </button>
           </div>
-          <p class="subtitle">Telegram-only кампании: новые шаблоны и персональные офферы.</p>
+          <p class="subtitle">Шаблоны ленты, Telegram-only кампании и персональные офферы.</p>
 
           <section class="panel-card admin-marketing-panel">
             <div id="marketingAdminTabs" class="segmented admin-marketing-tabs">
+              <button class="segmented-btn" type="button" data-admin-tab="templates">Шаблоны</button>
               <button class="segmented-btn is-active" type="button" data-admin-tab="campaigns">Кампании</button>
               <button class="segmented-btn" type="button" data-admin-tab="offers">Офферы</button>
             </div>
+          </section>
+
+          <section id="marketingTemplatesPanel" class="admin-marketing-panel is-hidden">
+            <section class="panel-card admin-form-card">
+              <div class="section-row section-row-tight">
+                <h3>Загрузка шаблона</h3>
+                <span id="adminTemplateStateBadge">Новый</span>
+              </div>
+              <div class="admin-grid-2">
+                <div class="field">
+                  <span>Название</span>
+                  <input id="adminTemplateTitleInput" type="text" maxlength="120" placeholder="Фото из 90-х" />
+                </div>
+                <div class="field">
+                  <span>Категория</span>
+                  <input id="adminTemplateCategoryInput" type="text" maxlength="60" placeholder="Ретро" />
+                </div>
+              </div>
+              <label class="field">
+                <span>Промпт</span>
+                <textarea id="adminTemplatePromptInput" rows="8" maxlength="3000" placeholder="Полный промпт шаблона"></textarea>
+              </label>
+              <div class="admin-media-upload-row">
+                <input id="adminTemplateFileInput" class="visually-hidden-input" type="file" accept="image/png,image/jpeg,image/webp" />
+                <button id="adminTemplatePickFileButton" class="soft-btn" type="button">Выбрать файл</button>
+                <span id="adminTemplateFileNote" class="note">PNG/JPG/WEBP до 10 MB. Превью и full соберутся автоматически. Файл нужен только для нового шаблона.</span>
+              </div>
+              <div id="adminTemplatePreview" class="admin-media-preview is-hidden">
+                <img id="adminTemplatePreviewImage" src="" alt="Превью шаблона" loading="lazy" />
+              </div>
+              <div id="adminTemplateMeta" class="note admin-selected-summary"></div>
+              <div class="admin-form-actions">
+                <button id="adminTemplateCreateButton" class="primary-action admin-primary-action" type="button">Загрузить новый</button>
+                <button id="adminTemplateSaveButton" class="soft-btn" type="button">Сохранить текст</button>
+                <button id="adminTemplateToggleButton" class="soft-btn" type="button">Скрыть</button>
+                <button id="adminTemplateResetButton" class="soft-btn" type="button">Новый</button>
+              </div>
+              <p id="adminTemplateFormNote" class="note"></p>
+            </section>
+
+            <section class="panel-card admin-list-card">
+              <div class="section-row section-row-tight">
+                <h3>Шаблоны в ленте</h3>
+                <button id="refreshAdminTemplatesButton" class="icon-btn" type="button" aria-label="Обновить шаблоны">
+                  <i data-lucide="refresh-cw"></i>
+                </button>
+              </div>
+              <div id="adminTemplatesList" class="admin-list"></div>
+            </section>
           </section>
 
           <section id="marketingCampaignsPanel" class="admin-marketing-panel">
@@ -495,6 +545,6 @@
       </article>
     </div>
 
-    <script src="./app.js?v=20260614a" defer></script>
+    <script src="./app.js?v=20260618a" defer></script>
   </body>
 </html>

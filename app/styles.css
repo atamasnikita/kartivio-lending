@@ -1746,7 +1746,7 @@ body.is-web-runtime.is-mobile-browser .app-main {
 }
 
 .admin-marketing-tabs {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .admin-form-card,
@@ -1919,6 +1919,54 @@ body.is-web-runtime.is-mobile-browser .app-main {
   display: flex;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+.admin-template-card {
+  grid-template-columns: 92px minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+}
+
+.admin-template-card-static {
+  cursor: pointer;
+}
+
+.admin-template-thumb {
+  width: 92px;
+  aspect-ratio: 3 / 4;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #283145;
+  background: #0b1019;
+}
+
+.admin-template-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.admin-template-body {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.admin-template-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.admin-template-title-row strong {
+  min-width: 0;
+}
+
+.admin-template-title-row .plan-badge,
+.admin-template-title-row .plan-badge-muted {
+  flex: 0 0 auto;
 }
 
 .stat {
@@ -2180,6 +2228,14 @@ body.is-web-runtime.is-mobile-browser.nav-hidden .bottom-nav {
   .admin-grid-2,
   .admin-preview-grid {
     grid-template-columns: 1fr;
+  }
+
+  .admin-template-card {
+    grid-template-columns: 72px minmax(0, 1fr);
+  }
+
+  .admin-template-thumb {
+    width: 72px;
   }
 }
 
