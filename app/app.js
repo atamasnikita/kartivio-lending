@@ -18,6 +18,7 @@ const AUTH_BRIDGE_HASH_KEY = "auth_bridge";
 const API_HEALTHCHECK_TIMEOUT_MS = 2500;
 const API_FETCH_TIMEOUT_MS = 12000;
 const API_MULTIPART_TIMEOUT_MS = 20000;
+const REFERENCE_PROMPT_TIMEOUT_MS = 50000;
 const YANDEX_OAUTH_STORAGE_KEYS = {
   state: "kartivio.yandex_oauth_state",
   verifier: "kartivio.yandex_oauth_verifier",
@@ -25,6 +26,7 @@ const YANDEX_OAUTH_STORAGE_KEYS = {
 };
 const MAX_SOURCE_IMAGES = 3;
 const PROMPT_MAX_LENGTH = 3000;
+const REFERENCE_PROMPT_NOTE_DEFAULT = "Лицо и сходство берем только из твоих фото, не из референса.";
 const TEMPLATE_SKELETON_RATIOS = ["1 / 1", "4 / 5", "3 / 4", "5 / 4", "2 / 3", "3 / 2"];
 const TEMPLATE_MODAL_ANIMATION_MS = 260;
 
@@ -144,6 +146,7 @@ const API_ERROR_MESSAGES = Object.freeze({
   invalid_token_payload: "Ошибка сессии. Войди снова.",
   auth_rate_limit_exceeded: "Слишком много попыток входа. Подожди немного и попробуй снова.",
   rate_limit_unavailable: "Сервис временно недоступен. Попробуй еще раз.",
+  request_timeout: "Сервис не ответил вовремя. Попробуй еще раз.",
   hour_limit_exceeded: "Лимит генераций на этот час исчерпан.",
   queue_unavailable: "Не удалось запустить генерацию из-за перегрузки очереди. Попробуй еще раз.",
   insufficient_credits: "Недостаточно кредитов для генерации.",
@@ -156,6 +159,19 @@ const API_ERROR_MESSAGES = Object.freeze({
   unsupported_source_image_type: "Поддерживаются только PNG, JPG и WEBP.",
   source_image_too_large: "Одно из фото слишком большое. Используй файл до 10 MB.",
   source_image_not_found: "Не удалось найти загруженное фото. Попробуй загрузить заново.",
+  reference_prompt_paid_feature_required: "Эта функция откроется после первой оплаты.",
+  reference_prompt_rate_limit_exceeded: "Слишком много запросов на сборку промпта. Попробуй чуть позже.",
+  reference_prompt_daily_limit_exceeded: "Лимит сборки промптов на сегодня исчерпан.",
+  reference_prompt_image_required: "Сначала добавь фото-референс.",
+  reference_prompt_unsupported_image_type: "Для фото-референса подходят только PNG, JPG и WEBP.",
+  reference_prompt_image_too_large: "Фото-референс слишком большое. Используй файл до 10 MB.",
+  reference_prompt_invalid_image: "Не удалось прочитать фото-референс. Выбери другой файл.",
+  reference_prompt_timeout: "Сборка промпта заняла слишком много времени. Попробуй еще раз.",
+  reference_prompt_unavailable: "Сборка промпта временно недоступна.",
+  reference_prompt_provider_rate_limited: "Сервис сборки промпта перегружен. Попробуй чуть позже.",
+  reference_prompt_invalid_request: "Не удалось собрать промпт по этому файлу.",
+  reference_prompt_invalid_response: "Сервис вернул пустой результат. Попробуй другой референс.",
+  reference_prompt_failed: "Не удалось собрать промпт по фото-референсу.",
   unsupported_campaign_media_type: "Для рассылки подходят только PNG, JPG и WEBP.",
   campaign_media_too_large: "Файл для рассылки слишком большой. Используй изображение до 10 MB.",
   unsupported_campaign_kind: "Выбран неподдерживаемый тип кампании.",
@@ -308,6 +324,10 @@ const state = {
   telegramLinkPollTimer: null,
   telegramWebLoginToken: "",
   telegramWebLoginPollTimer: null,
+  referenceImageFile: null,
+  referenceImagePreviewUrl: "",
+  referencePromptBusy: false,
+  referencePromptPreviousValue: "",
   sourceImageFiles: [],
   sourceImagePreviewUrls: [],
   historyItems: null,
@@ -438,6 +458,17 @@ const promptInput = document.getElementById("promptInput");
 const modelChips = document.getElementById("modelChips");
 const resolutionChips = document.getElementById("resolutionChips");
 const ratioChips = document.getElementById("ratioChips");
+const referenceImageInput = document.getElementById("referenceImageInput");
+const referenceImageDropzone = document.getElementById("referenceImageDropzone");
+const referenceDropzoneEmptyState = document.getElementById("referenceDropzoneEmptyState");
+const referenceDropzoneTitle = document.getElementById("referenceDropzoneTitle");
+const referenceImagePreviewGrid = document.getElementById("referenceImagePreviewGrid");
+const referenceDropzoneBadge = document.getElementById("referenceDropzoneBadge");
+const clearReferenceImageButton = document.getElementById("clearReferenceImageButton");
+const referencePromptPickButton = document.getElementById("referencePromptPickButton");
+const referencePromptBuildButton = document.getElementById("referencePromptBuildButton");
+const referencePromptRestoreButton = document.getElementById("referencePromptRestoreButton");
+const referencePromptNote = document.getElementById("referencePromptNote");
 const sourceImageInput = document.getElementById("sourceImageInput");
 const uploadPhotoButton = document.getElementById("uploadPhotoButton");
 const uploadDropzone = document.getElementById("uploadDropzone");
@@ -1650,6 +1681,14 @@ function setCreateNote(message, isError = false) {
   createNote.style.color = isError ? "#ff8f8f" : "#8f98b0";
 }
 
+function setReferencePromptNote(message, isError = false) {
+  if (!referencePromptNote) {
+    return;
+  }
+  referencePromptNote.textContent = String(message || REFERENCE_PROMPT_NOTE_DEFAULT);
+  referencePromptNote.style.color = isError ? "#ff8f8f" : "#8f98b0";
+}
+
 function setPlansNote(message, isError = false) {
   plansNote.textContent = message;
   plansNote.style.color = isError ? "#ff8f8f" : "#8f98b0";
@@ -1912,6 +1951,166 @@ function markHistoryCacheStale() {
   state.historyLoadedAt = 0;
 }
 
+function referenceImageFile() {
+  return state.referenceImageFile instanceof File ? state.referenceImageFile : null;
+}
+
+function revokeReferenceImagePreview() {
+  if (state.referenceImagePreviewUrl) {
+    URL.revokeObjectURL(state.referenceImagePreviewUrl);
+  }
+  state.referenceImagePreviewUrl = "";
+}
+
+function setReferenceImage(file) {
+  revokeReferenceImagePreview();
+  state.referenceImageFile = file instanceof File ? file : null;
+  if (state.referenceImageFile) {
+    state.referenceImagePreviewUrl = URL.createObjectURL(state.referenceImageFile);
+  }
+}
+
+function selectedReferenceFileFromInput() {
+  if (!referenceImageInput || !referenceImageInput.files) {
+    return null;
+  }
+  const [file] = Array.from(referenceImageInput.files).filter((item) => item instanceof File);
+  return file || null;
+}
+
+function renderReferencePromptRestoreButton() {
+  if (!referencePromptRestoreButton) {
+    return;
+  }
+  const shouldShow = Boolean(String(state.referencePromptPreviousValue || "").length > 0);
+  referencePromptRestoreButton.classList.toggle("is-hidden", !shouldShow);
+  referencePromptRestoreButton.disabled = Boolean(state.referencePromptBusy);
+}
+
+function syncReferencePromptControls() {
+  const hasFile = Boolean(referenceImageFile());
+  if (referencePromptBuildButton) {
+    referencePromptBuildButton.disabled = !hasFile || Boolean(state.referencePromptBusy);
+    const label = referencePromptBuildButton.querySelector("span");
+    if (label) {
+      label.textContent = state.referencePromptBusy ? "Собираем..." : "Собрать промпт";
+    }
+  }
+  if (referencePromptPickButton) {
+    referencePromptPickButton.disabled = Boolean(state.referencePromptBusy);
+  }
+  if (clearReferenceImageButton) {
+    clearReferenceImageButton.disabled = Boolean(state.referencePromptBusy);
+  }
+  renderReferencePromptRestoreButton();
+}
+
+function clearReferencePromptUndoState() {
+  state.referencePromptPreviousValue = "";
+  renderReferencePromptRestoreButton();
+}
+
+function renderReferenceImage() {
+  const file = referenceImageFile();
+  const hasFile = Boolean(file);
+
+  if (!file) {
+    if (referenceDropzoneTitle) {
+      referenceDropzoneTitle.textContent = "Добавьте фото-референс";
+    }
+    if (referenceImageDropzone) {
+      referenceImageDropzone.classList.remove("has-image");
+    }
+    if (referenceDropzoneEmptyState) {
+      referenceDropzoneEmptyState.classList.remove("is-hidden");
+    }
+    if (referenceImagePreviewGrid) {
+      referenceImagePreviewGrid.classList.add("is-hidden");
+      referenceImagePreviewGrid.innerHTML = "";
+    }
+    if (referenceDropzoneBadge) {
+      referenceDropzoneBadge.classList.add("is-hidden");
+    }
+    if (clearReferenceImageButton) {
+      clearReferenceImageButton.classList.add("is-hidden");
+    }
+    syncReferencePromptControls();
+    return;
+  }
+
+  if (referenceDropzoneTitle) {
+    referenceDropzoneTitle.textContent = file.name || "Фото-референс";
+  }
+  if (referenceImagePreviewGrid) {
+    referenceImagePreviewGrid.innerHTML = "";
+    const cell = document.createElement("figure");
+    cell.className = "dropzone-preview-thumb";
+
+    const img = document.createElement("img");
+    img.src = state.referenceImagePreviewUrl || "";
+    img.alt = `Фото-референс: ${file.name}`;
+    img.loading = "lazy";
+    cell.appendChild(img);
+
+    const removeBtn = document.createElement("button");
+    removeBtn.type = "button";
+    removeBtn.className = "dropzone-thumb-remove";
+    removeBtn.setAttribute("aria-label", "Убрать фото-референс");
+    removeBtn.textContent = "×";
+    removeBtn.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      clearReferenceImage();
+      setReferencePromptNote("Фото-референс убрано.");
+    });
+    cell.appendChild(removeBtn);
+
+    referenceImagePreviewGrid.appendChild(cell);
+    referenceImagePreviewGrid.classList.remove("is-hidden");
+  }
+  if (referenceImageDropzone) {
+    referenceImageDropzone.classList.add("has-image");
+  }
+  if (referenceDropzoneEmptyState) {
+    referenceDropzoneEmptyState.classList.toggle("is-hidden", hasFile);
+  }
+  if (referenceDropzoneBadge) {
+    referenceDropzoneBadge.textContent = `Фото-референс · ${sourceImageSizeLabel(file.size)}`;
+    referenceDropzoneBadge.classList.remove("is-hidden");
+  }
+  if (clearReferenceImageButton) {
+    clearReferenceImageButton.classList.remove("is-hidden");
+  }
+  syncReferencePromptControls();
+}
+
+function openReferenceImagePicker() {
+  if (!referenceImageInput) {
+    return;
+  }
+  referenceImageInput.value = "";
+  if (typeof referenceImageInput.showPicker === "function") {
+    try {
+      referenceImageInput.showPicker();
+      return;
+    } catch (_error) {
+      // fallback to click()
+    }
+  }
+  referenceImageInput.click();
+}
+
+function clearReferenceImage({ preserveNote = false } = {}) {
+  if (referenceImageInput) {
+    referenceImageInput.value = "";
+  }
+  setReferenceImage(null);
+  renderReferenceImage();
+  if (!preserveNote) {
+    setReferencePromptNote(REFERENCE_PROMPT_NOTE_DEFAULT);
+  }
+}
+
 function sourceImageFiles() {
   return Array.isArray(state.sourceImageFiles) ? state.sourceImageFiles : [];
 }
@@ -2058,14 +2257,14 @@ function renderSelectedSourceImage() {
 
       const img = document.createElement("img");
       img.src = state.sourceImagePreviewUrls[index] || "";
-      img.alt = `Референс ${index + 1}: ${file.name}`;
+      img.alt = `Фото ${index + 1}: ${file.name}`;
       img.loading = "lazy";
       cell.appendChild(img);
 
       const removeBtn = document.createElement("button");
       removeBtn.type = "button";
       removeBtn.className = "dropzone-thumb-remove";
-      removeBtn.setAttribute("aria-label", `Убрать референс ${index + 1}`);
+      removeBtn.setAttribute("aria-label", `Убрать фото ${index + 1}`);
       removeBtn.textContent = "×";
       removeBtn.addEventListener("click", (event) => {
         event.preventDefault();
@@ -2073,7 +2272,7 @@ function renderSelectedSourceImage() {
         removeSourceImageAt(index);
         renderSelectedSourceImage();
         renderSelectedTemplateCard();
-        setCreateNote("Референс удален.");
+        setCreateNote("Фото удалено.");
       });
       cell.appendChild(removeBtn);
 
@@ -2117,6 +2316,32 @@ function handleSourceImageChange() {
   }
   renderSelectedSourceImage();
   renderSelectedTemplateCard();
+}
+
+function handleReferenceImageChange() {
+  const pickedFile = selectedReferenceFileFromInput();
+  if (referenceImageInput) {
+    referenceImageInput.value = "";
+  }
+  if (!pickedFile) {
+    return;
+  }
+
+  const previousTemplate = state.selectedTemplate;
+  const currentPrompt = String(promptInput.value || "").trim();
+  const templatePrompt = previousTemplate ? String(previousTemplate.prompt || "").trim() : "";
+  const shouldClearPrompt = Boolean(templatePrompt && currentPrompt === templatePrompt);
+  if (previousTemplate) {
+    clearSelectedTemplate({ clearPrompt: shouldClearPrompt });
+  }
+
+  setReferenceImage(pickedFile);
+  renderReferenceImage();
+  if (previousTemplate) {
+    setReferencePromptNote("Шаблон убран. Теперь сцена будет собрана по фото-референсу.");
+  } else {
+    setReferencePromptNote(REFERENCE_PROMPT_NOTE_DEFAULT);
+  }
 }
 
 function clearSelectedTemplate({ clearPrompt } = { clearPrompt: false }) {
@@ -2455,6 +2680,10 @@ async function logoutSession() {
   state.me = null;
   state.telegramLinkToken = "";
   state.telegramWebLoginToken = "";
+  clearReferenceImage({ preserveNote: true });
+  clearReferencePromptUndoState();
+  clearSelectedSourceImage();
+  clearSelectedTemplate({ clearPrompt: true });
   releaseAdminTemplateLocalPreview();
   state.adminTemplates = [];
   state.adminCampaigns = [];
@@ -3619,7 +3848,7 @@ async function apiFetch(path, { method = "GET", body, auth = false, idempotencyK
   return payload;
 }
 
-async function apiMultipart(path, formData, { auth = false, idempotencyKey } = {}) {
+async function apiMultipart(path, formData, { auth = false, idempotencyKey, timeoutMs } = {}) {
   const headers = headersForApiBase(state.apiBase);
   if (auth && state.accessToken) {
     headers.Authorization = `Bearer ${state.accessToken}`;
@@ -3636,7 +3865,7 @@ async function apiMultipart(path, formData, { auth = false, idempotencyKey } = {
       headers,
       body: formData,
     },
-    API_MULTIPART_TIMEOUT_MS
+    timeoutMs || API_MULTIPART_TIMEOUT_MS
   );
   const payload = await parseJsonResponse(response);
   if (!response.ok) {
@@ -3925,6 +4154,11 @@ function renderPlans(payload) {
 }
 
 function selectTemplate(item) {
+  if (referenceImageFile()) {
+    clearReferenceImage({ preserveNote: true });
+    clearReferencePromptUndoState();
+    setReferencePromptNote("Фото-референс убрано: выбран шаблон.");
+  }
   state.selectedTemplateId = item.id;
   state.selectedTemplate = {
     id: item.id,
@@ -5130,6 +5364,73 @@ async function createEditGeneration(prompt, imageModel, outputSize, sourceImages
   });
 }
 
+async function createReferencePromptFromImage(referenceImage) {
+  const form = new FormData();
+  form.append("reference_image", referenceImage);
+  return authorizedMultipart("/v1/reference-prompts", form, {
+    timeoutMs: REFERENCE_PROMPT_TIMEOUT_MS,
+  });
+}
+
+function validateReferenceImageFile(file) {
+  if (!(file instanceof File)) {
+    throw new Error("Сначала добавь фото-референс.");
+  }
+  const maxBytes = 10 * 1024 * 1024;
+  const allowedMime = new Set(["image/png", "image/jpeg", "image/webp"]);
+  const mime = String(file.type || "").toLowerCase();
+  if (!file.size) {
+    throw new Error("Фото-референс пустое. Выбери другой файл.");
+  }
+  if (file.size > maxBytes) {
+    throw new Error("Фото-референс больше 10 MB. Сожми изображение и повтори.");
+  }
+  if (mime && !allowedMime.has(mime)) {
+    throw new Error("Для фото-референса подходят только PNG, JPG и WEBP.");
+  }
+}
+
+async function handleBuildReferencePrompt() {
+  try {
+    ensureAuthorizedForCreate();
+    const file = referenceImageFile();
+    validateReferenceImageFile(file);
+    state.referencePromptBusy = true;
+    syncReferencePromptControls();
+    setReferencePromptNote("Описываем референс... Обычно это занимает 3–8 секунд.");
+
+    const previousPrompt = String(promptInput.value || "");
+    const payload = await createReferencePromptFromImage(file);
+    const nextPrompt = String((payload && payload.prompt) || "").trim();
+    if (!nextPrompt) {
+      throw new Error("Сервис вернул пустой промпт.");
+    }
+    state.referencePromptPreviousValue = previousPrompt && previousPrompt !== nextPrompt ? previousPrompt : "";
+    renderReferencePromptRestoreButton();
+    promptInput.value = nextPrompt;
+    switchScreen("studio");
+    promptInput.focus();
+    setReferencePromptNote("Промпт собран. Его можно отредактировать перед генерацией.");
+    setCreateNote("Промпт собран по фото-референсу.");
+  } catch (error) {
+    setReferencePromptNote(userFacingErrorMessage(error, "Не удалось собрать промпт по референсу."), true);
+  } finally {
+    state.referencePromptBusy = false;
+    syncReferencePromptControls();
+  }
+}
+
+function restoreReferencePromptPreviousText() {
+  const previous = String(state.referencePromptPreviousValue || "");
+  if (!previous) {
+    return;
+  }
+  promptInput.value = previous;
+  clearReferencePromptUndoState();
+  promptInput.focus();
+  setReferencePromptNote("Предыдущий текст возвращен.");
+}
+
 async function pollActiveJob(jobId) {
   if (state.activePollTimer) {
     window.clearTimeout(state.activePollTimer);
@@ -5695,6 +5996,48 @@ function bindEvents() {
     });
   }
 
+  if (referencePromptPickButton) {
+    referencePromptPickButton.addEventListener("click", () => openReferenceImagePicker());
+  }
+  if (referencePromptBuildButton) {
+    referencePromptBuildButton.addEventListener("click", () => {
+      handleBuildReferencePrompt().catch((error) => {
+        setReferencePromptNote(userFacingErrorMessage(error, "Не удалось собрать промпт по референсу."), true);
+      });
+    });
+  }
+  if (referencePromptRestoreButton) {
+    referencePromptRestoreButton.addEventListener("click", () => {
+      restoreReferencePromptPreviousText();
+    });
+  }
+  if (referenceImageDropzone) {
+    referenceImageDropzone.addEventListener("click", (event) => {
+      if (event.target instanceof Element && event.target.closest("#clearReferenceImageButton")) {
+        return;
+      }
+      openReferenceImagePicker();
+    });
+    referenceImageDropzone.addEventListener("keydown", (event) => {
+      const key = event.key;
+      if (key === "Enter" || key === " ") {
+        event.preventDefault();
+        openReferenceImagePicker();
+      }
+    });
+  }
+  if (referenceImageInput) {
+    referenceImageInput.addEventListener("change", handleReferenceImageChange);
+  }
+  if (clearReferenceImageButton) {
+    clearReferenceImageButton.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      clearReferenceImage();
+      setReferencePromptNote("Фото-референс убрано.");
+    });
+  }
+
   uploadPhotoButton.addEventListener("click", () => openSourceImagePicker());
   uploadDropzone.addEventListener("click", (event) => {
     if (
@@ -6049,6 +6392,7 @@ function bindEvents() {
   });
 
   window.addEventListener("beforeunload", () => {
+    revokeReferenceImagePreview();
     revokeSourceImagePreview();
   });
   window.addEventListener("focus", () => {
@@ -6119,7 +6463,9 @@ async function bootstrap() {
   }
   renderGenerationChips();
   bindEvents();
+  setReferencePromptNote(REFERENCE_PROMPT_NOTE_DEFAULT);
   renderSelectedTemplateCard();
+  renderReferenceImage();
   renderSelectedSourceImage();
   refreshGenerationCostNote();
   refreshIcons();

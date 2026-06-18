@@ -816,6 +816,52 @@ body.is-web-runtime.is-mobile-browser .app-main {
   overflow: hidden;
 }
 
+.reference-prompt-card {
+  gap: 12px;
+}
+
+.reference-prompt-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.reference-prompt-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.reference-prompt-copy strong {
+  font-size: 16px;
+  line-height: 1.2;
+}
+
+.reference-prompt-copy span {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.reference-prompt-badge {
+  flex: 0 0 auto;
+  border: 1px solid rgba(54, 72, 102, 0.9);
+  border-radius: 999px;
+  background: rgba(17, 24, 37, 0.92);
+  color: #d9e3ff;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 6px 10px;
+}
+
+.upload-dropzone-reference {
+  min-height: 164px;
+}
+
+.upload-dropzone-reference.has-image {
+  min-height: 220px;
+}
+
 .dropzone-empty {
   display: grid;
   place-items: center;
@@ -866,6 +912,16 @@ body.is-web-runtime.is-mobile-browser .app-main {
   box-sizing: border-box;
 }
 
+.reference-preview-grid {
+  max-width: 320px;
+}
+
+.reference-preview-grid .dropzone-preview-thumb {
+  --thumb-size: min(280px, 100%);
+  width: min(280px, 100%);
+  flex: 0 1 min(280px, 100%);
+}
+
 .dropzone-preview-thumb {
   --thumb-size: clamp(84px, 21vw, 180px);
   width: var(--thumb-size);
@@ -883,6 +939,10 @@ body.is-web-runtime.is-mobile-browser .app-main {
   height: 100%;
   object-fit: cover;
   display: block;
+}
+
+.reference-preview-grid .dropzone-preview-thumb img {
+  aspect-ratio: 4 / 5;
 }
 
 .dropzone-thumb-remove {

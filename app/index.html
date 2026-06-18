@@ -128,13 +128,67 @@
             </button>
           </section>
 
+          <section class="panel-card reference-prompt-card">
+            <div class="reference-prompt-header">
+              <div class="reference-prompt-copy">
+                <strong>Фото-референс</strong>
+                <span>Поза, свет, одежда и композиция · доступно после первой оплаты</span>
+              </div>
+              <span class="reference-prompt-badge">Новый промпт</span>
+            </div>
+
+            <div
+              id="referenceImageDropzone"
+              class="upload-dropzone upload-dropzone-reference"
+              role="button"
+              tabindex="0"
+              aria-label="Добавить фото-референс для сборки промпта"
+            >
+              <span id="referenceDropzoneEmptyState" class="dropzone-empty">
+                <span class="dropzone-icon"><i data-lucide="image-plus"></i></span>
+                <span class="dropzone-title" id="referenceDropzoneTitle">Добавьте фото-референс</span>
+                <span class="dropzone-subtitle">Один файл PNG/JPG/WEBP до 10 MB</span>
+              </span>
+              <div id="referenceImagePreviewGrid" class="dropzone-preview-grid reference-preview-grid is-hidden" aria-label="Превью фото-референса"></div>
+              <button
+                id="clearReferenceImageButton"
+                class="dropzone-clear-btn is-hidden"
+                type="button"
+                aria-label="Убрать фото-референс"
+              >
+                <i data-lucide="x"></i>
+              </button>
+              <span id="referenceDropzoneBadge" class="dropzone-preview-badge is-hidden">Фото-референс</span>
+            </div>
+
+            <div class="inline-actions">
+              <button id="referencePromptPickButton" class="soft-btn soft-btn-icon" type="button">
+                <i data-lucide="paperclip"></i>
+                <span>Загрузить референс</span>
+              </button>
+              <button id="referencePromptBuildButton" class="soft-btn soft-btn-icon" type="button">
+                <i data-lucide="sparkles"></i>
+                <span>Собрать промпт</span>
+              </button>
+              <button id="referencePromptRestoreButton" class="soft-btn btn-compact is-hidden" type="button">Вернуть прошлый текст</button>
+            </div>
+
+            <p id="referencePromptNote" class="note">Лицо и сходство берем только из твоих фото, не из референса.</p>
+            <input
+              id="referenceImageInput"
+              class="visually-hidden-input"
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+            />
+          </section>
+
           <div id="uploadDropzone" class="upload-dropzone" role="button" tabindex="0" aria-label="Добавить свои фото для фотосессии">
             <span id="dropzoneEmptyState" class="dropzone-empty">
               <span class="dropzone-icon"><i data-lucide="image-plus"></i></span>
               <span class="dropzone-title" id="dropzoneTitle">Добавьте свои фото</span>
               <span class="dropzone-subtitle">Для фотосессии с вашим лицом · до 3 фото, до 10 MB каждое, PNG/JPG/WEBP</span>
             </span>
-            <div id="sourceImagePreviewGrid" class="dropzone-preview-grid is-hidden" aria-label="Превью референсов"></div>
+            <div id="sourceImagePreviewGrid" class="dropzone-preview-grid is-hidden" aria-label="Превью своих фото"></div>
             <button
               id="clearSourceImageButton"
               class="dropzone-clear-btn is-hidden"
