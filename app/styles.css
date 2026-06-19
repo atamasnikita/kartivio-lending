@@ -900,148 +900,21 @@ body.is-web-runtime.is-mobile-browser .app-main {
     linear-gradient(120deg, rgba(112, 139, 193, 0.48), rgba(70, 84, 120, 0.42), rgba(112, 139, 193, 0.48)) border-box;
 }
 
-.reference-prompt-ai-layer {
-  position: absolute;
-  inset: 118px 18px 82px;
-  z-index: 0;
-  pointer-events: none;
-  overflow: hidden;
-  border-radius: 20px;
-  opacity: 0;
-  transition: opacity 0.2s ease;
-  mask-image: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.72) 14%, #000 34%, #000 76%, rgba(0, 0, 0, 0.76) 90%, transparent 100%);
-}
-
-.reference-prompt-card.is-busy .reference-prompt-ai-layer {
-  opacity: 1;
-}
-
-.reference-prompt-orbit {
-  position: absolute;
-  border: 1px solid rgba(94, 106, 162, 0.28);
-  border-radius: 999px;
-  transform-origin: center;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.015);
-  opacity: 0.7;
-}
-
-.reference-prompt-orbit::before,
-.reference-prompt-orbit::after {
-  content: "";
-  position: absolute;
-  top: 50%;
-  left: -10px;
-  pointer-events: none;
-}
-
-.reference-prompt-orbit::before {
-  width: 44px;
-  height: 10px;
-  transform: translateY(-50%);
-  border-radius: 999px;
-  background: linear-gradient(90deg, rgba(129, 145, 231, 0), rgba(141, 159, 255, 0.16), rgba(239, 243, 255, 0.82), rgba(141, 159, 255, 0));
-  filter: blur(6px);
-  opacity: 0.72;
-}
-
-.reference-prompt-orbit::after {
-  width: 8px;
-  height: 8px;
-  margin-top: -4px;
-  border-radius: 999px;
-  background: #eef2ff;
-  box-shadow:
-    0 0 0 4px rgba(138, 153, 239, 0.1),
-    0 0 14px rgba(164, 180, 255, 0.42);
-}
-
-.reference-prompt-orbit--primary {
-  inset: 18px -6px 28px;
-  transform: rotate(0deg);
-  animation: reference-prompt-orbit-spin-primary 9.8s linear infinite;
-}
-
-.reference-prompt-orbit--secondary {
-  inset: 46px 84px 4px;
-  opacity: 0.5;
-  transform: rotate(0deg);
-  animation: reference-prompt-orbit-spin-secondary 12.8s linear infinite reverse;
-}
-
-.reference-prompt-orbit--secondary::before {
-  width: 36px;
-  background: linear-gradient(90deg, rgba(112, 129, 214, 0), rgba(122, 138, 232, 0.12), rgba(228, 233, 255, 0.72), rgba(122, 138, 232, 0));
-}
-
-.reference-prompt-pill {
-  position: absolute;
-  border: 1px solid rgba(98, 113, 173, 0.62);
-  border-radius: 999px;
-  background: rgba(11, 15, 27, 0.94);
-  color: #eef2ff;
-  font-size: 11px;
-  line-height: 1;
-  padding: 6px 10px;
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.02),
-    0 8px 16px rgba(4, 8, 18, 0.24);
-  opacity: 0;
-  transform: translateY(6px) scale(0.98);
-  transition: opacity 0.18s ease;
-}
-
-.reference-prompt-card.is-busy .reference-prompt-pill {
-  opacity: 0.94;
-  animation:
-    reference-prompt-pill-drift 6.4s ease-in-out infinite,
-    reference-prompt-pill-focus 4.6s ease-in-out infinite;
-}
-
-.reference-prompt-pill--scene {
-  top: 8px;
-  left: 50%;
-  margin-left: -30px;
-  animation-delay: -0.8s;
-}
-
-.reference-prompt-pill--light {
-  top: 16px;
-  right: 64px;
-  animation-delay: -1.9s;
-}
-
-.reference-prompt-pill--pose {
-  right: 18px;
-  top: 78px;
-  animation-delay: -2.6s;
-}
-
-.reference-prompt-pill--wardrobe {
-  bottom: 20px;
-  left: 50%;
-  margin-left: -34px;
-  animation-delay: -1.3s;
-}
-
-.reference-prompt-pill--composition {
-  left: 52px;
-  bottom: 28px;
-  animation-delay: -3.2s;
-}
-
 .reference-prompt-busy-panel {
   position: relative;
   z-index: 1;
   display: grid;
-  gap: 14px;
+  gap: 18px;
   max-height: 0;
   overflow: hidden;
   opacity: 0;
   pointer-events: none;
   border: 0 solid rgba(66, 77, 118, 0.76);
-  border-radius: 12px;
-  background: linear-gradient(180deg, rgba(16, 20, 34, 0.98), rgba(12, 16, 28, 0.99));
-  padding: 0 16px;
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at top center, rgba(31, 45, 79, 0.18), rgba(31, 45, 79, 0) 44%),
+    linear-gradient(180deg, rgba(14, 19, 32, 0.98), rgba(11, 16, 28, 0.99));
+  padding: 0 20px;
   transform: translateY(-8px) scale(0.985);
   transition:
     max-height 0.28s ease,
@@ -1052,10 +925,10 @@ body.is-web-runtime.is-mobile-browser .app-main {
 }
 
 .reference-prompt-card.is-busy .reference-prompt-busy-panel {
-  max-height: 180px;
+  max-height: 220px;
   opacity: 1;
   pointer-events: none;
-  padding: 18px 16px 16px;
+  padding: 20px;
   border-width: 1px;
   transform: translateY(0) scale(1);
   box-shadow:
@@ -1066,15 +939,14 @@ body.is-web-runtime.is-mobile-browser .app-main {
 .reference-prompt-busy-head {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  gap: 10px;
-  justify-self: center;
+  gap: 12px;
+  justify-self: start;
   color: #eef2ff;
 }
 
 .reference-prompt-busy-head strong {
-  font-size: 17px;
-  line-height: 1.15;
+  font-size: 22px;
+  line-height: 1.08;
 }
 
 .reference-prompt-busy-icon {
@@ -1084,47 +956,98 @@ body.is-web-runtime.is-mobile-browser .app-main {
 }
 
 .reference-prompt-busy-icon svg {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
 }
 
-.reference-prompt-busy-rail {
+.reference-prompt-busy-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 18px;
+  align-items: center;
+}
+
+.reference-prompt-busy-step {
   position: relative;
-  height: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 0 14px;
   border-radius: 999px;
-  background: rgba(49, 56, 88, 0.42);
-  overflow: hidden;
+  border: 1px solid rgba(56, 67, 101, 0.76);
+  background: rgba(15, 21, 35, 0.78);
+  color: #7a86aa;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  transition:
+    background-color 420ms cubic-bezier(0.23, 1, 0.32, 1),
+    color 420ms cubic-bezier(0.23, 1, 0.32, 1),
+    box-shadow 420ms cubic-bezier(0.23, 1, 0.32, 1),
+    transform 420ms cubic-bezier(0.23, 1, 0.32, 1),
+    opacity 420ms cubic-bezier(0.23, 1, 0.32, 1);
 }
 
-.reference-prompt-busy-rail::after {
+.reference-prompt-busy-step::after {
   content: "";
   position: absolute;
-  inset: 0;
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(141, 165, 255, 0.04), rgba(255, 255, 255, 0));
+  inset: -8px -10px;
+  border-radius: inherit;
+  background: radial-gradient(circle, rgba(132, 148, 235, 0.18), rgba(132, 148, 235, 0));
+  opacity: 0;
+  filter: blur(8px);
+  transition: opacity 420ms cubic-bezier(0.23, 1, 0.32, 1);
+  pointer-events: none;
 }
 
-.reference-prompt-busy-shuttle {
-  position: absolute;
-  top: 1px;
-  left: 0;
-  width: 22%;
-  min-width: 88px;
-  max-width: 156px;
-  height: 6px;
-  border-radius: 999px;
-  background: linear-gradient(90deg, rgba(132, 147, 235, 0.1), rgba(229, 235, 255, 0.98), rgba(132, 147, 235, 0.08));
+.reference-prompt-busy-step.is-active {
+  color: #eef3ff;
+  border-color: rgba(67, 79, 115, 0.76);
+  background: linear-gradient(180deg, rgba(27, 36, 59, 0.98), rgba(17, 24, 42, 0.98));
   box-shadow:
-    0 0 18px rgba(164, 180, 255, 0.54),
-    0 0 8px rgba(119, 134, 221, 0.28);
-  animation: reference-prompt-shuttle 1.8s cubic-bezier(0.23, 1, 0.32, 1) infinite alternate;
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 8px 18px rgba(17, 25, 47, 0.32),
+    0 0 22px rgba(79, 98, 182, 0.12);
+  transform: translateY(-0.5px) scale(1.01);
+}
+
+.reference-prompt-busy-step.is-active::after {
+  opacity: 0.88;
 }
 
 .reference-prompt-busy-caption {
+  display: grid;
+  gap: 4px;
+  min-height: 50px;
   margin: 0;
+  max-width: 640px;
+  justify-self: center;
   text-align: center;
-  color: #a7afd0;
-  font-size: 13px;
-  line-height: 1.4;
+  color: #b7c1db;
+  font-size: 15px;
+  line-height: 1.55;
+  transition:
+    opacity 420ms cubic-bezier(0.23, 1, 0.32, 1),
+    transform 420ms cubic-bezier(0.23, 1, 0.32, 1),
+    color 420ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.reference-prompt-busy-caption.is-changing {
+  opacity: 0.3;
+  transform: translateY(6px);
+}
+
+.reference-prompt-busy-caption strong {
+  color: #edf2ff;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.reference-prompt-busy-caption span {
+  color: inherit;
 }
 
 .reference-prompt-header {
@@ -1603,86 +1526,6 @@ body.is-web-runtime.is-mobile-browser .app-main {
 .file-trigger-label {
   text-decoration: none;
   user-select: none;
-}
-
-@keyframes reference-prompt-border-shift {
-  0% {
-    background-position: 0% 45%;
-  }
-  100% {
-    background-position: 200% 55%;
-  }
-}
-
-@keyframes reference-prompt-glow-drift {
-  0% {
-    transform: translate3d(-8%, -6%, 0) scale(1.04);
-    opacity: 0.72;
-  }
-  50% {
-    transform: translate3d(6%, -2%, 0) scale(1.18);
-    opacity: 0.96;
-  }
-  100% {
-    transform: translate3d(14%, 8%, 0) scale(1.08);
-    opacity: 0.8;
-  }
-}
-
-@keyframes reference-prompt-orbit-spin-primary {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@keyframes reference-prompt-orbit-spin-secondary {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@keyframes reference-prompt-pill-drift {
-  0% {
-    transform: translateY(0) scale(0.985);
-  }
-  50% {
-    transform: translateY(-3px) scale(1);
-  }
-  100% {
-    transform: translateY(0) scale(0.99);
-  }
-}
-
-@keyframes reference-prompt-pill-focus {
-  0%,
-  100% {
-    border-color: rgba(98, 113, 173, 0.62);
-    box-shadow:
-      inset 0 0 0 1px rgba(255, 255, 255, 0.02),
-      0 8px 16px rgba(4, 8, 18, 0.24);
-  }
-  45% {
-    border-color: rgba(163, 178, 255, 0.82);
-    box-shadow:
-      inset 0 0 0 1px rgba(255, 255, 255, 0.06),
-      0 0 0 1px rgba(132, 148, 235, 0.12),
-      0 0 18px rgba(132, 148, 235, 0.22);
-  }
-}
-
-@keyframes reference-prompt-shuttle {
-  0% {
-    transform: translateX(0) scaleX(0.92);
-  }
-  100% {
-    transform: translateX(350%) scaleX(1.03);
-  }
 }
 
 .settings-panel {
@@ -2838,49 +2681,36 @@ body.is-web-runtime.is-mobile-browser.nav-hidden .bottom-nav {
     height: 52px;
   }
 
-  .reference-prompt-ai-layer {
-    inset: 108px 12px 74px;
-  }
-
-  .reference-prompt-pill {
-    font-size: 11px;
-    padding: 6px 10px;
-  }
-
-  .reference-prompt-pill--light,
-  .reference-prompt-pill--composition {
-    display: none;
-  }
-
-  .reference-prompt-pill--scene {
-    left: 50%;
-    top: 8px;
-  }
-
-  .reference-prompt-pill--pose {
-    right: 14px;
-    top: 70px;
-  }
-
-  .reference-prompt-pill--wardrobe {
-    margin-left: -30px;
-    bottom: 18px;
-  }
-
   .reference-prompt-busy-panel {
-    gap: 12px;
+    gap: 16px;
   }
 
   .reference-prompt-card.is-busy .reference-prompt-busy-panel {
-    padding: 16px 14px 14px;
+    max-height: 240px;
+    padding: 18px 16px;
   }
 
   .reference-prompt-busy-head strong {
-    font-size: 16px;
+    font-size: 20px;
+  }
+
+  .reference-prompt-busy-steps {
+    gap: 12px 10px;
+  }
+
+  .reference-prompt-busy-step {
+    min-height: 32px;
+    padding: 0 12px;
+    font-size: 11px;
   }
 
   .reference-prompt-busy-caption {
-    font-size: 12px;
+    min-height: 60px;
+    font-size: 14px;
+  }
+
+  .reference-prompt-busy-caption strong {
+    font-size: 14px;
   }
 
   .template-filter-shell {
@@ -2987,10 +2817,10 @@ body.is-web-runtime.is-mobile-browser.nav-hidden .bottom-nav {
 
   .reference-prompt-card::before,
   .reference-prompt-card::after,
-  .reference-prompt-orbit,
-  .reference-prompt-pill,
-  .reference-prompt-busy-shuttle {
+  .reference-prompt-busy-step,
+  .reference-prompt-busy-caption {
     animation: none !important;
+    transition: none !important;
   }
 }
 

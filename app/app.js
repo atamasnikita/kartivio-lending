@@ -474,6 +474,10 @@ const referencePromptBuildButton = document.getElementById("referencePromptBuild
 const referencePromptActionIcon = document.getElementById("referencePromptActionIcon");
 const referencePromptRestoreButton = document.getElementById("referencePromptRestoreButton");
 const referencePromptNote = document.getElementById("referencePromptNote");
+const referencePromptBusyCaption = document.getElementById("referencePromptBusyCaption");
+const referencePromptBusyCaptionTitle = document.getElementById("referencePromptBusyCaptionTitle");
+const referencePromptBusyCaptionBody = document.getElementById("referencePromptBusyCaptionBody");
+const referencePromptBusySteps = Array.from(document.querySelectorAll("[data-reference-prompt-step]"));
 const sourceImageInput = document.getElementById("sourceImageInput");
 const uploadPhotoButton = document.getElementById("uploadPhotoButton");
 const uploadDropzone = document.getElementById("uploadDropzone");
@@ -518,6 +522,37 @@ const templateModalNote = document.getElementById("templateModalNote");
 let templateFeedAutoLoadRaf = 0;
 let lastTemplateGridColumnCount = 0;
 const navButtons = Array.from(document.querySelectorAll("[data-nav]"));
+const REFERENCE_PROMPT_BUSY_INTERVAL_MS = 1300;
+const REFERENCE_PROMPT_BUSY_STEPS = Object.freeze([
+  Object.freeze({
+    key: "scene",
+    title: "Определяем сцену.",
+    body: "Понимаем, что именно должно происходить в кадре.",
+  }),
+  Object.freeze({
+    key: "light",
+    title: "Оцениваем свет.",
+    body: "Снимаем характер освещения и распределение теней.",
+  }),
+  Object.freeze({
+    key: "wardrobe",
+    title: "Разбираем одежду.",
+    body: "Фиксируем силуэт, фактуру тканей и главные детали образа.",
+  }),
+  Object.freeze({
+    key: "pose",
+    title: "Считываем позу.",
+    body: "Смотрим на положение корпуса, головы, рук и направление взгляда.",
+  }),
+  Object.freeze({
+    key: "composition",
+    title: "Собираем композицию.",
+    body: "Укладываем кадр в понятный финальный промпт.",
+  }),
+]);
+let referencePromptBusyStepIndex = 0;
+let referencePromptBusyIntervalId = 0;
+let referencePromptBusyCaptionTimeoutId = 0;
 const jumpButtons = Array.from(document.querySelectorAll("[data-nav-target]"));
 const screens = Array.from(document.querySelectorAll("[data-screen]"));
 let yandexAuthPending = false;
@@ -2034,6 +2069,69 @@ function defaultReferencePromptNote() {
     : REFERENCE_PROMPT_NOTE_DEFAULT;
 }
 
+function renderReferencePromptBusyStep(options = {}) {
+  const { immediate = false } = options;
+  const step = REFERENCE_PROMPT_BUSY_STEPS[referencePromptBusyStepIndex] || REFERENCE_PROMPT_BUSY_STEPS[0];
+  if (!step) {
+    return;
+  }
+  referencePromptBusySteps.forEach((item) => {
+    item.classList.toggle("is-active", String(item.dataset.referencePromptStep || "") === step.key);
+  });
+  if (!referencePromptBusyCaptionTitle || !referencePromptBusyCaptionBody || !referencePromptBusyCaption) {
+    return;
+  }
+  if (referencePromptBusyCaptionTimeoutId) {
+    window.clearTimeout(referencePromptBusyCaptionTimeoutId);
+    referencePromptBusyCaptionTimeoutId = 0;
+  }
+  if (immediate) {
+    referencePromptBusyCaptionTitle.textContent = step.title;
+    referencePromptBusyCaptionBody.textContent = step.body;
+    referencePromptBusyCaption.classList.remove("is-changing");
+    return;
+  }
+  referencePromptBusyCaption.classList.add("is-changing");
+  referencePromptBusyCaptionTimeoutId = window.setTimeout(() => {
+    referencePromptBusyCaptionTitle.textContent = step.title;
+    referencePromptBusyCaptionBody.textContent = step.body;
+    window.requestAnimationFrame(() => {
+      referencePromptBusyCaption.classList.remove("is-changing");
+    });
+    referencePromptBusyCaptionTimeoutId = 0;
+  }, 220);
+}
+
+function stopReferencePromptBusyLoop(options = {}) {
+  const { reset = false } = options;
+  if (referencePromptBusyIntervalId) {
+    window.clearInterval(referencePromptBusyIntervalId);
+    referencePromptBusyIntervalId = 0;
+  }
+  if (referencePromptBusyCaptionTimeoutId) {
+    window.clearTimeout(referencePromptBusyCaptionTimeoutId);
+    referencePromptBusyCaptionTimeoutId = 0;
+  }
+  if (reset) {
+    referencePromptBusyStepIndex = 0;
+  }
+  renderReferencePromptBusyStep({ immediate: true });
+}
+
+function startReferencePromptBusyLoop() {
+  if (!referencePromptBusySteps.length) {
+    return;
+  }
+  if (referencePromptBusyIntervalId) {
+    return;
+  }
+  renderReferencePromptBusyStep({ immediate: true });
+  referencePromptBusyIntervalId = window.setInterval(() => {
+    referencePromptBusyStepIndex = (referencePromptBusyStepIndex + 1) % REFERENCE_PROMPT_BUSY_STEPS.length;
+    renderReferencePromptBusyStep();
+  }, REFERENCE_PROMPT_BUSY_INTERVAL_MS);
+}
+
 function syncReferencePromptAccessState() {
   const locked = referencePromptLocked();
   const busy = Boolean(state.referencePromptBusy);
@@ -2052,6 +2150,11 @@ function syncReferencePromptAccessState() {
   }
   if (referencePromptBadge) {
     referencePromptBadge.classList.toggle("is-hidden", !locked);
+  }
+  if (busy) {
+    startReferencePromptBusyLoop();
+  } else {
+    stopReferencePromptBusyLoop({ reset: true });
   }
 }
 
