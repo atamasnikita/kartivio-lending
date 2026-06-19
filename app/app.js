@@ -2047,7 +2047,7 @@ function syncReferencePromptAccessState() {
   }
   if (referencePromptSubtitle) {
     referencePromptSubtitle.textContent = locked
-      ? "Загрузишь кадр и сразу получишь готовый промпт"
+      ? "Платная фича для генерации по кадру"
       : "Создадим новый промпт по референсу";
   }
   if (referencePromptBadge) {
@@ -2099,7 +2099,7 @@ function renderReferenceImage() {
   const locked = referencePromptLocked();
   if (!file) {
     if (referenceDropzoneTitle) {
-      referenceDropzoneTitle.textContent = locked ? "Промпт по фото-референсу" : "Добавь фото-референс";
+      referenceDropzoneTitle.textContent = locked ? "Фото-референс" : "Добавь фото-референс";
     }
     if (referenceDropzoneSubtitle) {
       referenceDropzoneSubtitle.textContent = "Сцена, свет, одежда и композиция";
