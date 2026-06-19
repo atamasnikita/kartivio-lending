@@ -2059,6 +2059,13 @@ function syncReferencePromptControls() {
   syncReferencePromptAccessState();
   const hasFile = Boolean(referenceImageFile());
   const locked = referencePromptLocked();
+  if (hasFile && referenceDropzoneSubtitle && !locked) {
+    referenceDropzoneSubtitle.textContent = state.referencePromptBusy
+      ? "Анализируем сцену и детали кадра"
+      : state.referencePromptBuilt
+        ? "Промпт уже обновлен. Можно собрать заново."
+        : "Готово к сборке промпта";
+  }
   if (referencePromptBuildButton) {
     referencePromptBuildButton.disabled = Boolean(state.referencePromptBusy);
     const label = referencePromptBuildButton.querySelector("span");
@@ -2129,9 +2136,11 @@ function renderReferenceImage() {
     referenceDropzoneTitle.textContent = file.name || "Фото-референс";
   }
   if (referenceDropzoneSubtitle) {
-    referenceDropzoneSubtitle.textContent = state.referencePromptBuilt
-      ? "Промпт уже обновлен. Можно собрать заново."
-      : "Готово к сборке промпта";
+    referenceDropzoneSubtitle.textContent = state.referencePromptBusy
+      ? "Анализируем сцену и детали кадра"
+      : state.referencePromptBuilt
+        ? "Промпт уже обновлен. Можно собрать заново."
+        : "Готово к сборке промпта";
   }
   if (referenceImagePreview) {
     referenceImagePreview.src = state.referenceImagePreviewUrl || "";
