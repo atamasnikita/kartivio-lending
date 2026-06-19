@@ -836,6 +836,7 @@ body.is-web-runtime.is-mobile-browser .app-main {
 .reference-prompt-card {
   gap: 14px;
   position: relative;
+  isolation: isolate;
   overflow: hidden;
   border: 1px solid transparent;
   background:
@@ -901,11 +902,14 @@ body.is-web-runtime.is-mobile-browser .app-main {
 
 .reference-prompt-ai-layer {
   position: absolute;
-  inset: 62px 18px 118px;
+  inset: 118px 18px 82px;
   z-index: 0;
   pointer-events: none;
+  overflow: hidden;
+  border-radius: 20px;
   opacity: 0;
   transition: opacity 0.2s ease;
+  mask-image: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.72) 14%, #000 34%, #000 76%, rgba(0, 0, 0, 0.76) 90%, transparent 100%);
 }
 
 .reference-prompt-card.is-busy .reference-prompt-ai-layer {
@@ -918,6 +922,7 @@ body.is-web-runtime.is-mobile-browser .app-main {
   border-radius: 999px;
   transform-origin: center;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.015);
+  opacity: 0.7;
 }
 
 .reference-prompt-orbit::before,
@@ -930,42 +935,42 @@ body.is-web-runtime.is-mobile-browser .app-main {
 }
 
 .reference-prompt-orbit::before {
-  width: 62px;
-  height: 12px;
+  width: 44px;
+  height: 10px;
   transform: translateY(-50%);
   border-radius: 999px;
-  background: linear-gradient(90deg, rgba(129, 145, 231, 0), rgba(141, 159, 255, 0.18), rgba(239, 243, 255, 0.92), rgba(141, 159, 255, 0));
-  filter: blur(7px);
-  opacity: 0.9;
+  background: linear-gradient(90deg, rgba(129, 145, 231, 0), rgba(141, 159, 255, 0.16), rgba(239, 243, 255, 0.82), rgba(141, 159, 255, 0));
+  filter: blur(6px);
+  opacity: 0.72;
 }
 
 .reference-prompt-orbit::after {
-  width: 9px;
-  height: 9px;
-  margin-top: -4.5px;
+  width: 8px;
+  height: 8px;
+  margin-top: -4px;
   border-radius: 999px;
   background: #eef2ff;
   box-shadow:
-    0 0 0 5px rgba(138, 153, 239, 0.14),
-    0 0 18px rgba(164, 180, 255, 0.58);
+    0 0 0 4px rgba(138, 153, 239, 0.1),
+    0 0 14px rgba(164, 180, 255, 0.42);
 }
 
 .reference-prompt-orbit--primary {
-  inset: 6px -12px 82px;
-  transform: rotate(-7deg);
-  animation: reference-prompt-orbit-spin-primary 8.4s linear infinite;
+  inset: 18px -6px 28px;
+  transform: rotate(0deg);
+  animation: reference-prompt-orbit-spin-primary 9.8s linear infinite;
 }
 
 .reference-prompt-orbit--secondary {
-  inset: 28px 36px 46px;
-  opacity: 0.76;
-  transform: rotate(8deg);
-  animation: reference-prompt-orbit-spin-secondary 11.6s linear infinite reverse;
+  inset: 46px 84px 4px;
+  opacity: 0.5;
+  transform: rotate(0deg);
+  animation: reference-prompt-orbit-spin-secondary 12.8s linear infinite reverse;
 }
 
 .reference-prompt-orbit--secondary::before {
-  width: 48px;
-  background: linear-gradient(90deg, rgba(112, 129, 214, 0), rgba(122, 138, 232, 0.14), rgba(228, 233, 255, 0.9), rgba(122, 138, 232, 0));
+  width: 36px;
+  background: linear-gradient(90deg, rgba(112, 129, 214, 0), rgba(122, 138, 232, 0.12), rgba(228, 233, 255, 0.72), rgba(122, 138, 232, 0));
 }
 
 .reference-prompt-pill {
@@ -974,9 +979,9 @@ body.is-web-runtime.is-mobile-browser .app-main {
   border-radius: 999px;
   background: rgba(11, 15, 27, 0.94);
   color: #eef2ff;
-  font-size: 12px;
+  font-size: 11px;
   line-height: 1;
-  padding: 7px 12px;
+  padding: 6px 10px;
   box-shadow:
     inset 0 0 0 1px rgba(255, 255, 255, 0.02),
     0 8px 16px rgba(4, 8, 18, 0.24);
@@ -986,41 +991,41 @@ body.is-web-runtime.is-mobile-browser .app-main {
 }
 
 .reference-prompt-card.is-busy .reference-prompt-pill {
-  opacity: 1;
+  opacity: 0.94;
   animation:
     reference-prompt-pill-drift 6.4s ease-in-out infinite,
     reference-prompt-pill-focus 4.6s ease-in-out infinite;
 }
 
 .reference-prompt-pill--scene {
-  top: 2px;
+  top: 8px;
   left: 50%;
-  margin-left: -34px;
+  margin-left: -30px;
   animation-delay: -0.8s;
 }
 
 .reference-prompt-pill--light {
-  top: 18px;
-  right: 90px;
+  top: 16px;
+  right: 64px;
   animation-delay: -1.9s;
 }
 
 .reference-prompt-pill--pose {
-  right: 86px;
-  bottom: 94px;
+  right: 18px;
+  top: 78px;
   animation-delay: -2.6s;
 }
 
 .reference-prompt-pill--wardrobe {
-  bottom: 48px;
+  bottom: 20px;
   left: 50%;
-  margin-left: -40px;
+  margin-left: -34px;
   animation-delay: -1.3s;
 }
 
 .reference-prompt-pill--composition {
-  left: 136px;
-  bottom: 36px;
+  left: 52px;
+  bottom: 28px;
   animation-delay: -3.2s;
 }
 
@@ -1127,6 +1132,8 @@ body.is-web-runtime.is-mobile-browser .app-main {
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+  position: relative;
+  z-index: 1;
 }
 
 .reference-prompt-copy {
@@ -1170,7 +1177,7 @@ body.is-web-runtime.is-mobile-browser .app-main {
   gap: 12px;
   border: 1px solid #2d3750;
   border-radius: 10px;
-  background: rgba(10, 15, 25, 0.74);
+  background: rgba(10, 15, 25, 0.9);
   padding: 12px;
   overflow: hidden;
   transition:
@@ -1237,14 +1244,21 @@ body.is-web-runtime.is-mobile-browser .app-main {
 .reference-prompt-card.is-busy .reference-dropzone {
   position: relative;
   z-index: 1;
-  border-color: rgba(126, 229, 216, 0.58);
+  border-color: rgba(111, 128, 197, 0.56);
+  background: rgba(9, 13, 23, 0.96);
   box-shadow:
-    inset 0 0 0 1px rgba(126, 229, 216, 0.18),
-    0 0 28px rgba(81, 183, 213, 0.14);
+    inset 0 0 0 1px rgba(132, 148, 235, 0.12),
+    0 10px 24px rgba(12, 18, 34, 0.28);
 }
 
 .reference-prompt-card.is-busy .reference-prompt-actions {
   display: none;
+}
+
+.reference-prompt-actions,
+.reference-prompt-note {
+  position: relative;
+  z-index: 1;
 }
 
 .reference-preview-frame,
@@ -1617,19 +1631,19 @@ body.is-web-runtime.is-mobile-browser .app-main {
 
 @keyframes reference-prompt-orbit-spin-primary {
   from {
-    transform: rotate(-7deg);
+    transform: rotate(0deg);
   }
   to {
-    transform: rotate(353deg);
+    transform: rotate(360deg);
   }
 }
 
 @keyframes reference-prompt-orbit-spin-secondary {
   from {
-    transform: rotate(8deg);
+    transform: rotate(0deg);
   }
   to {
-    transform: rotate(368deg);
+    transform: rotate(360deg);
   }
 }
 
@@ -2825,7 +2839,7 @@ body.is-web-runtime.is-mobile-browser.nav-hidden .bottom-nav {
   }
 
   .reference-prompt-ai-layer {
-    inset: 78px 12px 110px;
+    inset: 108px 12px 74px;
   }
 
   .reference-prompt-pill {
@@ -2839,18 +2853,18 @@ body.is-web-runtime.is-mobile-browser.nav-hidden .bottom-nav {
   }
 
   .reference-prompt-pill--scene {
-    left: 54%;
-    top: 4px;
+    left: 50%;
+    top: 8px;
   }
 
   .reference-prompt-pill--pose {
-    right: 30px;
-    bottom: 102px;
+    right: 14px;
+    top: 70px;
   }
 
   .reference-prompt-pill--wardrobe {
-    margin-left: -34px;
-    bottom: 56px;
+    margin-left: -30px;
+    bottom: 18px;
   }
 
   .reference-prompt-busy-panel {
