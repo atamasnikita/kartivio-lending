@@ -2100,6 +2100,13 @@ function openReferenceImagePicker() {
   referenceImageInput.click();
 }
 
+function prepareReferenceImagePicker() {
+  if (!referenceImageInput) {
+    return;
+  }
+  referenceImageInput.value = "";
+}
+
 function clearReferenceImage({ preserveNote = false } = {}) {
   if (referenceImageInput) {
     referenceImageInput.value = "";
@@ -5997,7 +6004,16 @@ function bindEvents() {
   }
 
   if (referencePromptPickButton) {
-    referencePromptPickButton.addEventListener("click", () => openReferenceImagePicker());
+    referencePromptPickButton.addEventListener("click", () => {
+      prepareReferenceImagePicker();
+    });
+    referencePromptPickButton.addEventListener("keydown", (event) => {
+      const key = event.key;
+      if (key === "Enter" || key === " ") {
+        event.preventDefault();
+        openReferenceImagePicker();
+      }
+    });
   }
   if (referencePromptBuildButton) {
     referencePromptBuildButton.addEventListener("click", () => {
@@ -6012,12 +6028,12 @@ function bindEvents() {
     });
   }
   if (referenceImageDropzone) {
-    referenceImageDropzone.addEventListener("click", (event) => {
-      if (event.target instanceof Element && event.target.closest("#clearReferenceImageButton")) {
-        return;
-      }
-      openReferenceImagePicker();
-    });
+    const referenceHitbox = referenceImageDropzone.querySelector(".reference-dropzone-hitbox");
+    if (referenceHitbox) {
+      referenceHitbox.addEventListener("click", () => {
+        prepareReferenceImagePicker();
+      });
+    }
     referenceImageDropzone.addEventListener("keydown", (event) => {
       const key = event.key;
       if (key === "Enter" || key === " ") {

@@ -144,6 +144,11 @@
               tabindex="0"
               aria-label="Добавить фото-референс для сборки промпта"
             >
+              <label
+                for="referenceImageInput"
+                class="reference-dropzone-hitbox"
+                aria-hidden="true"
+              ></label>
               <span id="referenceDropzoneEmptyState" class="dropzone-empty">
                 <span class="dropzone-icon"><i data-lucide="image-plus"></i></span>
                 <span class="dropzone-title" id="referenceDropzoneTitle">Добавьте фото-референс</span>
@@ -162,10 +167,16 @@
             </div>
 
             <div class="inline-actions">
-              <button id="referencePromptPickButton" class="soft-btn soft-btn-icon" type="button">
+              <label
+                id="referencePromptPickButton"
+                class="soft-btn soft-btn-icon file-trigger-label"
+                for="referenceImageInput"
+                role="button"
+                tabindex="0"
+              >
                 <i data-lucide="paperclip"></i>
                 <span>Загрузить референс</span>
-              </button>
+              </label>
               <button id="referencePromptBuildButton" class="soft-btn soft-btn-icon" type="button">
                 <i data-lucide="sparkles"></i>
                 <span>Собрать промпт</span>

@@ -858,8 +858,23 @@ body.is-web-runtime.is-mobile-browser .app-main {
   min-height: 164px;
 }
 
+.reference-dropzone-hitbox {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  cursor: pointer;
+}
+
 .upload-dropzone-reference.has-image {
   min-height: 220px;
+}
+
+.upload-dropzone-reference .dropzone-empty,
+.upload-dropzone-reference .dropzone-preview-grid,
+.upload-dropzone-reference .dropzone-preview-badge {
+  position: relative;
+  z-index: 2;
+  pointer-events: none;
 }
 
 .dropzone-empty {
@@ -988,7 +1003,7 @@ body.is-web-runtime.is-mobile-browser .app-main {
   display: grid;
   place-items: center;
   cursor: pointer;
-  z-index: 2;
+  z-index: 3;
 }
 
 .dropzone-clear-btn:hover {
@@ -1091,6 +1106,11 @@ body.is-web-runtime.is-mobile-browser .app-main {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+}
+
+.file-trigger-label {
+  text-decoration: none;
+  user-select: none;
 }
 
 .settings-panel {
