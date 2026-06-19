@@ -911,6 +911,191 @@ body.is-web-runtime.is-mobile-browser .app-main {
     linear-gradient(120deg, rgba(112, 139, 193, 0.48), rgba(70, 84, 120, 0.42), rgba(112, 139, 193, 0.48)) border-box;
 }
 
+.reference-prompt-ai-layer {
+  position: absolute;
+  inset: 62px 18px 118px;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.24s ease;
+}
+
+.reference-prompt-card.is-busy .reference-prompt-ai-layer {
+  opacity: 1;
+}
+
+.reference-prompt-orbit {
+  position: absolute;
+  border: 1px solid rgba(98, 114, 180, 0.18);
+  border-radius: 999px;
+  box-shadow:
+    inset 0 0 26px rgba(83, 107, 197, 0.05),
+    0 0 12px rgba(104, 122, 216, 0.06);
+}
+
+.reference-prompt-orbit--primary {
+  inset: 6px -12px 82px;
+  transform: rotate(-7deg);
+  animation: reference-prompt-orbit-float 8.6s ease-in-out infinite;
+}
+
+.reference-prompt-orbit--secondary {
+  inset: 28px 36px 46px;
+  opacity: 0.72;
+  transform: rotate(8deg);
+  animation: reference-prompt-orbit-float 10.4s ease-in-out infinite reverse;
+}
+
+.reference-prompt-pill {
+  position: absolute;
+  border: 1px solid rgba(94, 107, 171, 0.54);
+  border-radius: 999px;
+  background: rgba(18, 23, 40, 0.86);
+  color: #dde5ff;
+  font-size: 12px;
+  line-height: 1;
+  padding: 7px 12px;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.02),
+    0 0 18px rgba(102, 117, 213, 0.12);
+  opacity: 0;
+  transform: translateY(8px) scale(0.96);
+}
+
+.reference-prompt-card.is-busy .reference-prompt-pill {
+  opacity: 1;
+  animation:
+    reference-prompt-pill-float 5.8s ease-in-out infinite,
+    reference-prompt-pill-pulse 2.8s ease-in-out infinite;
+}
+
+.reference-prompt-pill--scene {
+  top: 2px;
+  left: 50%;
+  margin-left: -34px;
+  animation-delay: -0.8s;
+}
+
+.reference-prompt-pill--light {
+  top: 18px;
+  right: 90px;
+  animation-delay: -1.9s;
+}
+
+.reference-prompt-pill--pose {
+  right: 86px;
+  bottom: 94px;
+  animation-delay: -2.6s;
+}
+
+.reference-prompt-pill--wardrobe {
+  bottom: 48px;
+  left: 50%;
+  margin-left: -40px;
+  animation-delay: -1.3s;
+}
+
+.reference-prompt-pill--composition {
+  left: 136px;
+  bottom: 36px;
+  animation-delay: -3.2s;
+}
+
+.reference-prompt-busy-panel {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 14px;
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  border: 0 solid rgba(66, 77, 118, 0.76);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(18, 23, 38, 0.96), rgba(12, 17, 31, 0.98));
+  padding: 0 16px;
+  transform: translateY(-8px) scale(0.985);
+  transition:
+    max-height 0.28s ease,
+    opacity 0.22s ease,
+    transform 0.22s ease,
+    padding 0.22s ease,
+    border-width 0.22s ease;
+}
+
+.reference-prompt-card.is-busy .reference-prompt-busy-panel {
+  max-height: 180px;
+  opacity: 1;
+  pointer-events: none;
+  padding: 18px 16px 16px;
+  border-width: 1px;
+  transform: translateY(0) scale(1);
+}
+
+.reference-prompt-busy-head {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  justify-self: center;
+  color: #eef2ff;
+}
+
+.reference-prompt-busy-head strong {
+  font-size: 17px;
+  line-height: 1.15;
+}
+
+.reference-prompt-busy-icon {
+  display: grid;
+  place-items: center;
+  color: #dbe2ff;
+}
+
+.reference-prompt-busy-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.reference-prompt-busy-rail {
+  position: relative;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(57, 64, 97, 0.48);
+  overflow: hidden;
+}
+
+.reference-prompt-busy-rail::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(141, 165, 255, 0.06), rgba(255, 255, 255, 0));
+}
+
+.reference-prompt-busy-shuttle {
+  position: absolute;
+  top: 1px;
+  left: 0;
+  width: 22%;
+  min-width: 88px;
+  max-width: 156px;
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(118, 231, 215, 0.22), rgba(184, 196, 255, 0.96), rgba(118, 231, 215, 0.16));
+  box-shadow:
+    0 0 22px rgba(147, 176, 255, 0.7),
+    0 0 10px rgba(118, 231, 215, 0.42);
+  animation: reference-prompt-shuttle 1.8s cubic-bezier(0.23, 1, 0.32, 1) infinite alternate;
+}
+
+.reference-prompt-busy-caption {
+  margin: 0;
+  text-align: center;
+  color: #a7afd0;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
 .reference-prompt-header {
   display: flex;
   align-items: flex-start;
@@ -1024,10 +1209,16 @@ body.is-web-runtime.is-mobile-browser .app-main {
 }
 
 .reference-prompt-card.is-busy .reference-dropzone {
+  position: relative;
+  z-index: 1;
   border-color: rgba(126, 229, 216, 0.58);
   box-shadow:
     inset 0 0 0 1px rgba(126, 229, 216, 0.18),
     0 0 28px rgba(81, 183, 213, 0.14);
+}
+
+.reference-prompt-card.is-busy .reference-prompt-actions {
+  display: none;
 }
 
 .reference-preview-frame,
@@ -1407,6 +1598,60 @@ body.is-web-runtime.is-mobile-browser .app-main {
   }
   100% {
     transform: rotate(360deg) scale(0.86);
+  }
+}
+
+@keyframes reference-prompt-orbit-float {
+  0% {
+    transform: rotate(-7deg) scaleX(0.98) translateY(0);
+    opacity: 0.48;
+  }
+  50% {
+    transform: rotate(-3deg) scaleX(1.02) translateY(4px);
+    opacity: 0.9;
+  }
+  100% {
+    transform: rotate(-9deg) scaleX(0.99) translateY(-1px);
+    opacity: 0.56;
+  }
+}
+
+@keyframes reference-prompt-pill-float {
+  0% {
+    transform: translateY(0) scale(0.98);
+  }
+  50% {
+    transform: translateY(-5px) scale(1.02);
+  }
+  100% {
+    transform: translateY(0) scale(0.99);
+  }
+}
+
+@keyframes reference-prompt-pill-pulse {
+  0% {
+    box-shadow:
+      inset 0 0 0 1px rgba(255, 255, 255, 0.02),
+      0 0 14px rgba(102, 117, 213, 0.09);
+  }
+  50% {
+    box-shadow:
+      inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+      0 0 24px rgba(141, 165, 255, 0.18);
+  }
+  100% {
+    box-shadow:
+      inset 0 0 0 1px rgba(255, 255, 255, 0.02),
+      0 0 14px rgba(102, 117, 213, 0.09);
+  }
+}
+
+@keyframes reference-prompt-shuttle {
+  0% {
+    transform: translateX(0) scaleX(0.92);
+  }
+  100% {
+    transform: translateX(350%) scaleX(1.03);
   }
 }
 
@@ -2563,6 +2808,51 @@ body.is-web-runtime.is-mobile-browser.nav-hidden .bottom-nav {
     height: 52px;
   }
 
+  .reference-prompt-ai-layer {
+    inset: 78px 12px 110px;
+  }
+
+  .reference-prompt-pill {
+    font-size: 11px;
+    padding: 6px 10px;
+  }
+
+  .reference-prompt-pill--light,
+  .reference-prompt-pill--composition {
+    display: none;
+  }
+
+  .reference-prompt-pill--scene {
+    left: 54%;
+    top: 4px;
+  }
+
+  .reference-prompt-pill--pose {
+    right: 30px;
+    bottom: 102px;
+  }
+
+  .reference-prompt-pill--wardrobe {
+    margin-left: -34px;
+    bottom: 56px;
+  }
+
+  .reference-prompt-busy-panel {
+    gap: 12px;
+  }
+
+  .reference-prompt-card.is-busy .reference-prompt-busy-panel {
+    padding: 16px 14px 14px;
+  }
+
+  .reference-prompt-busy-head strong {
+    font-size: 16px;
+  }
+
+  .reference-prompt-busy-caption {
+    font-size: 12px;
+  }
+
   .template-filter-shell {
     gap: 0;
   }
@@ -2666,7 +2956,10 @@ body.is-web-runtime.is-mobile-browser.nav-hidden .bottom-nav {
   }
 
   .reference-prompt-card::before,
-  .reference-prompt-card::after {
+  .reference-prompt-card::after,
+  .reference-prompt-orbit,
+  .reference-prompt-pill,
+  .reference-prompt-busy-shuttle {
     animation: none !important;
   }
 }
