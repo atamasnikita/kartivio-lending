@@ -2059,8 +2059,12 @@ function hasSuccessfulPayment() {
   return Boolean(state.me && state.me.has_successful_payment);
 }
 
+function hasReferencePromptAccess() {
+  return Boolean(hasSuccessfulPayment() || isAdminUser());
+}
+
 function referencePromptLocked() {
-  return Boolean(hasActiveSession() && !hasSuccessfulPayment());
+  return Boolean(hasActiveSession() && !hasReferencePromptAccess());
 }
 
 function defaultReferencePromptNote() {
