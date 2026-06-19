@@ -26,7 +26,7 @@ const YANDEX_OAUTH_STORAGE_KEYS = {
 };
 const MAX_SOURCE_IMAGES = 3;
 const PROMPT_MAX_LENGTH = 3000;
-const REFERENCE_PROMPT_NOTE_DEFAULT = "Лицо и сходство берем только из твоих фото, не из референса.";
+const REFERENCE_PROMPT_NOTE_DEFAULT = "Потом его можно отредактировать перед генерацией.";
 const TEMPLATE_SKELETON_RATIOS = ["1 / 1", "4 / 5", "3 / 4", "5 / 4", "2 / 3", "3 / 2"];
 const TEMPLATE_MODAL_ANIMATION_MS = 260;
 
@@ -328,6 +328,7 @@ const state = {
   referenceImagePreviewUrl: "",
   referencePromptBusy: false,
   referencePromptPreviousValue: "",
+  referencePromptBuilt: false,
   sourceImageFiles: [],
   sourceImagePreviewUrls: [],
   historyItems: null,
@@ -462,11 +463,12 @@ const referenceImageInput = document.getElementById("referenceImageInput");
 const referenceImageDropzone = document.getElementById("referenceImageDropzone");
 const referenceDropzoneEmptyState = document.getElementById("referenceDropzoneEmptyState");
 const referenceDropzoneTitle = document.getElementById("referenceDropzoneTitle");
-const referenceImagePreviewGrid = document.getElementById("referenceImagePreviewGrid");
+const referenceDropzoneSubtitle = document.getElementById("referenceDropzoneSubtitle");
+const referenceImagePreview = document.getElementById("referenceImagePreview");
 const referenceDropzoneBadge = document.getElementById("referenceDropzoneBadge");
 const clearReferenceImageButton = document.getElementById("clearReferenceImageButton");
-const referencePromptPickButton = document.getElementById("referencePromptPickButton");
 const referencePromptBuildButton = document.getElementById("referencePromptBuildButton");
+const referencePromptActionIcon = document.getElementById("referencePromptActionIcon");
 const referencePromptRestoreButton = document.getElementById("referencePromptRestoreButton");
 const referencePromptNote = document.getElementById("referencePromptNote");
 const sourceImageInput = document.getElementById("sourceImageInput");
@@ -1965,6 +1967,7 @@ function revokeReferenceImagePreview() {
 function setReferenceImage(file) {
   revokeReferenceImagePreview();
   state.referenceImageFile = file instanceof File ? file : null;
+  state.referencePromptBuilt = false;
   if (state.referenceImageFile) {
     state.referenceImagePreviewUrl = URL.createObjectURL(state.referenceImageFile);
   }
@@ -1987,17 +1990,48 @@ function renderReferencePromptRestoreButton() {
   referencePromptRestoreButton.disabled = Boolean(state.referencePromptBusy);
 }
 
+function setReferencePromptActionIcon(name) {
+  if (!referencePromptActionIcon || !name) {
+    return;
+  }
+  if (referencePromptActionIcon.getAttribute("data-lucide") === name) {
+    return;
+  }
+  referencePromptActionIcon.setAttribute("data-lucide", name);
+  refreshIcons();
+}
+
+function referenceImageFormatLabel(file) {
+  const mime = String(file && file.type || "").toLowerCase();
+  if (mime === "image/png") {
+    return "PNG";
+  }
+  if (mime === "image/webp") {
+    return "WEBP";
+  }
+  if (mime === "image/jpeg" || mime === "image/jpg") {
+    return "JPG";
+  }
+  const fileName = String(file && file.name || "");
+  const ext = fileName.includes(".") ? fileName.split(".").pop() : "";
+  return ext ? String(ext).toUpperCase() : "Фото";
+}
+
 function syncReferencePromptControls() {
   const hasFile = Boolean(referenceImageFile());
   if (referencePromptBuildButton) {
-    referencePromptBuildButton.disabled = !hasFile || Boolean(state.referencePromptBusy);
+    referencePromptBuildButton.disabled = Boolean(state.referencePromptBusy);
     const label = referencePromptBuildButton.querySelector("span");
     if (label) {
-      label.textContent = state.referencePromptBusy ? "Собираем..." : "Собрать промпт";
+      label.textContent = !hasFile
+        ? "Выбрать референс"
+        : state.referencePromptBusy
+          ? "Собираем..."
+          : state.referencePromptBuilt
+            ? "Собрать заново"
+            : "Собрать промпт";
     }
-  }
-  if (referencePromptPickButton) {
-    referencePromptPickButton.disabled = Boolean(state.referencePromptBusy);
+    setReferencePromptActionIcon(!hasFile ? "image-plus" : state.referencePromptBusy ? "loader-circle" : "sparkles");
   }
   if (clearReferenceImageButton) {
     clearReferenceImageButton.disabled = Boolean(state.referencePromptBusy);
@@ -2012,11 +2046,12 @@ function clearReferencePromptUndoState() {
 
 function renderReferenceImage() {
   const file = referenceImageFile();
-  const hasFile = Boolean(file);
-
   if (!file) {
     if (referenceDropzoneTitle) {
-      referenceDropzoneTitle.textContent = "Добавьте фото-референс";
+      referenceDropzoneTitle.textContent = "Добавь фото-референс";
+    }
+    if (referenceDropzoneSubtitle) {
+      referenceDropzoneSubtitle.textContent = "Сцена, свет, одежда и композиция";
     }
     if (referenceImageDropzone) {
       referenceImageDropzone.classList.remove("has-image");
@@ -2024,9 +2059,10 @@ function renderReferenceImage() {
     if (referenceDropzoneEmptyState) {
       referenceDropzoneEmptyState.classList.remove("is-hidden");
     }
-    if (referenceImagePreviewGrid) {
-      referenceImagePreviewGrid.classList.add("is-hidden");
-      referenceImagePreviewGrid.innerHTML = "";
+    if (referenceImagePreview) {
+      referenceImagePreview.classList.add("is-hidden");
+      referenceImagePreview.removeAttribute("src");
+      referenceImagePreview.alt = "";
     }
     if (referenceDropzoneBadge) {
       referenceDropzoneBadge.classList.add("is-hidden");
@@ -2041,41 +2077,24 @@ function renderReferenceImage() {
   if (referenceDropzoneTitle) {
     referenceDropzoneTitle.textContent = file.name || "Фото-референс";
   }
-  if (referenceImagePreviewGrid) {
-    referenceImagePreviewGrid.innerHTML = "";
-    const cell = document.createElement("figure");
-    cell.className = "dropzone-preview-thumb";
-
-    const img = document.createElement("img");
-    img.src = state.referenceImagePreviewUrl || "";
-    img.alt = `Фото-референс: ${file.name}`;
-    img.loading = "lazy";
-    cell.appendChild(img);
-
-    const removeBtn = document.createElement("button");
-    removeBtn.type = "button";
-    removeBtn.className = "dropzone-thumb-remove";
-    removeBtn.setAttribute("aria-label", "Убрать фото-референс");
-    removeBtn.textContent = "×";
-    removeBtn.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      clearReferenceImage();
-      setReferencePromptNote("Фото-референс убрано.");
-    });
-    cell.appendChild(removeBtn);
-
-    referenceImagePreviewGrid.appendChild(cell);
-    referenceImagePreviewGrid.classList.remove("is-hidden");
+  if (referenceDropzoneSubtitle) {
+    referenceDropzoneSubtitle.textContent = state.referencePromptBuilt
+      ? "Промпт уже обновлен. Можно собрать заново."
+      : "Готово к сборке промпта";
+  }
+  if (referenceImagePreview) {
+    referenceImagePreview.src = state.referenceImagePreviewUrl || "";
+    referenceImagePreview.alt = `Фото-референс: ${file.name}`;
+    referenceImagePreview.classList.remove("is-hidden");
   }
   if (referenceImageDropzone) {
     referenceImageDropzone.classList.add("has-image");
   }
   if (referenceDropzoneEmptyState) {
-    referenceDropzoneEmptyState.classList.toggle("is-hidden", hasFile);
+    referenceDropzoneEmptyState.classList.add("is-hidden");
   }
   if (referenceDropzoneBadge) {
-    referenceDropzoneBadge.textContent = `Фото-референс · ${sourceImageSizeLabel(file.size)}`;
+    referenceDropzoneBadge.textContent = `${referenceImageFormatLabel(file)} · ${sourceImageSizeLabel(file.size)}`;
     referenceDropzoneBadge.classList.remove("is-hidden");
   }
   if (clearReferenceImageButton) {
@@ -5413,12 +5432,14 @@ async function handleBuildReferencePrompt() {
       throw new Error("Сервис вернул пустой промпт.");
     }
     state.referencePromptPreviousValue = previousPrompt && previousPrompt !== nextPrompt ? previousPrompt : "";
+    state.referencePromptBuilt = true;
     renderReferencePromptRestoreButton();
     promptInput.value = nextPrompt;
     switchScreen("studio");
     promptInput.focus();
     setReferencePromptNote("Промпт собран. Его можно отредактировать перед генерацией.");
     setCreateNote("Промпт собран по фото-референсу.");
+    renderReferenceImage();
   } catch (error) {
     setReferencePromptNote(userFacingErrorMessage(error, "Не удалось собрать промпт по референсу."), true);
   } finally {
@@ -6003,20 +6024,12 @@ function bindEvents() {
     });
   }
 
-  if (referencePromptPickButton) {
-    referencePromptPickButton.addEventListener("click", () => {
-      prepareReferenceImagePicker();
-    });
-    referencePromptPickButton.addEventListener("keydown", (event) => {
-      const key = event.key;
-      if (key === "Enter" || key === " ") {
-        event.preventDefault();
-        openReferenceImagePicker();
-      }
-    });
-  }
   if (referencePromptBuildButton) {
     referencePromptBuildButton.addEventListener("click", () => {
+      if (!referenceImageFile()) {
+        openReferenceImagePicker();
+        return;
+      }
       handleBuildReferencePrompt().catch((error) => {
         setReferencePromptNote(userFacingErrorMessage(error, "Не удалось собрать промпт по референсу."), true);
       });

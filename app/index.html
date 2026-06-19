@@ -131,15 +131,15 @@
           <section class="panel-card reference-prompt-card">
             <div class="reference-prompt-header">
               <div class="reference-prompt-copy">
-                <strong>Фото-референс</strong>
-                <span>Поза, свет, одежда и композиция · доступно после первой оплаты</span>
+                <strong>Промпт по референсу</strong>
+                <span>Создадим новый промпт по референсу</span>
               </div>
-              <span class="reference-prompt-badge">Новый промпт</span>
+              <span class="reference-prompt-badge">Доступно после оплаты</span>
             </div>
 
             <div
               id="referenceImageDropzone"
-              class="upload-dropzone upload-dropzone-reference"
+              class="reference-dropzone"
               role="button"
               tabindex="0"
               aria-label="Добавить фото-референс для сборки промпта"
@@ -149,12 +149,20 @@
                 class="reference-dropzone-hitbox"
                 aria-hidden="true"
               ></label>
-              <span id="referenceDropzoneEmptyState" class="dropzone-empty">
-                <span class="dropzone-icon"><i data-lucide="image-plus"></i></span>
-                <span class="dropzone-title" id="referenceDropzoneTitle">Добавьте фото-референс</span>
-                <span class="dropzone-subtitle">Один файл PNG/JPG/WEBP до 10 MB</span>
-              </span>
-              <div id="referenceImagePreviewGrid" class="dropzone-preview-grid reference-preview-grid is-hidden" aria-label="Превью фото-референса"></div>
+              <div class="reference-preview-frame" aria-hidden="true">
+                <span id="referenceDropzoneEmptyState" class="reference-preview-empty">
+                  <span class="dropzone-icon"><i data-lucide="image-plus"></i></span>
+                </span>
+                <img id="referenceImagePreview" class="reference-preview-image is-hidden" alt="" loading="lazy" />
+              </div>
+              <div class="reference-dropzone-copy">
+                <strong id="referenceDropzoneTitle">Добавь фото-референс</strong>
+                <span id="referenceDropzoneSubtitle">Сцена, свет, одежда и композиция</span>
+                <div class="reference-dropzone-meta">
+                  <span>PNG, JPG, WEBP · до 10 MB</span>
+                  <span id="referenceDropzoneBadge" class="reference-dropzone-file-meta is-hidden">JPG · 1.4 MB</span>
+                </div>
+              </div>
               <button
                 id="clearReferenceImageButton"
                 class="dropzone-clear-btn is-hidden"
@@ -163,28 +171,17 @@
               >
                 <i data-lucide="x"></i>
               </button>
-              <span id="referenceDropzoneBadge" class="dropzone-preview-badge is-hidden">Фото-референс</span>
             </div>
 
-            <div class="inline-actions">
-              <label
-                id="referencePromptPickButton"
-                class="soft-btn soft-btn-icon file-trigger-label"
-                for="referenceImageInput"
-                role="button"
-                tabindex="0"
-              >
-                <i data-lucide="paperclip"></i>
-                <span>Загрузить референс</span>
-              </label>
-              <button id="referencePromptBuildButton" class="soft-btn soft-btn-icon" type="button">
-                <i data-lucide="sparkles"></i>
-                <span>Собрать промпт</span>
+            <div class="reference-prompt-actions">
+              <button id="referencePromptBuildButton" class="soft-btn soft-btn-icon reference-primary-btn" type="button">
+                <i id="referencePromptActionIcon" data-lucide="image-plus"></i>
+                <span>Выбрать референс</span>
               </button>
-              <button id="referencePromptRestoreButton" class="soft-btn btn-compact is-hidden" type="button">Вернуть прошлый текст</button>
+              <button id="referencePromptRestoreButton" class="reference-inline-btn is-hidden" type="button">Вернуть прошлый текст</button>
             </div>
 
-            <p id="referencePromptNote" class="note">Лицо и сходство берем только из твоих фото, не из референса.</p>
+            <p id="referencePromptNote" class="note reference-prompt-note">Потом его можно отредактировать перед генерацией.</p>
             <input
               id="referenceImageInput"
               class="visually-hidden-input"
