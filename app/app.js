@@ -460,6 +460,9 @@ const modelChips = document.getElementById("modelChips");
 const resolutionChips = document.getElementById("resolutionChips");
 const ratioChips = document.getElementById("ratioChips");
 const referenceImageInput = document.getElementById("referenceImageInput");
+const referencePromptCard = document.getElementById("referencePromptCard");
+const referencePromptSubtitle = document.getElementById("referencePromptSubtitle");
+const referencePromptBadge = document.getElementById("referencePromptBadge");
 const referenceImageDropzone = document.getElementById("referenceImageDropzone");
 const referenceDropzoneEmptyState = document.getElementById("referenceDropzoneEmptyState");
 const referenceDropzoneTitle = document.getElementById("referenceDropzoneTitle");
@@ -1687,7 +1690,7 @@ function setReferencePromptNote(message, isError = false) {
   if (!referencePromptNote) {
     return;
   }
-  referencePromptNote.textContent = String(message || REFERENCE_PROMPT_NOTE_DEFAULT);
+  referencePromptNote.textContent = String(message || defaultReferencePromptNote());
   referencePromptNote.style.color = isError ? "#ff8f8f" : "#8f98b0";
 }
 
@@ -1985,7 +1988,7 @@ function renderReferencePromptRestoreButton() {
   if (!referencePromptRestoreButton) {
     return;
   }
-  const shouldShow = Boolean(String(state.referencePromptPreviousValue || "").length > 0);
+  const shouldShow = Boolean(!referencePromptLocked() && String(state.referencePromptPreviousValue || "").length > 0);
   referencePromptRestoreButton.classList.toggle("is-hidden", !shouldShow);
   referencePromptRestoreButton.disabled = Boolean(state.referencePromptBusy);
 }
@@ -2017,24 +2020,71 @@ function referenceImageFormatLabel(file) {
   return ext ? String(ext).toUpperCase() : "Фото";
 }
 
+function hasSuccessfulPayment() {
+  return Boolean(state.me && state.me.has_successful_payment);
+}
+
+function referencePromptLocked() {
+  return Boolean(hasActiveSession() && !hasSuccessfulPayment());
+}
+
+function defaultReferencePromptNote() {
+  return referencePromptLocked()
+    ? "Фича откроется после первой оплаты."
+    : REFERENCE_PROMPT_NOTE_DEFAULT;
+}
+
+function syncReferencePromptAccessState() {
+  const locked = referencePromptLocked();
+  const busy = Boolean(state.referencePromptBusy);
+
+  if (referencePromptCard) {
+    referencePromptCard.classList.toggle("is-locked", locked);
+    referencePromptCard.classList.toggle("is-busy", busy);
+  }
+  if (referenceImageDropzone) {
+    referenceImageDropzone.classList.toggle("is-locked", locked);
+  }
+  if (referencePromptSubtitle) {
+    referencePromptSubtitle.textContent = locked
+      ? "Загрузишь кадр и сразу получишь готовый промпт"
+      : "Создадим новый промпт по референсу";
+  }
+  if (referencePromptBadge) {
+    referencePromptBadge.classList.toggle("is-hidden", !locked);
+  }
+}
+
 function syncReferencePromptControls() {
+  syncReferencePromptAccessState();
   const hasFile = Boolean(referenceImageFile());
+  const locked = referencePromptLocked();
   if (referencePromptBuildButton) {
     referencePromptBuildButton.disabled = Boolean(state.referencePromptBusy);
     const label = referencePromptBuildButton.querySelector("span");
     if (label) {
-      label.textContent = !hasFile
-        ? "Выбрать референс"
-        : state.referencePromptBusy
-          ? "Собираем..."
-          : state.referencePromptBuilt
-            ? "Собрать заново"
-            : "Собрать промпт";
+      label.textContent = locked
+        ? "Разблокировать"
+        : !hasFile
+          ? "Выбрать изображение"
+          : state.referencePromptBusy
+            ? "Собираем..."
+            : state.referencePromptBuilt
+              ? "Собрать заново"
+              : "Собрать промпт";
     }
-    setReferencePromptActionIcon(!hasFile ? "image-plus" : state.referencePromptBusy ? "loader-circle" : "sparkles");
+    setReferencePromptActionIcon(
+      locked
+        ? "lock"
+        : !hasFile
+          ? "image-plus"
+          : state.referencePromptBusy
+            ? "loader-circle"
+            : "sparkles",
+    );
   }
   if (clearReferenceImageButton) {
-    clearReferenceImageButton.disabled = Boolean(state.referencePromptBusy);
+    clearReferenceImageButton.disabled = Boolean(state.referencePromptBusy || locked);
   }
   renderReferencePromptRestoreButton();
 }
@@ -2046,9 +2096,10 @@ function clearReferencePromptUndoState() {
 
 function renderReferenceImage() {
   const file = referenceImageFile();
+  const locked = referencePromptLocked();
   if (!file) {
     if (referenceDropzoneTitle) {
-      referenceDropzoneTitle.textContent = "Добавь фото-референс";
+      referenceDropzoneTitle.textContent = locked ? "Промпт по фото-референсу" : "Добавь фото-референс";
     }
     if (referenceDropzoneSubtitle) {
       referenceDropzoneSubtitle.textContent = "Сцена, свет, одежда и композиция";
@@ -2119,11 +2170,43 @@ function openReferenceImagePicker() {
   referenceImageInput.click();
 }
 
-function prepareReferenceImagePicker() {
-  if (!referenceImageInput) {
+function openReferencePromptPaywall() {
+  if (!hasActiveSession()) {
+    setAuthGateVisible(true);
+    setReferencePromptNote("Сначала войди в аккаунт.", true);
     return;
   }
-  referenceImageInput.value = "";
+  switchScreen("tokens");
+  setPlansNote("Промпт по референсу откроется после первой оплаты.");
+  setReferencePromptNote("Фича откроется после первой оплаты.");
+}
+
+function handleReferenceDropzoneAction() {
+  if (state.referencePromptBusy) {
+    return;
+  }
+  if (referencePromptLocked()) {
+    openReferencePromptPaywall();
+    return;
+  }
+  openReferenceImagePicker();
+}
+
+function handleReferencePromptPrimaryAction() {
+  if (state.referencePromptBusy) {
+    return;
+  }
+  if (referencePromptLocked()) {
+    openReferencePromptPaywall();
+    return;
+  }
+  if (!referenceImageFile()) {
+    openReferenceImagePicker();
+    return;
+  }
+  handleBuildReferencePrompt().catch((error) => {
+    setReferencePromptNote(userFacingErrorMessage(error, "Не удалось собрать промпт по референсу."), true);
+  });
 }
 
 function clearReferenceImage({ preserveNote = false } = {}) {
@@ -2133,7 +2216,7 @@ function clearReferenceImage({ preserveNote = false } = {}) {
   setReferenceImage(null);
   renderReferenceImage();
   if (!preserveNote) {
-    setReferencePromptNote(REFERENCE_PROMPT_NOTE_DEFAULT);
+    setReferencePromptNote(defaultReferencePromptNote());
   }
 }
 
@@ -2366,7 +2449,7 @@ function handleReferenceImageChange() {
   if (previousTemplate) {
     setReferencePromptNote("Шаблон убран. Теперь сцена будет собрана по фото-референсу.");
   } else {
-    setReferencePromptNote(REFERENCE_PROMPT_NOTE_DEFAULT);
+    setReferencePromptNote(defaultReferencePromptNote());
   }
 }
 
@@ -4034,6 +4117,8 @@ function renderUser(me, wallet) {
   creditsValue.textContent = formatCredits(balance);
   creditsBadge.textContent = String(balance);
   profileAvatar.textContent = display === "—" ? "K" : display[0].toUpperCase();
+  renderReferenceImage();
+  setReferencePromptNote(defaultReferencePromptNote());
   renderIdentityActions();
   renderAdminAccess();
 }
@@ -5306,6 +5391,8 @@ async function loadPrivateData({ forceServerCheck = false } = {}) {
     creditsValue.textContent = "—";
     creditsBadge.textContent = "0";
     profileAvatar.textContent = "K";
+    renderReferenceImage();
+    setReferencePromptNote(defaultReferencePromptNote());
     renderIdentityActions();
     renderAdminAccess();
     return;
@@ -6025,15 +6112,7 @@ function bindEvents() {
   }
 
   if (referencePromptBuildButton) {
-    referencePromptBuildButton.addEventListener("click", () => {
-      if (!referenceImageFile()) {
-        openReferenceImagePicker();
-        return;
-      }
-      handleBuildReferencePrompt().catch((error) => {
-        setReferencePromptNote(userFacingErrorMessage(error, "Не удалось собрать промпт по референсу."), true);
-      });
-    });
+    referencePromptBuildButton.addEventListener("click", handleReferencePromptPrimaryAction);
   }
   if (referencePromptRestoreButton) {
     referencePromptRestoreButton.addEventListener("click", () => {
@@ -6041,17 +6120,20 @@ function bindEvents() {
     });
   }
   if (referenceImageDropzone) {
-    const referenceHitbox = referenceImageDropzone.querySelector(".reference-dropzone-hitbox");
-    if (referenceHitbox) {
-      referenceHitbox.addEventListener("click", () => {
-        prepareReferenceImagePicker();
-      });
-    }
+    referenceImageDropzone.addEventListener("click", (event) => {
+      if (
+        event.target instanceof Element &&
+        event.target.closest("#clearReferenceImageButton")
+      ) {
+        return;
+      }
+      handleReferenceDropzoneAction();
+    });
     referenceImageDropzone.addEventListener("keydown", (event) => {
       const key = event.key;
       if (key === "Enter" || key === " ") {
         event.preventDefault();
-        openReferenceImagePicker();
+        handleReferenceDropzoneAction();
       }
     });
   }
@@ -6492,7 +6574,7 @@ async function bootstrap() {
   }
   renderGenerationChips();
   bindEvents();
-  setReferencePromptNote(REFERENCE_PROMPT_NOTE_DEFAULT);
+  setReferencePromptNote(defaultReferencePromptNote());
   renderSelectedTemplateCard();
   renderReferenceImage();
   renderSelectedSourceImage();

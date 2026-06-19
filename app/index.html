@@ -11,7 +11,7 @@
     />
     <meta name="kartivio-yandex-metrika-id" content="109102691" />
     <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=20260617a" />
+    <link rel="stylesheet" href="./styles.css?v=20260619a" />
     <script src="./vendor/lucide.min.js?v=1.18.0" defer></script>
   </head>
   <body>
@@ -128,13 +128,13 @@
             </button>
           </section>
 
-          <section class="panel-card reference-prompt-card">
+          <section id="referencePromptCard" class="panel-card reference-prompt-card">
             <div class="reference-prompt-header">
               <div class="reference-prompt-copy">
                 <strong>Промпт по референсу</strong>
-                <span>Создадим новый промпт по референсу</span>
+                <span id="referencePromptSubtitle">Создадим новый промпт по референсу</span>
               </div>
-              <span class="reference-prompt-badge">Доступно после оплаты</span>
+              <span id="referencePromptBadge" class="reference-prompt-badge">После первой оплаты</span>
             </div>
 
             <div
@@ -144,11 +144,10 @@
               tabindex="0"
               aria-label="Добавить фото-референс для сборки промпта"
             >
-              <label
-                for="referenceImageInput"
+              <span
                 class="reference-dropzone-hitbox"
                 aria-hidden="true"
-              ></label>
+              ></span>
               <div class="reference-preview-frame" aria-hidden="true">
                 <span id="referenceDropzoneEmptyState" class="reference-preview-empty">
                   <span class="dropzone-icon"><i data-lucide="image-plus"></i></span>
@@ -176,7 +175,7 @@
             <div class="reference-prompt-actions">
               <button id="referencePromptBuildButton" class="soft-btn soft-btn-icon reference-primary-btn" type="button">
                 <i id="referencePromptActionIcon" data-lucide="image-plus"></i>
-                <span>Выбрать референс</span>
+                <span>Выбрать изображение</span>
               </button>
               <button id="referencePromptRestoreButton" class="reference-inline-btn is-hidden" type="button">Вернуть прошлый текст</button>
             </div>
@@ -607,6 +606,6 @@
       </article>
     </div>
 
-    <script src="./app.js?v=20260618a" defer></script>
+    <script src="./app.js?v=20260619a" defer></script>
   </body>
 </html>
