@@ -11,7 +11,7 @@
     />
     <meta name="kartivio-yandex-metrika-id" content="109102691" />
     <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=20260619f" />
+    <link rel="stylesheet" href="./styles.css?v=20260620h" />
     <script src="./vendor/lucide.min.js?v=1.18.0" defer></script>
   </head>
   <body>
@@ -177,17 +177,20 @@
                 <span class="reference-prompt-busy-icon"><i data-lucide="sparkles"></i></span>
                 <strong>Собираем промпт</strong>
               </div>
-              <div class="reference-prompt-busy-steps" aria-hidden="true">
-                <span class="reference-prompt-busy-step is-active" data-reference-prompt-step="scene">сцена</span>
-                <span class="reference-prompt-busy-step" data-reference-prompt-step="light">свет</span>
-                <span class="reference-prompt-busy-step" data-reference-prompt-step="wardrobe">одежда</span>
-                <span class="reference-prompt-busy-step" data-reference-prompt-step="pose">поза</span>
-                <span class="reference-prompt-busy-step" data-reference-prompt-step="composition">композиция</span>
+              <div class="reference-prompt-busy-body">
+                <div class="reference-prompt-busy-steps" aria-hidden="true">
+                  <span class="reference-prompt-busy-step is-active" data-reference-prompt-step="scene">сцена</span>
+                  <span class="reference-prompt-busy-step" data-reference-prompt-step="light">свет</span>
+                  <span class="reference-prompt-busy-step" data-reference-prompt-step="wardrobe">одежда</span>
+                  <span class="reference-prompt-busy-step" data-reference-prompt-step="pose">поза</span>
+                  <span class="reference-prompt-busy-step" data-reference-prompt-step="details">детали</span>
+                  <span class="reference-prompt-busy-step" data-reference-prompt-step="composition">композиция</span>
+                </div>
+                <p id="referencePromptBusyCaption" class="reference-prompt-busy-caption">
+                  <strong id="referencePromptBusyCaptionTitle">Определяем сцену.</strong>
+                  <span id="referencePromptBusyCaptionBody">Понимаем, что именно должно происходить в кадре.</span>
+                </p>
               </div>
-              <p id="referencePromptBusyCaption" class="reference-prompt-busy-caption">
-                <strong id="referencePromptBusyCaptionTitle">Определяем сцену.</strong>
-                <span id="referencePromptBusyCaptionBody">Понимаем, что именно должно происходить в кадре.</span>
-              </p>
             </div>
 
             <div class="reference-prompt-actions">
@@ -624,6 +627,6 @@
       </article>
     </div>
 
-    <script src="./app.js?v=20260619g" defer></script>
+    <script src="./app.js?v=20260620i" defer></script>
   </body>
 </html>
