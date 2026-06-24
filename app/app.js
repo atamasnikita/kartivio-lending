@@ -36,6 +36,13 @@ const MODEL_COSTS = {
   "gpt-image-2": 30,
 };
 
+const TOPUP_DISPLAY_TITLES = Object.freeze({
+  mini: "Старт",
+  small: "Базовый",
+  medium: "Продвинутый",
+  large: "Максимум",
+});
+
 const IMAGE_MODEL_LABELS = {
   "gemini-3.1-flash-image-preview": "Nano Banana 2",
   "gemini-3-pro-image-preview": "Nano Banana Pro",
@@ -386,6 +393,7 @@ const logoutButton = document.getElementById("logoutButton");
 const plansGrid = document.getElementById("plansGrid");
 const plansActionButton = document.getElementById("plansActionButton");
 const plansNote = document.getElementById("plansNote");
+const paywallGalleryImages = document.querySelectorAll(".paywall-gallery-image[data-src]");
 const marketingBackButton = document.getElementById("marketingBackButton");
 const marketingAdminTabs = document.getElementById("marketingAdminTabs");
 const marketingTemplatesPanel = document.getElementById("marketingTemplatesPanel");
@@ -1960,6 +1968,7 @@ function switchScreen(nextScreen) {
   }
   closeTemplateModal();
   state.currentScreen = target;
+  appShell.classList.toggle("is-paywall-active", target === "tokens");
   for (const screen of screens) {
     screen.classList.toggle("screen-active", screen.dataset.screen === target);
   }
@@ -1981,6 +1990,19 @@ function switchScreen(nextScreen) {
     });
   } else if (target === "feed") {
     window.requestAnimationFrame(() => maybeAutoLoadMoreTemplates());
+  } else if (target === "tokens") {
+    loadPaywallGalleryImages();
+  }
+}
+
+function loadPaywallGalleryImages() {
+  for (const image of paywallGalleryImages) {
+    const source = String(image.dataset.src || "").trim();
+    if (!source) {
+      continue;
+    }
+    image.src = source;
+    image.removeAttribute("data-src");
   }
 }
 
@@ -4323,6 +4345,7 @@ function selectTopup(code) {
   for (const card of cards) {
     const isSelected = card.dataset.code === state.selectedTopupCode;
     card.classList.toggle("is-selected", isSelected);
+    card.setAttribute("aria-checked", String(isSelected));
   }
   const selected = state.topups.find((item) => item.code === state.selectedTopupCode);
   if (!selected) {
@@ -4330,7 +4353,7 @@ function selectTopup(code) {
     plansActionButton.disabled = true;
     return;
   }
-  plansActionButton.textContent = `Оплатить ${selected.price_rub} ₽`;
+  plansActionButton.textContent = `Получить ${formatCredits(selected.credits)} за ${selected.price_rub} ₽`;
   plansActionButton.disabled = false;
 }
 
@@ -4339,7 +4362,7 @@ function renderPlans(payload) {
   state.topups = topups;
   plansGrid.innerHTML = "";
   if (!topups.length) {
-    plansGrid.innerHTML = '<article class="plan-card">Пакеты временно недоступны.</article>';
+    plansGrid.innerHTML = '<article class="plan-card plan-card-unavailable">Пакеты временно недоступны.</article>';
     selectTopup("");
     return;
   }
@@ -4350,35 +4373,40 @@ function renderPlans(payload) {
     const nbproCount = Number(item.nbpro_images || Math.floor(credits / (MODEL_COSTS["gemini-3-pro-image-preview"] || 1)));
     const isPopular = Boolean(item.is_popular);
     const valueDiscountPercent = Number(item.value_discount_percent || 0);
-    const badges = [];
-    if (isPopular) {
-      badges.push('<span class="plan-badge">Популярный</span>');
-    }
-    if (valueDiscountPercent > 0) {
-      badges.push(`<span class="plan-badge plan-badge-muted">Выгода ${valueDiscountPercent}%</span>`);
-    }
-    const badgeHtml = badges.length ? `<div class="plan-badges">${badges.join("")}</div>` : "";
-    const card = document.createElement("article");
+    const displayTitle = TOPUP_DISPLAY_TITLES[String(item.code || "").trim()] || String(item.title || "");
+    const discountHtml =
+      valueDiscountPercent > 0
+        ? `<span class="plan-saving">Выгода ${escapeHtml(valueDiscountPercent)}%</span>`
+        : "";
+    const popularHtml = isPopular ? '<span class="plan-popular-badge">Популярный</span>' : "";
+    const card = document.createElement("button");
+    card.type = "button";
+    card.setAttribute("role", "radio");
+    card.setAttribute("aria-checked", "false");
     card.className = "plan-card";
     if (isPopular) {
       card.classList.add("is-popular");
     }
     card.dataset.code = item.code;
     card.innerHTML = `
-      <div class="plan-title-row">
-        <div class="plan-title-copy">
-          ${badgeHtml}
-          <h3>${escapeHtml(item.title)}</h3>
-        </div>
-        <span class="chip">${escapeHtml(formatCredits(item.credits))}</span>
-      </div>
-      <div class="plan-price">${escapeHtml(item.price_rub)} ₽</div>
-      <div class="plan-stats">
-        <div>${nb2Count} фото Nano Banana 2</div>
-        <div>${nbproCount} фото Nano Banana Pro</div>
-      </div>
+      ${popularHtml}
+      <span class="plan-radio" aria-hidden="true"></span>
+      <span class="plan-main">
+        <span class="plan-name-row">
+          <span class="plan-name">${escapeHtml(displayTitle)}</span>
+          ${discountHtml}
+        </span>
+        <span class="plan-result">${escapeHtml(nb2Count)} фото NB2 или ${escapeHtml(nbproCount)} Pro · ${escapeHtml(formatCredits(credits))}</span>
+      </span>
+      <span class="plan-price">
+        <strong>${escapeHtml(item.price_rub)} ₽</strong>
+        <span>разово</span>
+      </span>
     `;
-    card.addEventListener("click", () => selectTopup(item.code));
+    card.addEventListener("click", () => {
+      selectTopup(item.code);
+      setPlansNote("Безопасная оплата через ЮKassa");
+    });
     plansGrid.appendChild(card);
   }
   const defaultCode = topups.find((item) => item.is_popular)?.code || topups[0].code;

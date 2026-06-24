@@ -11,7 +11,7 @@
     />
     <meta name="kartivio-yandex-metrika-id" content="109102691" />
     <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=20260620j" />
+    <link rel="stylesheet" href="./styles.css?v=20260624a" />
     <script src="./vendor/lucide.min.js?v=1.18.0" defer></script>
   </head>
   <body>
@@ -296,14 +296,47 @@
           </section>
         </section>
 
-        <section class="screen" data-screen="tokens">
-          <div class="section-row">
-            <h2>Пополнить кредиты</h2>
+        <section class="screen paywall-screen" data-screen="tokens">
+          <section class="paywall-gallery" aria-label="Примеры фотографий, созданных в Kartivio">
+            <div class="paywall-gallery-track">
+              <img class="paywall-gallery-image" data-src="./assets/paywall/forest.jpg" alt="Портрет в лесу" decoding="async" />
+              <img class="paywall-gallery-image" data-src="./assets/paywall/lilac.jpg" alt="Девушка с сиренью" decoding="async" />
+              <img class="paywall-gallery-image" data-src="./assets/paywall/mirror-flowers.jpg" alt="Портрет в зеркале среди цветов" decoding="async" />
+              <img class="paywall-gallery-image" data-src="./assets/paywall/couple-mirror.jpg" alt="Пара в зеркале мотоцикла" decoding="async" />
+              <img class="paywall-gallery-image" data-src="./assets/paywall/family-field.jpg" alt="Семейный портрет в поле" decoding="async" />
+              <img class="paywall-gallery-image" data-src="./assets/paywall/studio.jpg" alt="Студийный портрет" decoding="async" />
+              <img class="paywall-gallery-image" data-src="./assets/paywall/red-dress.jpg" alt="Портрет в красном платье" decoding="async" />
+              <img class="paywall-gallery-image" data-src="./assets/paywall/red-wall.jpg" alt="Девушка у красной стены" decoding="async" />
+              <img class="paywall-gallery-image" data-src="./assets/paywall/man-field.jpg" alt="Мужской портрет в поле" decoding="async" />
+              <img class="paywall-gallery-image" data-src="./assets/paywall/cardigan.jpg" alt="Портрет в бордовом кардигане" decoding="async" />
+              <img class="paywall-gallery-image" data-src="./assets/paywall/couple-sunset.jpg" alt="Пара на закате" decoding="async" />
+              <img class="paywall-gallery-image" data-src="./assets/paywall/apple-garden.jpg" alt="Портрет в яблоневом саду" decoding="async" />
+            </div>
+          </section>
+
+          <div class="paywall-content">
+            <header class="paywall-intro">
+              <span class="paywall-eyebrow">Кредиты не сгорают</span>
+              <h2>Создавай больше удачных кадров</h2>
+              <p>Выбери пакет под свои идеи. Разовая покупка без подписки и автосписаний.</p>
+            </header>
+
+            <h3 class="paywall-plans-heading">Выбери пакет</h3>
+            <div id="plansGrid" class="plans-list" role="radiogroup" aria-label="Пакеты кредитов"></div>
+
+            <div class="paywall-trust" aria-label="Условия покупки">
+              <span>Без подписки</span>
+              <span>Без автосписаний</span>
+              <span>Оплата российской картой</span>
+            </div>
           </div>
-          <p class="subtitle">Разовые пакеты без срока сгорания. Чем больше пакет, тем ниже цена одной генерации.</p>
-          <div id="plansGrid" class="plans-list"></div>
-          <button id="plansActionButton" class="primary-action" type="button">Выбери пакет</button>
-          <p id="plansNote" class="note"></p>
+
+          <footer class="paywall-checkout">
+            <div class="paywall-checkout-inner">
+              <button id="plansActionButton" class="primary-action paywall-action" type="button">Выбери пакет</button>
+              <p id="plansNote" class="note paywall-note">Безопасная оплата через ЮKassa</p>
+            </div>
+          </footer>
         </section>
 
         <section class="screen" data-screen="profile">
@@ -627,6 +660,6 @@
       </article>
     </div>
 
-    <script src="./app.js?v=20260620i" defer></script>
+    <script src="./app.js?v=20260624a" defer></script>
   </body>
 </html>
