@@ -1918,6 +1918,10 @@ body.is-web-runtime.is-mobile-browser .app-main {
   overscroll-behavior: contain;
 }
 
+.template-modal-prompt-scroll.is-loading {
+  min-height: var(--template-prompt-collapsed-height);
+}
+
 .template-modal-prompt-scroll.is-collapsed::after {
   content: "";
   position: absolute;

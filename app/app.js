@@ -363,6 +363,9 @@ const HISTORY_PAGE_SIZE = 12;
 const TEMPLATE_FEED_INCREMENTAL_THRESHOLD = 24;
 const TEMPLATE_FEED_INITIAL_BATCH_SIZE = 18;
 const TEMPLATE_FEED_BATCH_SIZE = 18;
+const TEMPLATE_FEED_PRELOAD_DISTANCE_PX = 2200;
+const TEMPLATE_FEED_PRELOAD_IMAGE_COUNT = 36;
+const TEMPLATE_FEED_PRELOAD_PROMPT_COUNT = 12;
 const ADMIN_TEMPLATE_FILE_NOTE_DEFAULT =
   "PNG/JPG/WEBP до 10 MB. Превью и full соберутся автоматически. Файл нужен только для нового шаблона.";
 
@@ -529,6 +532,10 @@ const templateModalNote = document.getElementById("templateModalNote");
 
 let templateFeedAutoLoadRaf = 0;
 let lastTemplateGridColumnCount = 0;
+let templateFeedPreloadRaf = 0;
+const templateDetailPromises = new Map();
+const templateImagePreloadPromises = new Map();
+const templatePreloadedImageUrls = new Set();
 const navButtons = Array.from(document.querySelectorAll("[data-nav]"));
 const REFERENCE_PROMPT_BUSY_INTERVAL_MS = 1300;
 const REFERENCE_PROMPT_BUSY_STEPS = Object.freeze([
@@ -4599,6 +4606,56 @@ function mergeTemplateDetail(raw) {
   };
 }
 
+function preloadTemplateImage(url) {
+  const normalizedUrl = String(url || "").trim();
+  if (!normalizedUrl) {
+    return Promise.resolve(false);
+  }
+  if (templatePreloadedImageUrls.has(normalizedUrl)) {
+    return Promise.resolve(true);
+  }
+  if (templateImagePreloadPromises.has(normalizedUrl)) {
+    return templateImagePreloadPromises.get(normalizedUrl);
+  }
+  const promise = new Promise((resolve) => {
+    const image = new Image();
+    image.decoding = "async";
+    image.onload = () => {
+      templatePreloadedImageUrls.add(normalizedUrl);
+      resolve(true);
+    };
+    image.onerror = () => {
+      resolve(false);
+    };
+    image.src = normalizedUrl;
+  }).finally(() => {
+    templateImagePreloadPromises.delete(normalizedUrl);
+  });
+  templateImagePreloadPromises.set(normalizedUrl, promise);
+  return promise;
+}
+
+function preloadTemplateDetail(templateId) {
+  const normalizedId = String(templateId || "").trim();
+  if (!normalizedId) {
+    return Promise.resolve(null);
+  }
+  const cached = state.templates.find((template) => template.id === normalizedId && templateHasPrompt(template));
+  if (cached) {
+    return Promise.resolve(cached);
+  }
+  if (templateDetailPromises.has(normalizedId)) {
+    return templateDetailPromises.get(normalizedId);
+  }
+  const promise = loadTemplateDetail(normalizedId)
+    .catch(() => null)
+    .finally(() => {
+      templateDetailPromises.delete(normalizedId);
+    });
+  templateDetailPromises.set(normalizedId, promise);
+  return promise;
+}
+
 async function loadTemplateDetail(templateId) {
   const normalizedId = String(templateId || "").trim();
   if (!normalizedId) {
@@ -4625,6 +4682,12 @@ async function ensureTemplatePrompt(item) {
     null;
   if (currentItem) {
     return currentItem;
+  }
+  if (templateDetailPromises.has(normalizedId)) {
+    const pendingItem = await templateDetailPromises.get(normalizedId);
+    if (pendingItem && templateHasPrompt(pendingItem)) {
+      return pendingItem;
+    }
   }
   return loadTemplateDetail(normalizedId);
 }
@@ -4744,42 +4807,35 @@ function closeTemplateModal() {
 }
 
 function openTemplateModal(item, initialPreviewUrl = "") {
-  state.activeTemplateModalId = item.id;
-  state.activeTemplateModalItem = { ...item };
+  const itemId = String(item?.id || "").trim();
+  const cachedItem = state.templates.find((template) => template.id === itemId);
+  const modalItem = {
+    ...(item || {}),
+    ...(cachedItem || {}),
+    prompt: String((cachedItem && cachedItem.prompt) || (item && item.prompt) || "").trim(),
+  };
+  state.activeTemplateModalId = modalItem.id;
+  state.activeTemplateModalItem = { ...modalItem };
   if (!templateModal) {
     return;
   }
-  const previewUrl = String(initialPreviewUrl || "").trim() || templatePreviewUrl(item) || "https://picsum.photos/seed/kartivio-template/720/960";
-  const fullUrl = templateFullUrl(item) || previewUrl;
-  const currentToken = templateModalImageLoadToken + 1;
-  templateModalImageLoadToken = currentToken;
-  templateModalImage.classList.add("is-loading");
-  templateModalImage.src = previewUrl;
-  if (fullUrl === previewUrl) {
-    templateModalImage.classList.remove("is-loading");
-  } else {
-    const preloader = new Image();
-    preloader.decoding = "async";
-    preloader.onload = () => {
-      if (currentToken !== templateModalImageLoadToken) {
-        return;
-      }
-      templateModalImage.src = fullUrl;
-      templateModalImage.classList.remove("is-loading");
-    };
-    preloader.onerror = () => {
-      if (currentToken !== templateModalImageLoadToken) {
-        return;
-      }
-      templateModalImage.classList.remove("is-loading");
-    };
-    preloader.src = fullUrl;
+  const previewUrl = String(initialPreviewUrl || "").trim() || templatePreviewUrl(modalItem) || "https://picsum.photos/seed/kartivio-template/720/960";
+  const fullUrl = templateFullUrl(modalItem) || previewUrl;
+  templateModalImageLoadToken += 1;
+  const displayUrl =
+    fullUrl !== previewUrl && templatePreloadedImageUrls.has(fullUrl) ? fullUrl : previewUrl;
+  templateModalImage.classList.remove("is-loading");
+  templateModalImage.src = displayUrl;
+  if (fullUrl && fullUrl !== displayUrl) {
+    preloadTemplateImage(fullUrl);
   }
-  templateModalImage.alt = item.title || "Шаблон";
-  templateModalTitle.textContent = item.title || "Шаблон";
-  templateModalCategory.textContent = normalizeTemplateCategory(item.category);
-  renderTemplateModalStats(item);
-  templateModalPrompt.textContent = templateHasPrompt(item) ? item.prompt : "Загружаю промпт...";
+  templateModalImage.alt = modalItem.title || "Шаблон";
+  templateModalTitle.textContent = modalItem.title || "Шаблон";
+  templateModalCategory.textContent = normalizeTemplateCategory(modalItem.category);
+  renderTemplateModalStats(modalItem);
+  const hasCachedPrompt = templateHasPrompt(modalItem);
+  templateModalPrompt.textContent = hasCachedPrompt ? modalItem.prompt : "Загружаю промпт...";
+  templateModalPromptScroll?.classList.toggle("is-loading", !hasCachedPrompt);
   setTemplatePromptExpanded(false);
   setTemplateModalNote("");
   if (templateModalCloseTimer) {
@@ -4797,24 +4853,31 @@ function openTemplateModal(item, initialPreviewUrl = "") {
     }
   });
   lockTemplateModalScroll();
-  if (!templateHasPrompt(item)) {
-    loadTemplateDetail(item.id)
+  if (!hasCachedPrompt) {
+    preloadTemplateDetail(modalItem.id)
       .then((resolvedItem) => {
-        if (!state.activeTemplateModalId || state.activeTemplateModalId !== resolvedItem.id) {
+        if (!resolvedItem || !state.activeTemplateModalId || state.activeTemplateModalId !== resolvedItem.id) {
+          if (state.activeTemplateModalId === modalItem.id) {
+            setTemplateModalNote("Не удалось загрузить промпт шаблона.", true);
+          }
           return;
         }
         state.activeTemplateModalItem = { ...resolvedItem };
         templateModalPrompt.textContent = resolvedItem.prompt || "";
+        templateModalPromptScroll?.classList.remove("is-loading");
         renderTemplateModalStats(resolvedItem);
         window.requestAnimationFrame(() => syncTemplatePromptToggle(true));
       })
       .catch((error) => {
-        if (state.activeTemplateModalId === item.id) {
+        if (state.activeTemplateModalId === modalItem.id) {
           templateModalPrompt.textContent = "";
+          templateModalPromptScroll?.classList.remove("is-loading");
           setTemplateModalNote(userFacingErrorMessage(error, "Не удалось загрузить промпт шаблона."), true);
           window.requestAnimationFrame(() => syncTemplatePromptToggle(true));
         }
       });
+  } else {
+    templateModalPromptScroll?.classList.remove("is-loading");
   }
 }
 
@@ -4998,6 +5061,10 @@ function resetTemplateFeedPagination() {
     window.cancelAnimationFrame(templateFeedAutoLoadRaf);
     templateFeedAutoLoadRaf = 0;
   }
+  if (templateFeedPreloadRaf) {
+    window.cancelAnimationFrame(templateFeedPreloadRaf);
+    templateFeedPreloadRaf = 0;
+  }
 }
 
 function syncTemplateVisibleCount(items, { reset = false } = {}) {
@@ -5063,6 +5130,50 @@ function revealMoreTemplateItems() {
   return true;
 }
 
+function uniqueTemplatesById(items) {
+  const seen = new Set();
+  const result = [];
+  for (const item of Array.isArray(items) ? items : []) {
+    const id = String((item && item.id) || "").trim();
+    if (!id || seen.has(id)) {
+      continue;
+    }
+    seen.add(id);
+    result.push(item);
+  }
+  return result;
+}
+
+function scheduleTemplateFeedPreload(items, visibleItems) {
+  if (templateFeedPreloadRaf || state.currentScreen !== "feed" || state.templatesLoading) {
+    return;
+  }
+  const allItems = Array.isArray(items) ? items : [];
+  const renderedItems = Array.isArray(visibleItems) ? visibleItems : [];
+  templateFeedPreloadRaf = window.requestAnimationFrame(() => {
+    templateFeedPreloadRaf = 0;
+    const runPreload = () => {
+      const visibleCount = renderedItems.length;
+      const imageCandidates = allItems.slice(
+        visibleCount,
+        Math.min(allItems.length, visibleCount + TEMPLATE_FEED_PRELOAD_IMAGE_COUNT)
+      );
+      for (const item of imageCandidates) {
+        preloadTemplateImage(templatePreviewUrl(item));
+      }
+
+      const promptCandidates = uniqueTemplatesById([
+        ...renderedItems.slice(0, 6),
+        ...renderedItems.slice(Math.max(0, renderedItems.length - TEMPLATE_FEED_PRELOAD_PROMPT_COUNT)),
+      ]);
+      for (const item of promptCandidates) {
+        preloadTemplateDetail(item.id);
+      }
+    };
+    window.setTimeout(runPreload, 40);
+  });
+}
+
 function getPrimaryScrollMetrics() {
   if (!isTelegramMiniAppRuntime() && isMobileBrowser()) {
     const root = document.documentElement;
@@ -5095,7 +5206,7 @@ function maybeAutoLoadMoreTemplates() {
     }
     const metrics = getPrimaryScrollMetrics();
     const distanceToBottom = metrics.scrollHeight - (metrics.scrollTop + metrics.clientHeight);
-    if (distanceToBottom > 420) {
+    if (distanceToBottom > TEMPLATE_FEED_PRELOAD_DISTANCE_PX) {
       return;
     }
     if (revealMoreTemplateItems()) {
@@ -5159,17 +5270,21 @@ function renderTemplateCards() {
   }
 
   const cards = [];
-  for (const item of visibleItems) {
+  for (const [itemIndex, item] of visibleItems.entries()) {
     const card = document.createElement("article");
     card.className = "tool-card";
     card.setAttribute("role", "button");
     card.setAttribute("tabindex", "0");
     const imageUrl = templatePreviewUrl(item);
     const ratio = Number(item.preview_ratio || templatePreviewRatio(item) || 1);
+    const newestBatchStart = Math.max(0, visibleItems.length - TEMPLATE_FEED_BATCH_SIZE);
+    const shouldEagerLoadImage = itemIndex < 6 || itemIndex >= newestBatchStart;
+    const imageLoading = shouldEagerLoadImage ? "eager" : "lazy";
+    const imagePriority = itemIndex < 4 ? ' fetchpriority="high"' : "";
     card.style.setProperty("--template-ratio", Number.isFinite(ratio) && ratio > 0 ? String(ratio) : "1");
     card.innerHTML = `
       <div class="tool-media">
-        <img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(item.title)}" loading="lazy" decoding="async" />
+        <img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(item.title)}" loading="${imageLoading}" decoding="async"${imagePriority} />
       </div>
       <div class="tool-card-top-actions">
         <button class="template-like-btn tool-like-btn${templateLikedByMe(item) ? " is-liked" : ""}" data-action="toggle-like" type="button" aria-label="${templateLikedByMe(item) ? "Убрать лайк у шаблона" : "Лайкнуть шаблон"}" aria-pressed="${templateLikedByMe(item) ? "true" : "false"}">
@@ -5189,6 +5304,14 @@ function renderTemplateCards() {
       </div>
     `;
     const likeButton = card.querySelector('[data-action="toggle-like"]');
+    const warmTemplateAssets = () => {
+      preloadTemplateDetail(item.id);
+      preloadTemplateImage(templatePreviewUrl(item));
+      const fullUrl = templateFullUrl(item);
+      if (fullUrl && fullUrl !== templatePreviewUrl(item)) {
+        preloadTemplateImage(fullUrl);
+      }
+    };
     likeButton.addEventListener("click", async (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -5203,13 +5326,18 @@ function renderTemplateCards() {
       }
     });
     card.addEventListener("click", () => {
+      warmTemplateAssets();
       const cardImage = card.querySelector("img");
       const initialPreviewUrl = cardImage && typeof cardImage.currentSrc === "string" ? cardImage.currentSrc : imageUrl;
       openTemplateModal(item, initialPreviewUrl);
     });
+    card.addEventListener("pointerenter", warmTemplateAssets, { passive: true });
+    card.addEventListener("pointerdown", warmTemplateAssets, { passive: true });
+    card.addEventListener("focus", warmTemplateAssets);
     card.addEventListener("keydown", (event) => {
       if (event.key === "Enter" || event.key === " ") {
         event.preventDefault();
+        warmTemplateAssets();
         const cardImage = card.querySelector("img");
         const initialPreviewUrl = cardImage && typeof cardImage.currentSrc === "string" ? cardImage.currentSrc : imageUrl;
         openTemplateModal(item, initialPreviewUrl);
@@ -5220,6 +5348,7 @@ function renderTemplateCards() {
   renderTemplateGridCards(cards);
   renderTemplateFeedPagination({ shownCount: visibleItems.length, totalCount: items.length });
   refreshIcons();
+  scheduleTemplateFeedPreload(items, visibleItems);
   maybeAutoLoadMoreTemplates();
 }
 
