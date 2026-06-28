@@ -754,6 +754,10 @@ function isTelegramMiniAppRuntime() {
   return Boolean(refreshTelegramWebAppHandle() && tg && tg.initData);
 }
 
+function isTelegramShellRuntime() {
+  return Boolean(isTelegramMiniAppRuntime() || isTelegramContextHint());
+}
+
 function getTelegramRuntimePlatform() {
   const tgPlatform = String(tg?.platform || "").trim().toLowerCase();
   if (tgPlatform === "ios" || tgPlatform === "android") {
@@ -799,7 +803,7 @@ function getPrimaryScrollTop() {
 }
 
 function handleBottomNavAutoHide() {
-  if (isTelegramMiniAppRuntime() || !isMobileBrowser()) {
+  if (isTelegramShellRuntime() || !isMobileBrowser()) {
     setBottomNavHidden(false);
     lastAppMainScrollTop = getPrimaryScrollTop();
     return;
@@ -2726,20 +2730,15 @@ function applyTelegramSafeInsets() {
     cssSafeBottomInset
   );
   const isMobile = isTelegramMobileClient();
-  const isFullscreen = Boolean(tg.isFullscreen);
   let controlsOffset = 0;
   if (isMobile) {
     if (platform === "ios") {
-      if (isFullscreen) {
-        controlsOffset = 0;
-      } else if (topInset > 0) {
-        controlsOffset = 56;
-      } else {
-        controlsOffset = 104;
-      }
+      const targetTopClearance = 104;
+      controlsOffset = Math.max(0, targetTopClearance - topInset);
     } else if (topInset > 0) {
       controlsOffset = 0;
     } else {
+      const isFullscreen = Boolean(tg.isFullscreen);
       controlsOffset = isFullscreen ? 18 : 40;
     }
   }
