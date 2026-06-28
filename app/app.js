@@ -5648,38 +5648,38 @@ function renderHistory(payload) {
     const meta = `${imageModelLabel(job.provider_model)} · ${historyOutputLabel(job)} · ${formatCredits(job.requested_credits || 0)}`;
     item.className = `history-item${done ? " is-done" : " is-pending"}`;
     item.innerHTML = `
-      <button class="history-thumb${done ? " history-thumb-button" : ""}" data-action="open-image" type="button" ${done ? "" : "disabled"} aria-label="Открыть результат">
+      <div class="history-thumb${done ? " history-thumb-ready" : ""}">
         ${historyThumb(job)}
-        ${done ? '<span class="history-open-indicator" aria-hidden="true"><i data-lucide="maximize-2"></i></span>' : ""}
+        ${done ? '<button class="history-thumb-open" data-action="open-image" type="button" aria-label="Открыть результат"><span class="history-open-indicator" aria-hidden="true"><i data-lucide="maximize-2"></i></span></button>' : ""}
+        ${canDownload && done ? '<button class="history-icon-action history-download-overlay" data-action="download-image" type="button" aria-label="Скачать изображение"><i data-lucide="download"></i></button>' : ""}
         ${done ? "" : `<span class="status-pill history-status ${escapeHtml(statusClass)}">${escapeHtml(jobStatusLabel(job.status))}</span>`}
-      </button>
+      </div>
       <div class="history-body">
         <div class="history-topline">
           <span class="chip">${escapeHtml(modeLabel)}</span>
         </div>
         <p class="history-prompt">${escapeHtml(job.prompt)}</p>
         <div class="plan-meta">${escapeHtml(meta)}</div>
-        <div class="history-actions${canDownload ? " history-actions-with-download" : ""}">
+        <div class="history-actions">
           <button class="soft-btn btn-compact history-repeat-btn" data-action="use-prompt" type="button">
             <i data-lucide="repeat-2"></i>
             <span>Повторить</span>
           </button>
-          ${canDownload ? `<button class="history-icon-action" data-action="download-image" type="button" ${done ? "" : "disabled"} aria-label="Скачать изображение"><i data-lucide="download"></i></button>` : ""}
         </div>
       </div>
     `;
     item.querySelector('[data-action="use-prompt"]').addEventListener("click", () => {
       repeatHistoryJob(job);
     });
-    item.querySelector('[data-action="open-image"]').addEventListener("click", (event) => {
-      event.preventDefault();
-      if (!done) {
-        return;
-      }
-      openGenerationImage(job).catch((error) => {
-        setCreateNote(userFacingErrorMessage(error, "Не удалось открыть изображение."), true);
+    const openButton = item.querySelector('[data-action="open-image"]');
+    if (openButton) {
+      openButton.addEventListener("click", (event) => {
+        event.preventDefault();
+        openGenerationImage(job).catch((error) => {
+          setCreateNote(userFacingErrorMessage(error, "Не удалось открыть изображение."), true);
+        });
       });
-    });
+    }
     const downloadButton = item.querySelector('[data-action="download-image"]');
     if (downloadButton) {
       downloadButton.addEventListener("click", () => {

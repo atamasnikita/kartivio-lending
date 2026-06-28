@@ -2096,19 +2096,6 @@ body.is-web-runtime.is-mobile-browser .app-main {
   padding: 10px;
 }
 
-.history-thumb-button {
-  cursor: pointer;
-  padding: 0;
-  color: inherit;
-  transition:
-    border-color 0.2s ease,
-    transform 0.16s cubic-bezier(0.23, 1, 0.32, 1);
-}
-
-.history-thumb-button:active {
-  transform: scale(0.985);
-}
-
 .history-thumb img {
   width: 100%;
   height: 100%;
@@ -2117,10 +2104,32 @@ body.is-web-runtime.is-mobile-browser .app-main {
   grid-area: 1 / 1;
 }
 
+.history-thumb-open {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  z-index: 2;
+  padding: 0;
+}
+
+.history-thumb-ready {
+  padding: 0;
+  transition:
+    border-color 0.2s ease,
+    transform 0.16s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.history-thumb-ready:active {
+  transform: scale(0.985);
+}
+
 .history-open-indicator {
   position: absolute;
   right: 7px;
-  top: 7px;
+  bottom: 7px;
   width: 34px;
   height: 34px;
   border: 1px solid rgba(65, 80, 116, 0.72);
@@ -2143,8 +2152,8 @@ body.is-web-runtime.is-mobile-browser .app-main {
   height: 16px;
 }
 
-.history-thumb-button:hover .history-open-indicator,
-.history-thumb-button:focus-visible .history-open-indicator {
+.history-thumb-open:hover .history-open-indicator,
+.history-thumb-open:focus-visible .history-open-indicator {
   opacity: 1;
   transform: translateY(0) scale(1);
 }
@@ -2231,15 +2240,14 @@ body.is-web-runtime.is-mobile-browser .app-main {
   gap: 7px;
 }
 
-.history-actions-with-download {
-  grid-template-columns: minmax(0, 1fr) 38px;
-}
-
 .history-repeat-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 7px;
+  width: 100%;
+  min-height: 42px;
+  font-size: 14px;
 }
 
 .history-repeat-btn svg {
@@ -2275,6 +2283,16 @@ body.is-web-runtime.is-mobile-browser .app-main {
 .history-icon-action svg {
   width: 17px;
   height: 17px;
+}
+
+.history-download-overlay {
+  position: absolute;
+  right: 7px;
+  top: 7px;
+  z-index: 3;
+  background: rgba(7, 12, 21, 0.62);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 .is-telegram-runtime [data-action="download-image"],
