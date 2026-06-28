@@ -1564,6 +1564,63 @@ function currentOutputSizeSelection() {
   return byResolution[ratio] || null;
 }
 
+function findOutputSelectionBySize(model, outputSize) {
+  const normalizedModel = String(model || "").trim().toLowerCase();
+  const normalizedSize = String(outputSize || "").trim();
+  if (!normalizedSize || !MODEL_OUTPUT_MATRIX[normalizedModel]) {
+    return null;
+  }
+  const matrix = outputMatrixForModel(normalizedModel);
+  for (const resolution of Object.keys(matrix)) {
+    const ratios = matrix[resolution] || {};
+    for (const ratio of Object.keys(ratios)) {
+      if (String(ratios[ratio] || "").trim() === normalizedSize) {
+        return { model: normalizedModel, resolution, ratio };
+      }
+    }
+  }
+  return null;
+}
+
+function findAnyOutputSelectionBySize(outputSize) {
+  for (const model of Object.keys(MODEL_OUTPUT_MATRIX)) {
+    const selection = findOutputSelectionBySize(model, outputSize);
+    if (selection) {
+      return selection;
+    }
+  }
+  return null;
+}
+
+function applyGenerationSettingsFromJob(job) {
+  const rawModel = String(job?.provider_model || "").trim().toLowerCase();
+  const model = MODEL_ORDER.includes(rawModel) ? rawModel : DEFAULT_IMAGE_MODEL;
+  const selection =
+    findOutputSelectionBySize(model, job?.output_size) ||
+    findOutputSelectionBySize(DEFAULT_IMAGE_MODEL, job?.output_size);
+
+  state.selectedImageModel = model;
+  if (selection) {
+    state.selectedResolution = selection.resolution;
+    state.selectedRatio = selection.ratio;
+  }
+  ensureGenerationSelectionState();
+  renderGenerationChips();
+  refreshGenerationCostNote();
+}
+
+function historyOutputLabel(job) {
+  const rawModel = String(job?.provider_model || "").trim().toLowerCase();
+  const selection =
+    findOutputSelectionBySize(rawModel, job?.output_size) ||
+    findAnyOutputSelectionBySize(job?.output_size);
+  if (selection) {
+    const ratio = ratioLabel(selection.ratio);
+    return selection.resolution === "auto" ? ratio : `${ratio} · ${resolutionLabel(selection.resolution)}`;
+  }
+  return String(job?.output_size || "").trim() || "формат";
+}
+
 function refreshGenerationCostNote() {
   ensureGenerationSelectionState();
   const cost = selectedGenerationCost();
@@ -5465,6 +5522,22 @@ function jobStatusLabel(status) {
   return STATUS_LABELS[status] || status;
 }
 
+function isGenerationDone(job) {
+  return String(job?.status || "").toLowerCase() === "done" && Boolean(job?.result_image_url);
+}
+
+function repeatHistoryJob(job) {
+  const prompt = String(job?.prompt || "").trim();
+  if (prompt) {
+    promptInput.value = prompt;
+  }
+  clearSelectedTemplate({ clearPrompt: false });
+  applyGenerationSettingsFromJob(job);
+  switchScreen("studio");
+  promptInput.focus();
+  setCreateNote(prompt ? "Промпт и параметры перенесены из истории." : "Параметры перенесены из истории.");
+}
+
 async function renderActiveImage(job, renderToken) {
   try {
     const rendered = await resolveDisplayImage(generationViewImageUrl(job));
@@ -5524,10 +5597,20 @@ function renderActiveJob(job) {
 }
 
 function historyThumb(job) {
-  if (!job.result_image_url) {
-    return escapeHtml(jobStatusLabel(job.status));
+  if (job.result_image_url) {
+    return "";
   }
-  return "Превью";
+  const status = String(job.status || "").toLowerCase();
+  if (status === "failed") {
+    return `<span>${escapeHtml(generationErrorMessage(job.error_code))}</span>`;
+  }
+  if (status === "cancelled") {
+    return "<span>Задача отменена</span>";
+  }
+  if (status === "queued" || status === "processing") {
+    return "<span>Готовим изображение</span>";
+  }
+  return "<span>Результат появится здесь</span>";
 }
 
 function renderHistoryPagination({ hasMore = false, loadingMore = false, itemCount = 0 } = {}) {
@@ -5553,41 +5636,44 @@ function renderHistory(payload) {
   const canDownload = !isTelegramMiniAppRuntime();
   historyList.innerHTML = "";
   if (!items.length) {
-    historyList.innerHTML = '<article class="history-item"><div class="history-body">История пока пустая.</div></article>';
+    historyList.innerHTML = '<article class="history-item history-empty"><div class="history-body">История пока пустая.</div></article>';
     renderHistoryPagination({ hasMore: false, loadingMore: false, itemCount: 0 });
     return;
   }
   for (const job of items) {
     const item = document.createElement("article");
     const statusClass = `status-${String(job.status || "").toLowerCase()}`;
-    item.className = "history-item";
+    const done = isGenerationDone(job);
+    const modeLabel = job.is_edit ? "с фото" : "промпт";
+    const meta = `${imageModelLabel(job.provider_model)} · ${historyOutputLabel(job)} · ${formatCredits(job.requested_credits || 0)}`;
+    item.className = `history-item${done ? " is-done" : " is-pending"}`;
     item.innerHTML = `
-      <div class="history-thumb">${historyThumb(job)}</div>
+      <button class="history-thumb${done ? " history-thumb-button" : ""}" data-action="open-image" type="button" ${done ? "" : "disabled"} aria-label="Открыть результат">
+        ${historyThumb(job)}
+        ${done ? '<span class="history-open-indicator" aria-hidden="true"><i data-lucide="maximize-2"></i></span>' : ""}
+        ${done ? "" : `<span class="status-pill history-status ${escapeHtml(statusClass)}">${escapeHtml(jobStatusLabel(job.status))}</span>`}
+      </button>
       <div class="history-body">
         <div class="history-topline">
-          <span class="chip">${job.is_edit ? "edit" : "text"}</span>
-          <span class="status-pill ${escapeHtml(statusClass)}">${escapeHtml(jobStatusLabel(job.status))}</span>
+          <span class="chip">${escapeHtml(modeLabel)}</span>
         </div>
         <p class="history-prompt">${escapeHtml(job.prompt)}</p>
-        <div class="plan-meta">${escapeHtml(imageModelLabel(job.provider_model))} · ${escapeHtml(job.output_size)} · ${escapeHtml(formatCredits(job.requested_credits || 0))}</div>
-        <div class="history-actions">
-          <button class="soft-btn btn-compact" data-action="use-prompt" type="button">Вставить промпт</button>
-          <button class="soft-btn btn-compact" data-action="open-image" type="button" ${job.result_image_url ? "" : "disabled"}>Открыть</button>
-          ${canDownload ? `<button class="soft-btn btn-compact" data-action="download-image" type="button" ${job.result_image_url ? "" : "disabled"}>Скачать</button>` : ""}
+        <div class="plan-meta">${escapeHtml(meta)}</div>
+        <div class="history-actions${canDownload ? " history-actions-with-download" : ""}">
+          <button class="soft-btn btn-compact history-repeat-btn" data-action="use-prompt" type="button">
+            <i data-lucide="repeat-2"></i>
+            <span>Повторить</span>
+          </button>
+          ${canDownload ? `<button class="history-icon-action" data-action="download-image" type="button" ${done ? "" : "disabled"} aria-label="Скачать изображение"><i data-lucide="download"></i></button>` : ""}
         </div>
       </div>
     `;
     item.querySelector('[data-action="use-prompt"]').addEventListener("click", () => {
-      if (job.prompt) {
-        promptInput.value = job.prompt;
-        clearSelectedTemplate({ clearPrompt: false });
-        switchScreen("studio");
-        promptInput.focus();
-      }
-      setCreateNote("Промпт вставлен в студию.");
+      repeatHistoryJob(job);
     });
-    item.querySelector('[data-action="open-image"]').addEventListener("click", () => {
-      if (!job.result_image_url) {
+    item.querySelector('[data-action="open-image"]').addEventListener("click", (event) => {
+      event.preventDefault();
+      if (!done) {
         return;
       }
       openGenerationImage(job).catch((error) => {
@@ -5607,7 +5693,7 @@ function renderHistory(payload) {
     }
     historyList.appendChild(item);
 
-    if (job.result_image_url) {
+    if (done) {
       resolveDisplayImage(generationThumbnailUrl(job))
         .then((rendered) => {
           const thumb = item.querySelector(".history-thumb");
@@ -5619,8 +5705,9 @@ function renderHistory(payload) {
             img = document.createElement("img");
             img.alt = "Результат";
             img.loading = "lazy";
-            thumb.textContent = "";
-            thumb.appendChild(img);
+            img.decoding = "async";
+            const existingChildren = Array.from(thumb.children);
+            thumb.replaceChildren(img, ...existingChildren);
           }
           img.src = rendered.src;
         })
@@ -5628,6 +5715,7 @@ function renderHistory(payload) {
     }
   }
   renderHistoryPagination({ hasMore, loadingMore, itemCount: items.length });
+  refreshIcons();
 }
 
 function mergeHistoryItems(existingItems, incomingItems) {

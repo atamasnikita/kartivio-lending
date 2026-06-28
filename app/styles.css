@@ -2049,8 +2049,8 @@ body.is-web-runtime.is-mobile-browser .app-main {
 
 .history-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(156px, 1fr));
+  gap: 10px;
 }
 
 .history-pagination {
@@ -2062,40 +2062,103 @@ body.is-web-runtime.is-mobile-browser .app-main {
 .history-item {
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: #0b1019;
-  padding: 8px;
+  background: linear-gradient(180deg, rgba(13, 18, 29, 0.98), rgba(8, 12, 20, 0.98));
+  padding: 7px;
   display: grid;
-  gap: 8px;
+  gap: 9px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.history-empty {
+  grid-column: 1 / -1;
+  min-height: 120px;
+  place-items: center;
+  color: var(--muted);
 }
 
 .history-thumb {
   width: 100%;
-  aspect-ratio: 1;
+  aspect-ratio: 4 / 5;
   border-radius: 8px;
   overflow: hidden;
   border: 1px solid #273047;
-  background: #0f1522;
+  background:
+    radial-gradient(circle at 50% 20%, rgba(var(--accent-rgb), 0.11), transparent 36%),
+    #0f1522;
   display: grid;
   place-items: center;
   color: var(--muted);
   font-size: 12px;
+  line-height: 1.3;
+  text-align: center;
+  position: relative;
+  padding: 10px;
+}
+
+.history-thumb-button {
+  cursor: pointer;
+  padding: 0;
+  color: inherit;
+  transition:
+    border-color 0.2s ease,
+    transform 0.16s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.history-thumb-button:active {
+  transform: scale(0.985);
 }
 
 .history-thumb img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
+  grid-area: 1 / 1;
+}
+
+.history-open-indicator {
+  position: absolute;
+  right: 7px;
+  top: 7px;
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgba(65, 80, 116, 0.72);
+  border-radius: 999px;
+  background: rgba(7, 12, 21, 0.58);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: #f1f5ff;
+  display: grid;
+  place-items: center;
+  opacity: 0;
+  transform: translateY(-2px) scale(0.96);
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.history-open-indicator svg {
+  width: 16px;
+  height: 16px;
+}
+
+.history-thumb-button:hover .history-open-indicator,
+.history-thumb-button:focus-visible .history-open-indicator {
+  opacity: 1;
+  transform: translateY(0) scale(1);
 }
 
 .history-body {
   display: grid;
   gap: 7px;
+  min-width: 0;
 }
 
 .history-topline {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 8px;
 }
 
@@ -2132,10 +2195,20 @@ body.is-web-runtime.is-mobile-browser .app-main {
   color: #8eeade;
 }
 
+.history-status {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  background: rgba(9, 14, 24, 0.78);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  max-width: calc(100% - 16px);
+}
+
 .history-prompt {
   margin: 0;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.35;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -2145,13 +2218,63 @@ body.is-web-runtime.is-mobile-browser .app-main {
 
 .plan-meta {
   color: #aab2c8;
-  font-size: 12px;
+  font-size: 11px;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .history-actions {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 6px;
+  gap: 7px;
+}
+
+.history-actions-with-download {
+  grid-template-columns: minmax(0, 1fr) 38px;
+}
+
+.history-repeat-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+
+.history-repeat-btn svg {
+  width: 15px;
+  height: 15px;
+}
+
+.history-icon-action {
+  width: 38px;
+  height: 36px;
+  border: 1px solid #2b3345;
+  border-radius: 8px;
+  background: #0d1422;
+  color: #d9e0f4;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    transform 0.16s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.history-icon-action:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.history-icon-action:not(:disabled):active {
+  transform: scale(0.96);
+}
+
+.history-icon-action svg {
+  width: 17px;
+  height: 17px;
 }
 
 .is-telegram-runtime [data-action="download-image"],
@@ -3198,7 +3321,7 @@ body.is-web-runtime.is-mobile-browser.nav-hidden .bottom-nav {
   }
 
   .history-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .nav-btn span {
