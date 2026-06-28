@@ -11,7 +11,7 @@
     />
     <meta name="kartivio-yandex-metrika-id" content="109102691" />
     <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=20260628e" />
+    <link rel="stylesheet" href="./styles.css?v=20260628f" />
     <script src="./vendor/lucide.min.js?v=1.18.0" defer></script>
   </head>
   <body>
@@ -111,135 +111,184 @@
         </section>
 
         <section class="screen" data-screen="studio">
-          <section id="selectedTemplateCard" class="selected-template is-hidden">
-            <img
-              id="selectedTemplatePreview"
-              class="selected-template-preview"
-              src="https://picsum.photos/seed/kartivio-template/320/320"
-              alt="Выбранный шаблон"
-              loading="lazy"
-            />
-            <div class="selected-template-body">
-              <strong id="selectedTemplateTitle">Шаблон</strong>
-              <span id="selectedTemplateMeta">Готовый промпт для старта</span>
-            </div>
-            <button id="clearTemplateButton" class="template-clear-btn" type="button" aria-label="Убрать шаблон">
-              <i data-lucide="x"></i>
-            </button>
-          </section>
-
-          <section id="referencePromptCard" class="panel-card reference-prompt-card">
-            <div class="reference-prompt-header">
-              <div class="reference-prompt-copy">
-                <strong>Промпт по референсу</strong>
-                <span id="referencePromptSubtitle">Создадим новый промпт по референсу</span>
+          <section id="studioSceneBlock" class="studio-scene-block">
+            <div class="studio-scene-head">
+              <div class="studio-scene-title">
+                <span>Сцена</span>
+                <strong id="studioSceneTitle">Выбери основу кадра</strong>
               </div>
-              <span id="referencePromptBadge" class="reference-prompt-badge">После первой оплаты</span>
             </div>
 
-            <div
-              id="referenceImageDropzone"
-              class="reference-dropzone"
-              role="button"
-              tabindex="0"
-              aria-label="Добавить фото-референс для сборки промпта"
-            >
-              <span
-                class="reference-dropzone-hitbox"
-                aria-hidden="true"
-              ></span>
-              <div class="reference-preview-frame" aria-hidden="true">
-                <span id="referenceDropzoneEmptyState" class="reference-preview-empty">
-                  <span class="dropzone-icon"><i data-lucide="image-plus"></i></span>
+            <div id="studioSceneActions" class="studio-scene-actions">
+              <button id="chooseTemplateButton" class="studio-scene-option" type="button">
+                <span class="studio-scene-option-icon"><i data-lucide="layout-grid"></i></span>
+                <span>
+                  <strong>Выбрать шаблон</strong>
+                  <small>Готовая идея из ленты</small>
                 </span>
-                <img id="referenceImagePreview" class="reference-preview-image is-hidden" alt="" loading="lazy" />
+              </button>
+              <button
+                id="referencePromptToggleButton"
+                class="studio-scene-option"
+                type="button"
+                aria-controls="referencePromptCard"
+                aria-expanded="false"
+              >
+                <span class="studio-scene-option-icon"><i data-lucide="image-plus"></i></span>
+                <span>
+                  <strong>Промпт по референсу</strong>
+                  <small>Создадим промпт по загруженному кадру</small>
+                </span>
+              </button>
+            </div>
+
+            <section id="selectedTemplateCard" class="selected-template is-hidden">
+              <img
+                id="selectedTemplatePreview"
+                class="selected-template-preview"
+                src="https://picsum.photos/seed/kartivio-template/320/320"
+                alt="Выбранный шаблон"
+                loading="lazy"
+              />
+              <div class="selected-template-body">
+                <strong id="selectedTemplateTitle">Шаблон</strong>
+                <span id="selectedTemplateMeta">Готовый промпт для старта</span>
               </div>
-              <div class="reference-dropzone-copy">
-                <strong id="referenceDropzoneTitle">Добавь фото-референс</strong>
-                <span id="referenceDropzoneSubtitle">Сцена, свет, одежда и композиция</span>
-                <div class="reference-dropzone-meta">
-                  <span>PNG, JPG, WEBP · до 10 MB</span>
-                  <span id="referenceDropzoneBadge" class="reference-dropzone-file-meta is-hidden">JPG · 1.4 MB</span>
+              <button id="clearTemplateButton" class="template-clear-btn" type="button" aria-label="Убрать шаблон">
+                <i data-lucide="x"></i>
+              </button>
+            </section>
+
+            <section id="referencePromptCard" class="reference-prompt-card is-collapsed">
+              <div class="reference-prompt-header">
+                <div class="reference-prompt-copy">
+                  <strong>Промпт по референсу</strong>
+                  <span id="referencePromptSubtitle">Создадим новый промпт по референсу</span>
+                </div>
+                <div class="reference-prompt-header-actions">
+                  <span id="referencePromptBadge" class="reference-prompt-badge">После первой оплаты</span>
+                  <button
+                    id="referencePromptCollapseButton"
+                    class="icon-btn reference-collapse-btn"
+                    type="button"
+                    aria-label="Свернуть промпт по референсу"
+                  >
+                    <i data-lucide="chevron-up"></i>
+                  </button>
                 </div>
               </div>
+
+              <div
+                id="referenceImageDropzone"
+                class="reference-dropzone"
+                role="button"
+                tabindex="0"
+                aria-label="Добавить фото-референс для сборки промпта"
+              >
+                <span
+                  class="reference-dropzone-hitbox"
+                  aria-hidden="true"
+                ></span>
+                <div class="reference-preview-frame" aria-hidden="true">
+                  <span id="referenceDropzoneEmptyState" class="reference-preview-empty">
+                    <span class="dropzone-icon"><i data-lucide="image-plus"></i></span>
+                  </span>
+                  <img id="referenceImagePreview" class="reference-preview-image is-hidden" alt="" loading="lazy" />
+                </div>
+                <div class="reference-dropzone-copy">
+                  <strong id="referenceDropzoneTitle">Добавь фото-референс</strong>
+                  <span id="referenceDropzoneSubtitle">Сцена, свет, одежда и композиция</span>
+                  <div class="reference-dropzone-meta">
+                    <span>PNG, JPG, WEBP · до 10 MB</span>
+                    <span id="referenceDropzoneBadge" class="reference-dropzone-file-meta is-hidden">JPG · 1.4 MB</span>
+                  </div>
+                </div>
+                <button
+                  id="clearReferenceImageButton"
+                  class="dropzone-clear-btn is-hidden"
+                  type="button"
+                  aria-label="Убрать фото-референс"
+                >
+                  <i data-lucide="x"></i>
+                </button>
+              </div>
+
+              <div class="reference-prompt-busy-panel" aria-hidden="true">
+                <div class="reference-prompt-busy-head">
+                  <span class="reference-prompt-busy-icon"><i data-lucide="sparkles"></i></span>
+                  <strong>Собираем промпт</strong>
+                </div>
+                <div class="reference-prompt-busy-body">
+                  <div class="reference-prompt-busy-steps" aria-hidden="true">
+                    <span class="reference-prompt-busy-step is-active" data-reference-prompt-step="scene">сцена</span>
+                    <span class="reference-prompt-busy-step" data-reference-prompt-step="light">свет</span>
+                    <span class="reference-prompt-busy-step" data-reference-prompt-step="wardrobe">одежда</span>
+                    <span class="reference-prompt-busy-step" data-reference-prompt-step="pose">поза</span>
+                    <span class="reference-prompt-busy-step" data-reference-prompt-step="details">детали</span>
+                    <span class="reference-prompt-busy-step" data-reference-prompt-step="composition">композиция</span>
+                  </div>
+                  <p id="referencePromptBusyCaption" class="reference-prompt-busy-caption">
+                    <strong id="referencePromptBusyCaptionTitle">Определяем сцену.</strong>
+                    <span id="referencePromptBusyCaptionBody">Понимаем, что именно должно происходить в кадре.</span>
+                  </p>
+                </div>
+              </div>
+
+              <div class="reference-prompt-actions">
+                <button id="referencePromptBuildButton" class="soft-btn soft-btn-icon reference-primary-btn" type="button">
+                  <i id="referencePromptActionIcon" data-lucide="image-plus"></i>
+                  <span>Выбрать изображение</span>
+                </button>
+                <button id="referencePromptRestoreButton" class="reference-inline-btn is-hidden" type="button">Вернуть прошлый текст</button>
+              </div>
+
+              <p id="referencePromptNote" class="note reference-prompt-note">Потом его можно отредактировать перед генерацией.</p>
+              <input
+                id="referenceImageInput"
+                class="visually-hidden-input"
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+              />
+            </section>
+          </section>
+
+          <section class="studio-source-panel">
+            <div class="studio-source-head">
+              <div class="studio-source-copy">
+                <strong>Свои фото</strong>
+                <span id="sourceImageMeta">Без своих фото получится обычная генерация, не фотосессия с вашим лицом.</span>
+              </div>
+              <div class="studio-source-actions">
+                <button id="uploadPhotoButton" class="soft-btn soft-btn-icon studio-source-add" type="button">
+                  <i data-lucide="paperclip"></i>
+                  <span>Добавить</span>
+                </button>
+                <button id="sourceTipsButton" class="icon-btn help-icon-btn" type="button" aria-label="Рекомендации по фото">
+                  <i data-lucide="circle-help"></i>
+                </button>
+              </div>
+            </div>
+
+            <div id="uploadDropzone" class="upload-dropzone" role="button" tabindex="0" aria-label="Добавить свои фото для фотосессии">
+              <span id="dropzoneEmptyState" class="dropzone-empty">
+                <span class="dropzone-icon"><i data-lucide="image-plus"></i></span>
+                <span class="dropzone-empty-copy">
+                  <span class="dropzone-title" id="dropzoneTitle">Добавь 1–3 фото</span>
+                  <span class="dropzone-subtitle">Для сохранения портретного сходства</span>
+                </span>
+              </span>
+              <div id="sourceImagePreviewGrid" class="dropzone-preview-grid is-hidden" aria-label="Превью своих фото"></div>
               <button
-                id="clearReferenceImageButton"
+                id="clearSourceImageButton"
                 class="dropzone-clear-btn is-hidden"
                 type="button"
-                aria-label="Убрать фото-референс"
+                aria-label="Убрать фото"
               >
                 <i data-lucide="x"></i>
               </button>
+              <span id="dropzonePreviewBadge" class="dropzone-preview-badge is-hidden">Фото для редактирования</span>
             </div>
 
-            <div class="reference-prompt-busy-panel" aria-hidden="true">
-              <div class="reference-prompt-busy-head">
-                <span class="reference-prompt-busy-icon"><i data-lucide="sparkles"></i></span>
-                <strong>Собираем промпт</strong>
-              </div>
-              <div class="reference-prompt-busy-body">
-                <div class="reference-prompt-busy-steps" aria-hidden="true">
-                  <span class="reference-prompt-busy-step is-active" data-reference-prompt-step="scene">сцена</span>
-                  <span class="reference-prompt-busy-step" data-reference-prompt-step="light">свет</span>
-                  <span class="reference-prompt-busy-step" data-reference-prompt-step="wardrobe">одежда</span>
-                  <span class="reference-prompt-busy-step" data-reference-prompt-step="pose">поза</span>
-                  <span class="reference-prompt-busy-step" data-reference-prompt-step="details">детали</span>
-                  <span class="reference-prompt-busy-step" data-reference-prompt-step="composition">композиция</span>
-                </div>
-                <p id="referencePromptBusyCaption" class="reference-prompt-busy-caption">
-                  <strong id="referencePromptBusyCaptionTitle">Определяем сцену.</strong>
-                  <span id="referencePromptBusyCaptionBody">Понимаем, что именно должно происходить в кадре.</span>
-                </p>
-              </div>
-            </div>
-
-            <div class="reference-prompt-actions">
-              <button id="referencePromptBuildButton" class="soft-btn soft-btn-icon reference-primary-btn" type="button">
-                <i id="referencePromptActionIcon" data-lucide="image-plus"></i>
-                <span>Выбрать изображение</span>
-              </button>
-              <button id="referencePromptRestoreButton" class="reference-inline-btn is-hidden" type="button">Вернуть прошлый текст</button>
-            </div>
-
-            <p id="referencePromptNote" class="note reference-prompt-note">Потом его можно отредактировать перед генерацией.</p>
-            <input
-              id="referenceImageInput"
-              class="visually-hidden-input"
-              type="file"
-              accept="image/png,image/jpeg,image/webp"
-            />
-          </section>
-
-          <div id="uploadDropzone" class="upload-dropzone" role="button" tabindex="0" aria-label="Добавить свои фото для фотосессии">
-            <span id="dropzoneEmptyState" class="dropzone-empty">
-              <span class="dropzone-icon"><i data-lucide="image-plus"></i></span>
-              <span class="dropzone-title" id="dropzoneTitle">Добавьте свои фото</span>
-              <span class="dropzone-subtitle">Для фотосессии с вашим лицом · до 3 фото, до 10 MB каждое, PNG/JPG/WEBP</span>
-            </span>
-            <div id="sourceImagePreviewGrid" class="dropzone-preview-grid is-hidden" aria-label="Превью своих фото"></div>
-            <button
-              id="clearSourceImageButton"
-              class="dropzone-clear-btn is-hidden"
-              type="button"
-              aria-label="Убрать фото"
-            >
-              <i data-lucide="x"></i>
-            </button>
-            <span id="dropzonePreviewBadge" class="dropzone-preview-badge is-hidden">Фото для редактирования</span>
-          </div>
-
-          <section class="panel-card">
-            <textarea id="promptInput" rows="6" placeholder="Напишите, что хотите создать или изменить..."></textarea>
-            <div class="inline-actions">
-              <button id="uploadPhotoButton" class="soft-btn soft-btn-icon" type="button">
-                <i data-lucide="paperclip"></i>
-                <span>Добавить свои фото</span>
-              </button>
-              <button id="sourceTipsButton" class="icon-btn help-icon-btn" type="button" aria-label="Рекомендации по фото">
-                <i data-lucide="circle-help"></i>
-              </button>
-              <span id="sourceImageMeta" class="muted-inline">Без своих фото получится обычная генерация, не фотосессия с вашим лицом.</span>
-            </div>
             <div id="sourceTipsPanel" class="tips-panel is-hidden" role="note">
               <strong>Рекомендации по своим фото</strong>
               <ul>
@@ -250,10 +299,6 @@
                 <li>Без своих фото получится обычная генерация, не фотосессия с вашим лицом.</li>
               </ul>
             </div>
-            <p class="storage-note">
-              Результаты генерации храним 14 дней.
-              <a href="/privacy/" target="_blank" rel="noreferrer">Подробнее</a>
-            </p>
             <input
               id="sourceImageInput"
               class="visually-hidden-input"
@@ -261,6 +306,14 @@
               accept="image/png,image/jpeg,image/webp"
               multiple
             />
+          </section>
+
+          <section class="panel-card prompt-card">
+            <textarea id="promptInput" rows="6" placeholder="Напишите, что хотите создать или изменить..."></textarea>
+            <p class="storage-note">
+              Результаты генерации храним 14 дней.
+              <a href="/privacy/" target="_blank" rel="noreferrer">Подробнее</a>
+            </p>
           </section>
 
           <details class="settings-panel" open>
@@ -660,6 +713,6 @@
       </article>
     </div>
 
-    <script src="./app.js?v=20260628e" defer></script>
+    <script src="./app.js?v=20260628f" defer></script>
   </body>
 </html>

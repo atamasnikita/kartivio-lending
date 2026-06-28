@@ -336,6 +336,7 @@ const state = {
   referencePromptBusy: false,
   referencePromptPreviousValue: "",
   referencePromptBuilt: false,
+  referencePromptExpanded: false,
   sourceImageFiles: [],
   sourceImagePreviewUrls: [],
   historyItems: null,
@@ -470,6 +471,11 @@ const promptInput = document.getElementById("promptInput");
 const modelChips = document.getElementById("modelChips");
 const resolutionChips = document.getElementById("resolutionChips");
 const ratioChips = document.getElementById("ratioChips");
+const studioSceneBlock = document.getElementById("studioSceneBlock");
+const studioSceneTitle = document.getElementById("studioSceneTitle");
+const chooseTemplateButton = document.getElementById("chooseTemplateButton");
+const referencePromptToggleButton = document.getElementById("referencePromptToggleButton");
+const referencePromptCollapseButton = document.getElementById("referencePromptCollapseButton");
 const referenceImageInput = document.getElementById("referenceImageInput");
 const referencePromptCard = document.getElementById("referencePromptCard");
 const referencePromptSubtitle = document.getElementById("referencePromptSubtitle");
@@ -2169,6 +2175,38 @@ function defaultReferencePromptNote() {
     : REFERENCE_PROMPT_NOTE_DEFAULT;
 }
 
+function referencePromptShouldBeExpanded() {
+  return Boolean(state.referencePromptExpanded || state.referencePromptBusy);
+}
+
+function setReferencePromptExpanded(expanded) {
+  state.referencePromptExpanded = Boolean(expanded);
+  syncReferencePromptControls();
+}
+
+function renderStudioSceneState() {
+  const hasTemplate = Boolean(state.selectedTemplate);
+  const referenceOpen = referencePromptShouldBeExpanded();
+  if (studioSceneBlock) {
+    studioSceneBlock.classList.toggle("has-template", hasTemplate);
+    studioSceneBlock.classList.toggle("has-reference-open", referenceOpen);
+  }
+  if (studioSceneTitle) {
+    studioSceneTitle.textContent = hasTemplate
+      ? "Шаблон выбран"
+      : referenceOpen
+        ? "Промпт по референсу"
+        : "Выбери основу кадра";
+  }
+  if (referencePromptToggleButton) {
+    referencePromptToggleButton.classList.toggle(
+      "is-active",
+      referenceOpen || Boolean(referenceImageFile()) || Boolean(state.referencePromptBuilt),
+    );
+    referencePromptToggleButton.setAttribute("aria-expanded", referenceOpen ? "true" : "false");
+  }
+}
+
 function renderReferencePromptBusyStep(options = {}) {
   const { immediate = false } = options;
   const step = REFERENCE_PROMPT_BUSY_STEPS[referencePromptBusyStepIndex] || REFERENCE_PROMPT_BUSY_STEPS[0];
@@ -2239,6 +2277,7 @@ function syncReferencePromptAccessState() {
   if (referencePromptCard) {
     referencePromptCard.classList.toggle("is-locked", locked);
     referencePromptCard.classList.toggle("is-busy", busy);
+    referencePromptCard.classList.toggle("is-collapsed", !referencePromptShouldBeExpanded());
   }
   if (referenceImageDropzone) {
     referenceImageDropzone.classList.toggle("is-locked", locked);
@@ -2256,6 +2295,7 @@ function syncReferencePromptAccessState() {
   } else {
     stopReferencePromptBusyLoop({ reset: true });
   }
+  renderStudioSceneState();
 }
 
 function syncReferencePromptControls() {
@@ -2547,7 +2587,7 @@ function renderSelectedSourceImage() {
   const hasFiles = files.length > 0;
 
   if (!files.length) {
-    dropzoneTitle.textContent = "Добавьте свои фото";
+    dropzoneTitle.textContent = "Добавь 1–3 фото";
     sourceImageMeta.textContent = "Без своих фото получится обычная генерация, не фотосессия с вашим лицом.";
     uploadDropzone.classList.remove("has-image");
     if (dropzoneEmptyState) {
@@ -2657,6 +2697,7 @@ function handleReferenceImageChange() {
   }
 
   setReferenceImage(pickedFile);
+  state.referencePromptExpanded = true;
   renderReferenceImage();
   if (previousTemplate) {
     setReferencePromptNote("Шаблон убран. Теперь сцена будет собрана по фото-референсу.");
@@ -2701,6 +2742,7 @@ function toggleSourceTips(forceVisible = null) {
 function renderSelectedTemplateCard() {
   if (!state.selectedTemplate) {
     selectedTemplateCard.classList.add("is-hidden");
+    renderStudioSceneState();
     return;
   }
   const preview = String(state.selectedTemplate.preview_image_url || "").trim();
@@ -2710,6 +2752,7 @@ function renderSelectedTemplateCard() {
   const status = selectedTemplatePromptStatus();
   selectedTemplateMeta.textContent = category ? `${category} · ${status}` : status;
   selectedTemplateCard.classList.remove("is-hidden");
+  renderStudioSceneState();
 }
 
 function syncTemplateStateFromPrompt() {
@@ -4479,6 +4522,7 @@ function renderPlans(payload) {
 
 async function selectTemplate(item) {
   const resolvedItem = await ensureTemplatePrompt(item);
+  state.referencePromptExpanded = false;
   if (referenceImageFile()) {
     clearReferenceImage({ preserveNote: true });
     clearReferencePromptUndoState();
@@ -5993,6 +6037,7 @@ async function handleBuildReferencePrompt() {
     ensureAuthorizedForCreate();
     const file = referenceImageFile();
     validateReferenceImageFile(file);
+    state.referencePromptExpanded = true;
     state.referencePromptBusy = true;
     syncReferencePromptControls();
     setReferencePromptNote("Описываем референс... Обычно это занимает 3–8 секунд.");
@@ -6527,6 +6572,9 @@ function bindEvents() {
     promptInput.focus();
   });
   promptInput.addEventListener("input", syncTemplateStateFromPrompt);
+  if (chooseTemplateButton) {
+    chooseTemplateButton.addEventListener("click", () => switchScreen("feed"));
+  }
   if (templateUseButton) {
     templateUseButton.addEventListener("click", async (event) => {
       event.preventDefault();
@@ -6608,6 +6656,23 @@ function bindEvents() {
     });
   }
 
+  if (referencePromptToggleButton) {
+    referencePromptToggleButton.addEventListener("click", () => {
+      if (referencePromptLocked()) {
+        openReferencePromptPaywall();
+        return;
+      }
+      setReferencePromptExpanded(true);
+    });
+  }
+  if (referencePromptCollapseButton) {
+    referencePromptCollapseButton.addEventListener("click", () => {
+      if (state.referencePromptBusy) {
+        return;
+      }
+      setReferencePromptExpanded(false);
+    });
+  }
   if (referencePromptBuildButton) {
     referencePromptBuildButton.addEventListener("click", handleReferencePromptPrimaryAction);
   }
