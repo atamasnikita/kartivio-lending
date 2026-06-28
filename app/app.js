@@ -584,6 +584,7 @@ let deferredStartupScheduled = false;
 
 const TEMPLATE_FILTER_NEW = "new";
 const TEMPLATE_FILTER_PRIORITY = ["Полезности", "Мужское", "Семейные"];
+const TEMPLATE_LIST_PATH = "/v1/templates?include_prompt=false";
 const ADMIN_CAMPAIGN_KIND_LABELS = Object.freeze({
   new_templates: "Новые шаблоны",
   promo_discount: "Персональный оффер",
@@ -4413,25 +4414,26 @@ function renderPlans(payload) {
   selectTopup(defaultCode);
 }
 
-function selectTemplate(item) {
+async function selectTemplate(item) {
+  const resolvedItem = await ensureTemplatePrompt(item);
   if (referenceImageFile()) {
     clearReferenceImage({ preserveNote: true });
     clearReferencePromptUndoState();
     setReferencePromptNote("Фото-референс убрано: выбран шаблон.");
   }
-  state.selectedTemplateId = item.id;
+  state.selectedTemplateId = resolvedItem.id;
   state.selectedTemplate = {
-    id: item.id,
-    title: item.title,
-    category: item.category,
-    prompt: item.prompt,
-    preview_image_url: item.preview_image_url,
-    full_image_url: item.full_image_url,
-    usage_count: templateUsageCount(item),
-    likes_count: templateLikesCount(item),
-    liked_by_me: templateLikedByMe(item),
+    id: resolvedItem.id,
+    title: resolvedItem.title,
+    category: resolvedItem.category,
+    prompt: resolvedItem.prompt,
+    preview_image_url: resolvedItem.preview_image_url,
+    full_image_url: resolvedItem.full_image_url,
+    usage_count: templateUsageCount(resolvedItem),
+    likes_count: templateLikesCount(resolvedItem),
+    liked_by_me: templateLikedByMe(resolvedItem),
   };
-  promptInput.value = item.prompt || "";
+  promptInput.value = resolvedItem.prompt || "";
   renderSelectedTemplateCard();
   switchScreen("studio");
   promptInput.focus();
@@ -4545,6 +4547,86 @@ function updateTemplateInState(templateId, patch) {
     state.activeTemplateModalItem = { ...state.activeTemplateModalItem, ...patch };
   }
   return updatedItem;
+}
+
+function templateHasPrompt(item) {
+  return Boolean(String((item && item.prompt) || "").trim());
+}
+
+function normalizeTemplateDetail(raw) {
+  const item = raw && typeof raw === "object" ? raw : {};
+  return {
+    id: String(item.id || "").trim(),
+    title: String(item.title || "").trim() || "Шаблон",
+    category: normalizeTemplateCategory(item.category),
+    prompt: String(item.prompt || "").trim(),
+    sort_index: Number(item.sort_index || 0),
+    created_at: String(item.created_at || "").trim(),
+    preview_image_url: String(item.preview_image_url || "").trim(),
+    full_image_url: String(item.full_image_url || "").trim(),
+    preview_width: Number(item.preview_width || 0),
+    preview_height: Number(item.preview_height || 0),
+    usage_count: normalizeTemplateCount(item.usage_count),
+    likes_count: normalizeTemplateCount(item.likes_count),
+    liked_by_me: Boolean(item.liked_by_me),
+  };
+}
+
+function mergeTemplateDetail(raw) {
+  const detail = normalizeTemplateDetail(raw);
+  if (!detail.id) {
+    return null;
+  }
+  const patch = {
+    title: detail.title,
+    category: detail.category,
+    prompt: detail.prompt,
+    sort_index: detail.sort_index,
+    created_at: detail.created_at,
+    preview_image_url: detail.preview_image_url,
+    full_image_url: detail.full_image_url,
+    preview_width: detail.preview_width,
+    preview_height: detail.preview_height,
+    usage_count: detail.usage_count,
+    likes_count: detail.likes_count,
+    liked_by_me: detail.liked_by_me,
+  };
+  const updated = updateTemplateInState(detail.id, patch);
+  return updated || {
+    ...detail,
+    preview_ratio: templatePreviewRatio(detail),
+    created_at_ts: Date.parse(detail.created_at || "") || 0,
+  };
+}
+
+async function loadTemplateDetail(templateId) {
+  const normalizedId = String(templateId || "").trim();
+  if (!normalizedId) {
+    throw new Error("Шаблон не найден.");
+  }
+  const payload = await apiFetch(`/v1/templates/${encodeURIComponent(normalizedId)}`, {
+    auth: Boolean(state.accessToken),
+  });
+  const item = mergeTemplateDetail(payload);
+  if (!item || !templateHasPrompt(item)) {
+    throw new Error("Промпт шаблона не найден.");
+  }
+  return item;
+}
+
+async function ensureTemplatePrompt(item) {
+  const normalizedId = String((item && item.id) || "").trim();
+  if (!normalizedId) {
+    throw new Error("Шаблон не найден.");
+  }
+  const currentItem =
+    (templateHasPrompt(item) && item) ||
+    state.templates.find((template) => template.id === normalizedId && templateHasPrompt(template)) ||
+    null;
+  if (currentItem) {
+    return currentItem;
+  }
+  return loadTemplateDetail(normalizedId);
 }
 
 function renderTemplateModalStats(item) {
@@ -4697,7 +4779,7 @@ function openTemplateModal(item, initialPreviewUrl = "") {
   templateModalTitle.textContent = item.title || "Шаблон";
   templateModalCategory.textContent = normalizeTemplateCategory(item.category);
   renderTemplateModalStats(item);
-  templateModalPrompt.textContent = item.prompt || "";
+  templateModalPrompt.textContent = templateHasPrompt(item) ? item.prompt : "Загружаю промпт...";
   setTemplatePromptExpanded(false);
   setTemplateModalNote("");
   if (templateModalCloseTimer) {
@@ -4715,6 +4797,25 @@ function openTemplateModal(item, initialPreviewUrl = "") {
     }
   });
   lockTemplateModalScroll();
+  if (!templateHasPrompt(item)) {
+    loadTemplateDetail(item.id)
+      .then((resolvedItem) => {
+        if (!state.activeTemplateModalId || state.activeTemplateModalId !== resolvedItem.id) {
+          return;
+        }
+        state.activeTemplateModalItem = { ...resolvedItem };
+        templateModalPrompt.textContent = resolvedItem.prompt || "";
+        renderTemplateModalStats(resolvedItem);
+        window.requestAnimationFrame(() => syncTemplatePromptToggle(true));
+      })
+      .catch((error) => {
+        if (state.activeTemplateModalId === item.id) {
+          templateModalPrompt.textContent = "";
+          setTemplateModalNote(userFacingErrorMessage(error, "Не удалось загрузить промпт шаблона."), true);
+          window.requestAnimationFrame(() => syncTemplatePromptToggle(true));
+        }
+      });
+  }
 }
 
 function updateTemplateFilterScroller() {
@@ -5151,11 +5252,22 @@ function renderTemplateGridCards(cards) {
 
 function renderTemplates(payload) {
   const items = Array.isArray(payload && payload.items) ? payload.items : [];
+  const cachedPrompts = new Map(
+    state.templates
+      .filter((item) => item.id && templateHasPrompt(item))
+      .map((item) => [item.id, String(item.prompt || "").trim()])
+  );
+  if (state.selectedTemplate && state.selectedTemplate.id && templateHasPrompt(state.selectedTemplate)) {
+    cachedPrompts.set(state.selectedTemplate.id, String(state.selectedTemplate.prompt || "").trim());
+  }
+  if (state.activeTemplateModalItem && state.activeTemplateModalItem.id && templateHasPrompt(state.activeTemplateModalItem)) {
+    cachedPrompts.set(state.activeTemplateModalItem.id, String(state.activeTemplateModalItem.prompt || "").trim());
+  }
   const normalized = items.map((item) => ({
     id: String(item.id || "").trim(),
     title: String(item.title || "").trim() || "Шаблон",
     category: normalizeTemplateCategory(item.category),
-    prompt: String(item.prompt || "").trim(),
+    prompt: String(item.prompt || "").trim() || cachedPrompts.get(String(item.id || "").trim()) || "",
     sort_index: Number(item.sort_index || 0),
     created_at: String(item.created_at || "").trim(),
     preview_image_url: String(item.preview_image_url || "").trim(),
@@ -5165,7 +5277,7 @@ function renderTemplates(payload) {
     usage_count: normalizeTemplateCount(item.usage_count),
     likes_count: normalizeTemplateCount(item.likes_count),
     liked_by_me: Boolean(item.liked_by_me),
-  })).filter((item) => item.id && item.prompt);
+  })).filter((item) => item.id);
   state.templates = normalized.map((item) => ({
     ...item,
     preview_ratio: templatePreviewRatio(item),
@@ -5174,14 +5286,22 @@ function renderTemplates(payload) {
   if (state.selectedTemplateId) {
     const selected = state.templates.find((item) => item.id === state.selectedTemplateId);
     if (selected) {
-      state.selectedTemplate = { ...selected };
+      state.selectedTemplate = {
+        ...state.selectedTemplate,
+        ...selected,
+        prompt: selected.prompt || (state.selectedTemplate && state.selectedTemplate.prompt) || "",
+      };
       renderSelectedTemplateCard();
     }
   }
   if (state.activeTemplateModalId) {
     const modalItem = state.templates.find((item) => item.id === state.activeTemplateModalId);
     if (modalItem) {
-      state.activeTemplateModalItem = { ...modalItem };
+      state.activeTemplateModalItem = {
+        ...state.activeTemplateModalItem,
+        ...modalItem,
+        prompt: modalItem.prompt || (state.activeTemplateModalItem && state.activeTemplateModalItem.prompt) || "",
+      };
       renderTemplateModalStats(modalItem);
     }
   }
@@ -5191,7 +5311,7 @@ function renderTemplates(payload) {
 }
 
 async function loadTemplates() {
-  const payload = await apiFetch("/v1/templates", { auth: Boolean(state.accessToken) });
+  const payload = await apiFetch(TEMPLATE_LIST_PATH, { auth: Boolean(state.accessToken) });
   renderTemplates(payload);
 }
 
@@ -5455,7 +5575,7 @@ async function loadHistory({ forceServerCheck = false, append = false } = {}) {
 async function loadPublicData({ requestToken = 0, auth = hasActiveSession() } = {}) {
   const [plansPayload, templatesPayload] = await Promise.all([
     apiFetch("/v1/plans"),
-    apiFetch("/v1/templates", { auth }),
+    apiFetch(TEMPLATE_LIST_PATH, { auth }),
   ]);
   if (requestToken && requestToken !== state.publicDataRequestToken) {
     return false;
@@ -6192,7 +6312,7 @@ function bindEvents() {
   });
   promptInput.addEventListener("input", syncTemplateStateFromPrompt);
   if (templateUseButton) {
-    templateUseButton.addEventListener("click", (event) => {
+    templateUseButton.addEventListener("click", async (event) => {
       event.preventDefault();
       event.stopPropagation();
       const item = currentTemplateModalItem();
@@ -6200,8 +6320,16 @@ function bindEvents() {
         setTemplateModalNote("Шаблон не найден.", true);
         return;
       }
-      selectTemplate(item);
-      setCreateNote("Шаблон выбран и промпт вставлен.");
+      templateUseButton.disabled = true;
+      setTemplateModalNote(templateHasPrompt(item) ? "" : "Загружаю промпт шаблона...");
+      try {
+        await selectTemplate(item);
+        setCreateNote("Шаблон выбран и промпт вставлен.");
+      } catch (error) {
+        setTemplateModalNote(userFacingErrorMessage(error, "Не удалось выбрать шаблон."), true);
+      } finally {
+        templateUseButton.disabled = false;
+      }
     });
   }
   if (templateCopyPromptButton) {
@@ -6213,11 +6341,15 @@ function bindEvents() {
         setTemplateModalNote("Шаблон не найден.", true);
         return;
       }
+      templateCopyPromptButton.disabled = true;
       try {
-        await copyPromptToClipboard(item.prompt);
+        const resolvedItem = await ensureTemplatePrompt(item);
+        await copyPromptToClipboard(resolvedItem.prompt);
         setTemplateModalNote("Промпт скопирован.");
       } catch (error) {
         setTemplateModalNote(userFacingErrorMessage(error, "Не удалось скопировать промпт."), true);
+      } finally {
+        templateCopyPromptButton.disabled = false;
       }
     });
   }
