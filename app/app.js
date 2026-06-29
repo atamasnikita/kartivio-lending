@@ -1475,6 +1475,12 @@ function formatCredits(amount) {
 function setCreateButtonIdleLabel() {
   const cost = selectedGenerationCost();
   createButton.textContent = `Генерировать · ${formatCredits(cost)}`;
+  createButton.classList.remove("is-loading");
+}
+
+function setCreateButtonBusyLabel() {
+  createButton.textContent = "Генерация...";
+  createButton.classList.add("is-loading");
 }
 
 function ratioLabel(ratio) {
@@ -5582,6 +5588,67 @@ function repeatHistoryJob(job) {
   setCreateNote(prompt ? "Промпт и параметры перенесены из истории." : "Параметры перенесены из истории.");
 }
 
+function activeJobDetailsLabel(job) {
+  if (!job || typeof job !== "object") {
+    return "";
+  }
+  const mode = job.is_edit ? "с фото" : "промпт";
+  const model = imageModelLabel(job.provider_model);
+  const output = historyOutputLabel(job);
+  return `${mode} · ${model} · ${output}`;
+}
+
+function renderActiveResultState({ variant = "idle", icon = "image", title = "", body = "", meta = "" } = {}) {
+  activeResult.className = `active-result active-result-${variant} empty-result`;
+  const progress = variant === "loading"
+    ? '<span class="active-result-progress" aria-hidden="true"><span></span></span>'
+    : "";
+  activeResult.innerHTML = `
+    <div class="active-result-state" role="${variant === "loading" ? "status" : "note"}">
+      <span class="active-result-icon"><i data-lucide="${escapeHtml(icon)}"></i></span>
+      ${title ? `<strong>${escapeHtml(title)}</strong>` : ""}
+      ${body ? `<span>${escapeHtml(body)}</span>` : ""}
+      ${progress}
+      ${meta ? `<small>${escapeHtml(meta)}</small>` : ""}
+    </div>
+  `;
+  refreshIcons();
+}
+
+function renderActiveResultIdle() {
+  activeJobMeta.textContent = "Готов к генерации";
+  renderActiveResultState({
+    variant: "idle",
+    icon: "image",
+    title: "Кадр появится здесь",
+    body: "После запуска покажем статус генерации, а затем готовое изображение.",
+  });
+}
+
+function renderActiveResultSubmitting(cost) {
+  activeJobMeta.textContent = "Подготовка";
+  renderActiveResultState({
+    variant: "loading",
+    icon: "sparkles",
+    title: "Ставим задачу",
+    body: "Списываем кредиты и отправляем кадр в генерацию.",
+    meta: `Списание: ${formatCredits(cost)}`,
+  });
+}
+
+function renderActiveResultLoading(job) {
+  const status = String(job?.status || "").toLowerCase();
+  const isQueued = status === "queued";
+  activeResult.className = "active-result active-result-loading empty-result";
+  renderActiveResultState({
+    variant: "loading",
+    icon: isQueued ? "timer" : "sparkles",
+    title: isQueued ? "Кадр в очереди" : "Готовим кадр",
+    body: "Обычно это занимает 30-90 секунд. Результат появится здесь автоматически.",
+    meta: activeJobDetailsLabel(job),
+  });
+}
+
 async function renderActiveImage(job, renderToken) {
   try {
     const rendered = await resolveDisplayImage(generationViewImageUrl(job));
@@ -5591,12 +5658,27 @@ async function renderActiveImage(job, renderToken) {
     const canDownload = !isTelegramMiniAppRuntime();
     activeResult.className = "active-result active-result-has-image";
     activeResult.innerHTML = `
-      <img src="${escapeHtml(rendered.src)}" alt="Результат генерации" />
-      <div class="image-actions${canDownload ? "" : " image-actions-single"}">
-        <button class="soft-btn btn-compact" data-action="open" type="button">Открыть изображение</button>
-        ${canDownload ? '<button class="soft-btn btn-compact" data-action="download" type="button">Скачать</button>' : ""}
+      <div class="active-result-image-shell">
+        <img src="${escapeHtml(rendered.src)}" alt="Результат генерации" />
+      </div>
+      <div class="image-actions${canDownload ? "" : " image-actions-two"}">
+        <button class="soft-btn btn-compact image-action-btn" data-action="open" type="button">
+          <i data-lucide="external-link"></i>
+          <span>Открыть</span>
+        </button>
+        ${canDownload ? `
+          <button class="soft-btn btn-compact image-action-btn" data-action="download" type="button">
+            <i data-lucide="download"></i>
+            <span>Скачать</span>
+          </button>
+        ` : ""}
+        <button class="soft-btn btn-compact image-action-btn" data-action="repeat" type="button">
+          <i data-lucide="repeat-2"></i>
+          <span>Повторить</span>
+        </button>
       </div>
     `;
+    refreshIcons();
     const openBtn = activeResult.querySelector('[data-action="open"]');
     openBtn.addEventListener("click", () => {
       openGenerationImage(job).catch((error) => {
@@ -5611,33 +5693,54 @@ async function renderActiveImage(job, renderToken) {
         });
       });
     }
+    const repeatBtn = activeResult.querySelector('[data-action="repeat"]');
+    if (repeatBtn) {
+      repeatBtn.addEventListener("click", () => {
+        repeatHistoryJob(job);
+      });
+    }
   } catch (error) {
     if (renderToken !== state.activeImageRenderToken) {
       return;
     }
-    activeResult.className = "active-result empty-result";
-    activeResult.textContent = userFacingErrorMessage(error, "Изображение временно недоступно.");
+    renderActiveResultState({
+      variant: "error",
+      icon: "circle-alert",
+      title: "Изображение временно недоступно",
+      body: userFacingErrorMessage(error, "Не удалось показать результат."),
+    });
   }
 }
 
 function renderActiveJob(job) {
   const status = jobStatusLabel(job.status);
-  const mode = job.is_edit ? "редактирование" : "генерация";
-  const imageModel = imageModelLabel(job.provider_model);
-  activeJobMeta.textContent = `${status} · ${mode} · ${imageModel} · ${job.output_size}`;
+  const normalizedStatus = String(job.status || "").toLowerCase();
+  activeJobMeta.textContent = `${status} · ${activeJobDetailsLabel(job)}`;
 
-  activeResult.className = "active-result";
   if (job.result_image_url) {
     const renderToken = ++state.activeImageRenderToken;
-    activeResult.classList.add("empty-result");
-    activeResult.textContent = "Загружаю изображение…";
+    renderActiveResultState({
+      variant: "loading",
+      icon: "image",
+      title: "Открываем результат",
+      body: "Загружаем готовое изображение.",
+      meta: activeJobDetailsLabel(job),
+    });
     renderActiveImage(job, renderToken);
     return;
   }
   state.activeImageRenderToken += 1;
-  activeResult.classList.add("empty-result");
-  activeResult.textContent =
-    job.status === "failed" ? generationErrorMessage(job.error_code) : "Задача выполняется.";
+  if (normalizedStatus === "failed") {
+    renderActiveResultState({
+      variant: "error",
+      icon: "circle-alert",
+      title: "Не получилось сгенерировать",
+      body: generationErrorMessage(job.error_code),
+      meta: activeJobDetailsLabel(job),
+    });
+    return;
+  }
+  renderActiveResultLoading(job);
 }
 
 function historyThumb(job) {
@@ -6107,6 +6210,7 @@ async function handleCreate() {
   const sourceImages = sourceImageFilesForUpload();
   const totalSelectedFiles = sourceImageFiles().length;
   const cost = selectedGenerationCost();
+  let requestStarted = false;
 
   try {
     ensureAuthorizedForCreate();
@@ -6138,8 +6242,10 @@ async function handleCreate() {
         }
       }
     }
+    requestStarted = true;
     createButton.disabled = true;
-    createButton.textContent = "Создаю...";
+    setCreateButtonBusyLabel();
+    renderActiveResultSubmitting(cost);
     setCreateNote(`Списываю ${formatCredits(cost)} и ставлю задачу в очередь.`);
 
     const clientRequestId = buildClientRequestId();
@@ -6155,6 +6261,14 @@ async function handleCreate() {
     await pollActiveJob(job.id);
   } catch (error) {
     setCreateNote(userFacingErrorMessage(error, "Не удалось запустить генерацию."), true);
+    if (requestStarted) {
+      renderActiveResultState({
+        variant: "error",
+        icon: "circle-alert",
+        title: "Не удалось запустить генерацию",
+        body: userFacingErrorMessage(error, "Попробуй еще раз."),
+      });
+    }
   } finally {
     createButton.disabled = false;
     setCreateButtonIdleLabel();

@@ -11,7 +11,7 @@
     />
     <meta name="kartivio-yandex-metrika-id" content="109102691" />
     <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=20260628g" />
+    <link rel="stylesheet" href="./styles.css?v=20260629a" />
     <script src="./vendor/lucide.min.js?v=1.18.0" defer></script>
   </head>
   <body>
@@ -342,10 +342,16 @@
 
           <section class="result-panel">
             <div class="section-row section-row-tight">
-              <h3>Текущий результат</h3>
-              <span id="activeJobMeta">Нет активной задачи</span>
+              <h3>Результат</h3>
+              <span id="activeJobMeta">Готов к генерации</span>
             </div>
-            <div id="activeResult" class="active-result empty-result">Результат появится здесь.</div>
+            <div id="activeResult" class="active-result active-result-idle empty-result">
+              <div class="active-result-state">
+                <span class="active-result-icon"><i data-lucide="image"></i></span>
+                <strong>Кадр появится здесь</strong>
+                <span>После запуска покажем статус генерации, а затем готовое изображение.</span>
+              </div>
+            </div>
           </section>
         </section>
 
@@ -713,6 +719,6 @@
       </article>
     </div>
 
-    <script src="./app.js?v=20260628g" defer></script>
+    <script src="./app.js?v=20260629a" defer></script>
   </body>
 </html>
