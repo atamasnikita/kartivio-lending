@@ -524,6 +524,7 @@ const selectedTemplateMeta = document.getElementById("selectedTemplateMeta");
 const clearTemplateButton = document.getElementById("clearTemplateButton");
 const activeJobMeta = document.getElementById("activeJobMeta");
 const activeResult = document.getElementById("activeResult");
+const activeResultPanel = activeResult ? activeResult.closest(".result-panel") : null;
 const historyList = document.getElementById("historyList");
 const refreshHistoryButton = document.getElementById("refreshHistoryButton");
 const historyPagination = document.getElementById("historyPagination");
@@ -1490,6 +1491,39 @@ function setCreateButtonIdleLabel() {
 function setCreateButtonBusyLabel() {
   createButton.textContent = "Генерация...";
   createButton.classList.add("is-loading");
+}
+
+function prefersReducedMotion() {
+  return Boolean(
+    window.matchMedia &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+  );
+}
+
+function blurGenerationInputs() {
+  if (document.activeElement && typeof document.activeElement.blur === "function") {
+    document.activeElement.blur();
+  }
+  if (promptInput && typeof promptInput.blur === "function") {
+    promptInput.blur();
+  }
+}
+
+function scrollActiveResultIntoView() {
+  if (!activeResultPanel) {
+    return;
+  }
+  const scroll = () => {
+    activeResultPanel.scrollIntoView({
+      behavior: prefersReducedMotion() ? "auto" : "smooth",
+      block: "start",
+      inline: "nearest",
+    });
+  };
+  window.requestAnimationFrame(scroll);
+  if (isMobileBrowser()) {
+    window.setTimeout(scroll, 220);
+  }
 }
 
 function ratioLabel(ratio) {
@@ -5709,10 +5743,27 @@ function activeJobDetailsLabel(job) {
   return `${mode} · ${model} · ${output}`;
 }
 
-function renderActiveResultState({ variant = "idle", icon = "image", title = "", body = "", meta = "" } = {}) {
+function renderActiveResultState({
+  variant = "idle",
+  icon = "image",
+  title = "",
+  body = "",
+  meta = "",
+  action = null,
+} = {}) {
   activeResult.className = `active-result active-result-${variant} empty-result`;
   const progress = variant === "loading"
     ? '<span class="active-result-progress" aria-hidden="true"><span></span></span>'
+    : "";
+  const hasAction = Boolean(action && action.label && typeof action.onClick === "function");
+  const actionIcon = action && action.icon ? String(action.icon) : "";
+  const actionHtml = hasAction
+    ? `
+      <button class="soft-btn btn-compact active-result-action" data-action="active-result" type="button">
+        ${actionIcon ? `<i data-lucide="${escapeHtml(actionIcon)}"></i>` : ""}
+        <span>${escapeHtml(action.label)}</span>
+      </button>
+    `
     : "";
   activeResult.innerHTML = `
     <div class="active-result-state" role="${variant === "loading" ? "status" : "note"}">
@@ -5721,9 +5772,16 @@ function renderActiveResultState({ variant = "idle", icon = "image", title = "",
       ${body ? `<span>${escapeHtml(body)}</span>` : ""}
       ${progress}
       ${meta ? `<small>${escapeHtml(meta)}</small>` : ""}
+      ${actionHtml}
     </div>
   `;
   refreshIcons();
+  if (hasAction) {
+    const actionButton = activeResult.querySelector('[data-action="active-result"]');
+    if (actionButton) {
+      actionButton.addEventListener("click", action.onClick);
+    }
+  }
 }
 
 function renderActiveResultIdle() {
@@ -5742,7 +5800,7 @@ function renderActiveResultSubmitting(cost) {
     variant: "loading",
     icon: "sparkles",
     title: "Ставим задачу",
-    body: "Списываем кредиты и отправляем кадр в генерацию.",
+    body: "Списываем кредиты и отправляем кадр в очередь генерации.",
     meta: `Списание: ${formatCredits(cost)}`,
   });
 }
@@ -5754,8 +5812,10 @@ function renderActiveResultLoading(job) {
   renderActiveResultState({
     variant: "loading",
     icon: isQueued ? "timer" : "sparkles",
-    title: isQueued ? "Кадр в очереди" : "Готовим кадр",
-    body: "Обычно это занимает 30-90 секунд. Результат появится здесь автоматически.",
+    title: isQueued ? "Задача в очереди" : "Готовим кадр",
+    body: isQueued
+      ? "Мы приняли запрос. Как только очередь дойдет до задачи, начнется генерация."
+      : "Модель собирает изображение. Результат появится здесь автоматически.",
     meta: activeJobDetailsLabel(job),
   });
 }
@@ -5819,6 +5879,11 @@ async function renderActiveImage(job, renderToken) {
       icon: "circle-alert",
       title: "Изображение временно недоступно",
       body: userFacingErrorMessage(error, "Не удалось показать результат."),
+      action: {
+        label: "Открыть историю",
+        icon: "history",
+        onClick: () => switchScreen("history"),
+      },
     });
   }
 }
@@ -5848,6 +5913,11 @@ function renderActiveJob(job) {
       title: "Не получилось сгенерировать",
       body: generationErrorMessage(job.error_code),
       meta: activeJobDetailsLabel(job),
+      action: {
+        label: "Повторить настройки",
+        icon: "repeat-2",
+        onClick: () => repeatHistoryJob(job),
+      },
     });
     return;
   }
@@ -6356,9 +6426,11 @@ async function handleCreate() {
       }
     }
     requestStarted = true;
+    blurGenerationInputs();
     createButton.disabled = true;
     setCreateButtonBusyLabel();
     renderActiveResultSubmitting(cost);
+    scrollActiveResultIntoView();
     setCreateNote(`Списываю ${formatCredits(cost)} и ставлю задачу в очередь.`);
 
     const clientRequestId = buildClientRequestId();
@@ -6368,7 +6440,7 @@ async function handleCreate() {
 
     state.activeJobId = job.id;
     renderActiveJob(job);
-    setCreateNote(`Задача создана: ${jobStatusLabel(job.status)}.`);
+    setCreateNote("Задача создана. Статус и результат появятся ниже.");
     await Promise.allSettled([loadPrivateData(), loadTemplates()]);
     markHistoryCacheStale();
     await pollActiveJob(job.id);
@@ -6380,7 +6452,13 @@ async function handleCreate() {
         icon: "circle-alert",
         title: "Не удалось запустить генерацию",
         body: userFacingErrorMessage(error, "Попробуй еще раз."),
+        action: {
+          label: "Попробовать снова",
+          icon: "refresh-cw",
+          onClick: () => handleCreate(),
+        },
       });
+      scrollActiveResultIntoView();
     }
   } finally {
     createButton.disabled = false;

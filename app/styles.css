@@ -2393,6 +2393,7 @@ body.is-web-runtime.is-mobile-browser .app-main {
   padding: 12px;
   display: grid;
   gap: 12px;
+  scroll-margin-top: calc(84px + max(var(--tg-safe-top, 0px), env(safe-area-inset-top)) + var(--tg-controls-offset, 0px));
 }
 
 .active-result {
@@ -2449,6 +2450,41 @@ body.is-web-runtime.is-mobile-browser .app-main {
   color: #7f8aa6;
   font-size: 12px;
   line-height: 1.35;
+}
+
+.active-result-action {
+  margin-top: 4px;
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  color: #edf3ff;
+  transition:
+    border-color 0.16s ease,
+    background-color 0.16s ease,
+    color 0.16s ease,
+    transform 0.16s ease;
+}
+
+.active-result-action:hover {
+  border-color: #465576;
+  background: rgba(20, 29, 45, 0.95);
+}
+
+.active-result-action:active {
+  transform: scale(0.97);
+}
+
+.active-result-action span {
+  color: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.active-result-action svg {
+  width: 16px;
+  height: 16px;
 }
 
 .active-result-loading {
@@ -3933,8 +3969,13 @@ body.is-web-runtime.is-mobile-browser.nav-hidden .bottom-nav {
   }
 
   .prompt-clear-btn,
-  .prompt-card textarea {
+  .prompt-card textarea,
+  .active-result-action {
     transition: none !important;
+  }
+
+  .active-result-action:active {
+    transform: none;
   }
 
   .reference-prompt-card {
