@@ -11,7 +11,7 @@
     />
     <meta name="kartivio-yandex-metrika-id" content="109102691" />
     <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=20260701b" />
+    <link rel="stylesheet" href="./styles.css?v=20260701c" />
     <script src="./vendor/lucide.min.js?v=1.18.0" defer></script>
   </head>
   <body>
@@ -309,11 +309,29 @@
           </section>
 
           <section class="panel-card prompt-card">
-            <textarea id="promptInput" rows="6" placeholder="Напишите, что хотите создать или изменить..."></textarea>
-            <p class="storage-note">
-              Результаты генерации храним 14 дней.
-              <a href="/privacy/" target="_blank" rel="noreferrer">Подробнее</a>
-            </p>
+            <div class="prompt-card-head">
+              <div class="prompt-card-title">
+                <strong>Промпт</strong>
+                <span id="promptSourceStatus" class="prompt-source-status">Напиши описание кадра</span>
+              </div>
+              <button id="clearPromptButton" class="prompt-clear-btn is-hidden" type="button">
+                <i data-lucide="x"></i>
+                <span>Очистить</span>
+              </button>
+            </div>
+            <textarea
+              id="promptInput"
+              rows="7"
+              placeholder="Напишите, что хотите создать или изменить..."
+              aria-describedby="promptSourceStatus promptCounter"
+            ></textarea>
+            <div class="prompt-card-footer">
+              <p class="storage-note">
+                Результаты генерации храним 14 дней.
+                <a href="/privacy/" target="_blank" rel="noreferrer">Подробнее</a>
+              </p>
+              <span id="promptCounter" class="prompt-counter">0 / 3000</span>
+            </div>
           </section>
 
           <details class="settings-panel">
@@ -722,6 +740,6 @@
       </article>
     </div>
 
-    <script src="./app.js?v=20260701b" defer></script>
+    <script src="./app.js?v=20260701c" defer></script>
   </body>
 </html>

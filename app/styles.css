@@ -1677,6 +1677,148 @@ body.is-web-runtime.is-mobile-browser .app-main {
   min-height: 134px;
 }
 
+.prompt-card {
+  background:
+    radial-gradient(circle at 10% 0%, rgba(47, 68, 112, 0.2), transparent 34%),
+    var(--surface);
+}
+
+.prompt-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.prompt-card-title {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.prompt-card-title strong {
+  color: #f4f7ff;
+  font-size: 18px;
+  line-height: 1.18;
+}
+
+.prompt-source-status {
+  min-height: 17px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.prompt-source-status.is-template,
+.prompt-source-status.is-reference,
+.prompt-source-status.is-history {
+  color: #8fe5d9;
+}
+
+.prompt-source-status.is-edited {
+  color: #ffd88a;
+}
+
+.prompt-clear-btn {
+  min-width: 44px;
+  min-height: 36px;
+  border: 1px solid #30394d;
+  border-radius: 8px;
+  background: rgba(16, 23, 36, 0.88);
+  color: #dbe3f7;
+  padding: 0 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    border-color 0.16s ease,
+    background-color 0.16s ease,
+    color 0.16s ease,
+    transform 0.16s ease;
+}
+
+.prompt-clear-btn:hover {
+  border-color: #465576;
+  background: rgba(20, 29, 45, 0.95);
+  color: #f2f5ff;
+}
+
+.prompt-clear-btn:active {
+  transform: scale(0.97);
+}
+
+.prompt-clear-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.prompt-card textarea {
+  min-height: 170px;
+  max-height: min(44vh, 380px);
+  padding: 14px;
+  background: #080d16;
+  transition:
+    border-color 0.16s ease,
+    box-shadow 0.16s ease,
+    background-color 0.16s ease;
+}
+
+.prompt-card textarea:focus {
+  outline: none;
+  border-color: rgba(var(--accent-rgb), 0.62);
+  background: #0a101a;
+  box-shadow:
+    0 0 0 1px rgba(var(--accent-rgb), 0.1),
+    0 0 24px rgba(var(--accent-rgb), 0.08);
+}
+
+.prompt-card-footer {
+  min-height: 20px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.prompt-card-footer .storage-note {
+  min-width: 0;
+  margin-top: 1px;
+}
+
+.prompt-counter {
+  flex: 0 0 auto;
+  min-height: 20px;
+  border: 1px solid #2c354b;
+  border-radius: 999px;
+  background: rgba(11, 17, 27, 0.78);
+  color: #9ca6bd;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 750;
+  line-height: 1.25;
+  display: none;
+  align-items: center;
+}
+
+.prompt-counter.is-visible {
+  display: inline-flex;
+}
+
+.prompt-counter.is-warning {
+  border-color: rgba(255, 212, 71, 0.38);
+  color: #ffd88a;
+}
+
+.prompt-counter.is-danger {
+  border-color: rgba(255, 138, 150, 0.48);
+  color: #ff9da7;
+}
+
 .inline-actions {
   display: flex;
   align-items: center;
@@ -3644,6 +3786,29 @@ body.is-web-runtime.is-mobile-browser.nav-hidden .bottom-nav {
     font-size: 14px;
   }
 
+  .prompt-card {
+    padding: 10px;
+  }
+
+  .prompt-card-head {
+    align-items: center;
+  }
+
+  .prompt-clear-btn {
+    min-height: 34px;
+    padding: 0 10px;
+  }
+
+  .prompt-card textarea {
+    min-height: 158px;
+    max-height: 46vh;
+  }
+
+  .prompt-card-footer {
+    align-items: flex-start;
+    gap: 8px;
+  }
+
   .active-result {
     min-height: 190px;
   }
@@ -3764,6 +3929,11 @@ body.is-web-runtime.is-mobile-browser.nav-hidden .bottom-nav {
   .template-modal,
   .template-modal-card,
   .choice-chip {
+    transition: none !important;
+  }
+
+  .prompt-clear-btn,
+  .prompt-card textarea {
     transition: none !important;
   }
 

@@ -26,6 +26,8 @@ const YANDEX_OAUTH_STORAGE_KEYS = {
 };
 const MAX_SOURCE_IMAGES = 3;
 const PROMPT_MAX_LENGTH = 3000;
+const PROMPT_COUNTER_VISIBLE_AT = Math.floor(PROMPT_MAX_LENGTH * 0.72);
+const PROMPT_COUNTER_WARNING_AT = Math.floor(PROMPT_MAX_LENGTH * 0.9);
 const REFERENCE_PROMPT_NOTE_DEFAULT = "Потом его можно отредактировать перед генерацией.";
 const TEMPLATE_SKELETON_RATIOS = ["1 / 1", "4 / 5", "3 / 4", "5 / 4", "2 / 3", "3 / 2"];
 const TEMPLATE_MODAL_ANIMATION_MS = 260;
@@ -337,6 +339,8 @@ const state = {
   referencePromptPreviousValue: "",
   referencePromptBuilt: false,
   referencePromptExpanded: false,
+  promptSource: "manual",
+  promptSourceValue: "",
   sourceImageFiles: [],
   sourceImagePreviewUrls: [],
   historyItems: null,
@@ -468,6 +472,10 @@ const templateFeedPagination = document.getElementById("templateFeedPagination")
 const templateFeedMoreButton = document.getElementById("templateFeedMoreButton");
 const templateFeedMoreNote = document.getElementById("templateFeedMoreNote");
 const promptInput = document.getElementById("promptInput");
+const promptCard = document.querySelector(".prompt-card");
+const promptSourceStatus = document.getElementById("promptSourceStatus");
+const promptCounter = document.getElementById("promptCounter");
+const clearPromptButton = document.getElementById("clearPromptButton");
 const modelChips = document.getElementById("modelChips");
 const resolutionChips = document.getElementById("resolutionChips");
 const ratioChips = document.getElementById("ratioChips");
@@ -1828,6 +1836,93 @@ function setReferencePromptNote(message, isError = false) {
   referencePromptNote.style.color = isError ? "#ff8f8f" : "#8f98b0";
 }
 
+function promptTextValue() {
+  return String((promptInput && promptInput.value) || "");
+}
+
+function promptSourceState() {
+  const prompt = promptTextValue().trim();
+  if (!prompt) {
+    return { label: "Напиши описание кадра", kind: "empty" };
+  }
+
+  const selectedTemplatePrompt = state.selectedTemplate ? String(state.selectedTemplate.prompt || "").trim() : "";
+  if (selectedTemplatePrompt && prompt === selectedTemplatePrompt) {
+    return { label: "Промпт из шаблона", kind: "template" };
+  }
+
+  const source = String(state.promptSource || "manual");
+  const sourceValue = String(state.promptSourceValue || "").trim();
+  const changed = Boolean(sourceValue && prompt !== sourceValue);
+
+  if (source === "template") {
+    return {
+      label: changed ? "Шаблон изменен вручную" : "Промпт из шаблона",
+      kind: changed ? "edited" : "template",
+    };
+  }
+  if (source === "reference") {
+    return {
+      label: changed ? "Референс изменен вручную" : "Промпт по референсу",
+      kind: changed ? "edited" : "reference",
+    };
+  }
+  if (source === "history") {
+    return {
+      label: changed ? "История изменена вручную" : "Промпт из истории",
+      kind: changed ? "edited" : "history",
+    };
+  }
+
+  return { label: "Ручной промпт", kind: "manual" };
+}
+
+function renderPromptControls() {
+  const value = promptTextValue();
+  const length = value.length;
+  const source = promptSourceState();
+
+  if (promptSourceStatus) {
+    promptSourceStatus.textContent = source.label;
+    promptSourceStatus.className = `prompt-source-status is-${source.kind}`;
+  }
+  if (promptCounter) {
+    promptCounter.textContent = `${length} / ${PROMPT_MAX_LENGTH}`;
+    promptCounter.classList.toggle("is-visible", length >= PROMPT_COUNTER_VISIBLE_AT);
+    promptCounter.classList.toggle("is-warning", length >= PROMPT_COUNTER_WARNING_AT && length < PROMPT_MAX_LENGTH);
+    promptCounter.classList.toggle("is-danger", length >= PROMPT_MAX_LENGTH);
+  }
+  if (clearPromptButton) {
+    clearPromptButton.classList.toggle("is-hidden", length === 0);
+  }
+  if (promptCard) {
+    promptCard.classList.toggle("has-prompt", Boolean(value.trim()));
+    promptCard.dataset.promptSource = source.kind;
+  }
+}
+
+function setPromptSource(source, value = null) {
+  state.promptSource = String(source || "manual");
+  state.promptSourceValue = value === null ? promptTextValue() : String(value || "");
+  renderPromptControls();
+}
+
+function handlePromptInput() {
+  syncTemplateStateFromPrompt();
+  renderPromptControls();
+}
+
+function clearPromptText() {
+  if (!promptInput) {
+    return;
+  }
+  promptInput.value = "";
+  clearSelectedTemplate({ clearPrompt: false });
+  setPromptSource("manual", "");
+  promptInput.focus();
+  setCreateNote("Промпт очищен.");
+}
+
 function setPlansNote(message, isError = false) {
   plansNote.textContent = message;
   plansNote.style.color = isError ? "#ff8f8f" : "#8f98b0";
@@ -2722,6 +2817,7 @@ function clearSelectedTemplate({ clearPrompt } = { clearPrompt: false }) {
   state.selectedTemplate = null;
   if (clearPrompt) {
     promptInput.value = "";
+    setPromptSource("manual", "");
   }
   renderSelectedTemplateCard();
 }
@@ -4552,6 +4648,7 @@ async function selectTemplate(item) {
     liked_by_me: templateLikedByMe(resolvedItem),
   };
   promptInput.value = resolvedItem.prompt || "";
+  setPromptSource("template", resolvedItem.prompt || "");
   renderSelectedTemplateCard();
   switchScreen("studio");
   promptInput.focus();
@@ -5585,6 +5682,9 @@ function repeatHistoryJob(job) {
   const prompt = String(job?.prompt || "").trim();
   if (prompt) {
     promptInput.value = prompt;
+    setPromptSource("history", prompt);
+  } else {
+    setPromptSource("manual", "");
   }
   clearSelectedTemplate({ clearPrompt: false });
   applyGenerationSettingsFromJob(job);
@@ -6160,6 +6260,7 @@ async function handleBuildReferencePrompt() {
     state.referencePromptBuilt = true;
     renderReferencePromptRestoreButton();
     promptInput.value = nextPrompt;
+    setPromptSource("reference", nextPrompt);
     switchScreen("studio");
     promptInput.focus();
     setReferencePromptNote("Промпт собран. Его можно отредактировать перед генерацией.");
@@ -6179,6 +6280,7 @@ function restoreReferencePromptPreviousText() {
     return;
   }
   promptInput.value = previous;
+  setPromptSource("manual", previous);
   clearReferencePromptUndoState();
   promptInput.focus();
   setReferencePromptNote("Предыдущий текст возвращен.");
@@ -6690,7 +6792,10 @@ function bindEvents() {
     clearSelectedTemplate({ clearPrompt: true });
     promptInput.focus();
   });
-  promptInput.addEventListener("input", syncTemplateStateFromPrompt);
+  promptInput.addEventListener("input", handlePromptInput);
+  if (clearPromptButton) {
+    clearPromptButton.addEventListener("click", clearPromptText);
+  }
   if (chooseTemplateButton) {
     chooseTemplateButton.addEventListener("click", () => switchScreen("feed"));
   }
@@ -7259,6 +7364,7 @@ async function bootstrap() {
   renderSelectedTemplateCard();
   renderReferenceImage();
   renderSelectedSourceImage();
+  renderPromptControls();
   refreshGenerationCostNote();
   refreshIcons();
   renderIdentityActions();
