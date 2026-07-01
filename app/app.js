@@ -1840,19 +1840,25 @@ function promptTextValue() {
   return String((promptInput && promptInput.value) || "");
 }
 
+function normalizePromptForComparison(raw) {
+  return String(raw || "").replace(/\r\n?/g, "\n").trim();
+}
+
 function promptSourceState() {
-  const prompt = promptTextValue().trim();
+  const prompt = normalizePromptForComparison(promptTextValue());
   if (!prompt) {
     return { label: "Напиши описание кадра", kind: "empty" };
   }
 
-  const selectedTemplatePrompt = state.selectedTemplate ? String(state.selectedTemplate.prompt || "").trim() : "";
+  const selectedTemplatePrompt = state.selectedTemplate
+    ? normalizePromptForComparison(state.selectedTemplate.prompt)
+    : "";
   if (selectedTemplatePrompt && prompt === selectedTemplatePrompt) {
     return { label: "Промпт из шаблона", kind: "template" };
   }
 
   const source = String(state.promptSource || "manual");
-  const sourceValue = String(state.promptSourceValue || "").trim();
+  const sourceValue = normalizePromptForComparison(state.promptSourceValue);
   const changed = Boolean(sourceValue && prompt !== sourceValue);
 
   if (source === "template") {
@@ -2795,8 +2801,8 @@ function handleReferenceImageChange() {
   }
 
   const previousTemplate = state.selectedTemplate;
-  const currentPrompt = String(promptInput.value || "").trim();
-  const templatePrompt = previousTemplate ? String(previousTemplate.prompt || "").trim() : "";
+  const currentPrompt = normalizePromptForComparison(promptInput.value);
+  const templatePrompt = previousTemplate ? normalizePromptForComparison(previousTemplate.prompt) : "";
   const shouldClearPrompt = Boolean(templatePrompt && currentPrompt === templatePrompt);
   if (previousTemplate) {
     clearSelectedTemplate({ clearPrompt: shouldClearPrompt });
@@ -2827,8 +2833,8 @@ function selectedTemplatePromptStatus() {
     return "";
   }
   const hasSourceImage = sourceImageFilesForUpload().length > 0;
-  const currentPrompt = String(promptInput.value || "").trim();
-  const sourcePrompt = String(state.selectedTemplate.prompt || "").trim();
+  const currentPrompt = normalizePromptForComparison(promptInput.value);
+  const sourcePrompt = normalizePromptForComparison(state.selectedTemplate.prompt);
   if (!currentPrompt) {
     return hasSourceImage ? "Промпт очищен · фото добавлено" : "Промпт очищен";
   }
