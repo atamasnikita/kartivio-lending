@@ -11,7 +11,7 @@
     />
     <meta name="kartivio-yandex-metrika-id" content="109102691" />
     <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=20260701e" />
+    <link rel="stylesheet" href="./styles.css?v=20260701f" />
     <script src="./vendor/lucide.min.js?v=1.18.0" defer></script>
   </head>
   <body>
@@ -63,30 +63,37 @@
 
       <main class="app-main">
         <section class="screen screen-active" data-screen="feed">
-          <div class="section-row">
-            <h2>Лента шаблонов</h2>
-            <button class="icon-btn" type="button" data-nav-target="studio">
-              <i data-lucide="chevron-right"></i>
+          <div class="feed-header">
+            <div class="feed-heading">
+              <span>Шаблоны</span>
+              <h2>Лента</h2>
+            </div>
+            <button class="soft-btn soft-btn-icon feed-create-btn" type="button" data-nav-target="studio">
+              <i data-lucide="sparkles"></i>
+              <span>Создать</span>
             </button>
           </div>
-          <div id="templateFilterShell" class="template-filter-shell">
-            <button
-              id="templateFilterPrev"
-              class="template-filter-nav"
-              type="button"
-              aria-label="Прокрутить темы влево"
-            >
-              <i data-lucide="chevron-left"></i>
-            </button>
-            <div id="templateFilterChips" class="template-filter-row" role="tablist" aria-label="Фильтр тем"></div>
-            <button
-              id="templateFilterNext"
-              class="template-filter-nav"
-              type="button"
-              aria-label="Прокрутить темы вправо"
-            >
-              <i data-lucide="chevron-right"></i>
-            </button>
+          <div class="template-filter-stack">
+            <div id="templateQuickFilters" class="template-filter-quick" role="tablist" aria-label="Быстрые фильтры"></div>
+            <div id="templateFilterShell" class="template-filter-shell">
+              <button
+                id="templateFilterPrev"
+                class="template-filter-nav"
+                type="button"
+                aria-label="Прокрутить темы влево"
+              >
+                <i data-lucide="chevron-left"></i>
+              </button>
+              <div id="templateFilterChips" class="template-filter-row" role="tablist" aria-label="Фильтр тем"></div>
+              <button
+                id="templateFilterNext"
+                class="template-filter-nav"
+                type="button"
+                aria-label="Прокрутить темы вправо"
+              >
+                <i data-lucide="chevron-right"></i>
+              </button>
+            </div>
           </div>
           <div id="templatesGrid" class="tools-grid"></div>
           <div id="templateFeedPagination" class="history-pagination is-hidden">
@@ -740,6 +747,6 @@
       </article>
     </div>
 
-    <script src="./app.js?v=20260701e" defer></script>
+    <script src="./app.js?v=20260701f" defer></script>
   </body>
 </html>

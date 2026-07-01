@@ -466,6 +466,7 @@ const refreshOffersButton = document.getElementById("refreshOffersButton");
 const templateFilterShell = document.getElementById("templateFilterShell");
 const templateFilterPrev = document.getElementById("templateFilterPrev");
 const templateFilterNext = document.getElementById("templateFilterNext");
+const templateQuickFilters = document.getElementById("templateQuickFilters");
 const templateFilterChips = document.getElementById("templateFilterChips");
 const templatesGrid = document.getElementById("templatesGrid");
 const templateFeedPagination = document.getElementById("templateFeedPagination");
@@ -4771,6 +4772,46 @@ function templateFilterLabel(filterId) {
   return filterId;
 }
 
+function isPrimaryTemplateFilter(filterId) {
+  return isNewestTemplateFilter(filterId) || filterId === "all" || isFavoritesTemplateFilter(filterId);
+}
+
+function templateFilterDisplayLabel(filterId, compact = false) {
+  if (compact && filterId === "all") {
+    return "Все";
+  }
+  return templateFilterLabel(filterId);
+}
+
+function createTemplateFilterButton(filterId, { compact = false } = {}) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "template-filter-chip";
+  if (compact) {
+    button.classList.add("is-quick");
+  }
+  if (isNewestTemplateFilter(filterId)) {
+    button.classList.add("is-promoted");
+  }
+  button.innerHTML = isNewestTemplateFilter(filterId)
+    ? `<span>${escapeHtml(templateFilterDisplayLabel(filterId, compact))}</span>`
+    : `
+      <span>${escapeHtml(templateFilterDisplayLabel(filterId, compact))}</span>
+      <span class="template-filter-count">${templateFilterCount(filterId)}</span>
+    `;
+  button.setAttribute("role", "tab");
+  const isActive = state.selectedTemplateFilter === filterId;
+  button.classList.toggle("is-active", isActive);
+  button.setAttribute("aria-selected", isActive ? "true" : "false");
+  button.addEventListener("click", () => {
+    state.selectedTemplateFilter = filterId;
+    resetTemplateFeedPagination();
+    renderTemplateFilters();
+    renderTemplateCards();
+  });
+  return button;
+}
+
 function currentTemplateModalItem() {
   if (state.activeTemplateModalItem) {
     return state.activeTemplateModalItem;
@@ -5207,7 +5248,7 @@ function templateFilters() {
 }
 
 function renderTemplateFilters() {
-  if (!templateFilterChips) {
+  if (!templateFilterChips && !templateQuickFilters) {
     return;
   }
   bindTemplateFilterScroller();
@@ -5215,32 +5256,27 @@ function renderTemplateFilters() {
   if (!filters.includes(state.selectedTemplateFilter)) {
     state.selectedTemplateFilter = TEMPLATE_FILTER_NEW;
   }
-  templateFilterChips.innerHTML = "";
 
-  for (const filterId of filters) {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "template-filter-chip";
-    if (isNewestTemplateFilter(filterId)) {
-      button.classList.add("is-promoted");
+  const primaryFilters = filters.filter((filterId) => isPrimaryTemplateFilter(filterId));
+  const categoryFilters = filters.filter((filterId) => !isPrimaryTemplateFilter(filterId));
+
+  if (templateQuickFilters) {
+    templateQuickFilters.innerHTML = "";
+    for (const filterId of primaryFilters) {
+      templateQuickFilters.appendChild(createTemplateFilterButton(filterId, { compact: true }));
     }
-    button.innerHTML = isNewestTemplateFilter(filterId)
-      ? `<span>${escapeHtml(templateFilterLabel(filterId))}</span>`
-      : `
-      <span>${escapeHtml(templateFilterLabel(filterId))}</span>
-      <span class="template-filter-count">${templateFilterCount(filterId)}</span>
-    `;
-    button.setAttribute("role", "tab");
-    const isActive = state.selectedTemplateFilter === filterId;
-    button.classList.toggle("is-active", isActive);
-    button.setAttribute("aria-selected", isActive ? "true" : "false");
-    button.addEventListener("click", () => {
-      state.selectedTemplateFilter = filterId;
-      resetTemplateFeedPagination();
-      renderTemplateFilters();
-      renderTemplateCards();
-    });
-    templateFilterChips.appendChild(button);
+  }
+
+  if (templateFilterChips) {
+    templateFilterChips.innerHTML = "";
+    const filtersForCategoryRow = templateQuickFilters ? categoryFilters : filters;
+    for (const filterId of filtersForCategoryRow) {
+      templateFilterChips.appendChild(createTemplateFilterButton(filterId));
+    }
+  }
+
+  if (templateFilterShell) {
+    templateFilterShell.classList.toggle("is-empty", Boolean(templateQuickFilters && categoryFilters.length === 0));
   }
   window.requestAnimationFrame(updateTemplateFilterScroller);
   refreshIcons();
