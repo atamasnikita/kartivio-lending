@@ -130,7 +130,7 @@ const MODEL_OUTPUT_MATRIX = {
 
 const MODEL_ORDER = ["gemini-3.1-flash-image-preview", "gemini-3-pro-image-preview"];
 const DEFAULT_IMAGE_MODEL = "gemini-3.1-flash-image-preview";
-const DEFAULT_RESOLUTION = "1K";
+const DEFAULT_RESOLUTION = "2K";
 const DEFAULT_RATIO = "1:1";
 
 const STATUS_LABELS = {
