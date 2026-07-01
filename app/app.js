@@ -49,8 +49,8 @@ const IMAGE_MODEL_LABELS = {
   "gpt-image-2": "Архив",
 };
 
-const RESOLUTION_ORDER = ["auto", "1K", "2K", "4K"];
-const RATIO_ORDER = ["auto", "1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"];
+const RESOLUTION_ORDER = ["1K", "2K", "4K"];
+const RATIO_ORDER = ["1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "9:16"];
 
 const RESOLUTION_LABELS = {
   auto: "Auto",
@@ -471,6 +471,7 @@ const promptInput = document.getElementById("promptInput");
 const modelChips = document.getElementById("modelChips");
 const resolutionChips = document.getElementById("resolutionChips");
 const ratioChips = document.getElementById("ratioChips");
+const generationSettingsSummary = document.getElementById("generationSettingsSummary");
 const studioSceneBlock = document.getElementById("studioSceneBlock");
 const studioSceneTitle = document.getElementById("studioSceneTitle");
 const chooseTemplateButton = document.getElementById("chooseTemplateButton");
@@ -1553,15 +1554,16 @@ function ensureGenerationSelectionState() {
   }
 
   const availableRatios = availableRatiosFor(state.selectedImageModel, state.selectedResolution);
-  if (!availableRatios.length) {
+  const visibleAvailableRatios = RATIO_ORDER.filter((key) => availableRatios.includes(key));
+  if (!visibleAvailableRatios.length) {
     state.selectedRatio = "auto";
     return;
   }
-  if (!availableRatios.includes(state.selectedRatio)) {
-    if (availableRatios.includes(DEFAULT_RATIO)) {
+  if (!visibleAvailableRatios.includes(state.selectedRatio)) {
+    if (visibleAvailableRatios.includes(DEFAULT_RATIO)) {
       state.selectedRatio = DEFAULT_RATIO;
     } else {
-      state.selectedRatio = availableRatios[0];
+      state.selectedRatio = visibleAvailableRatios[0];
     }
   }
 }
@@ -1647,6 +1649,9 @@ function refreshGenerationCostNote() {
   setCreateNote(
     `Выбрано: ${model}, ${resolutionLabel(resolution)}, ${ratioLabel(ratio)} (${outputSize}). Списание: ${formatCredits(cost)}.`
   );
+  if (generationSettingsSummary) {
+    generationSettingsSummary.textContent = `${model} · ${resolutionLabel(resolution)} · ${ratioLabel(ratio)} · ${formatCredits(cost)}`;
+  }
   setCreateButtonIdleLabel();
 }
 
@@ -1670,7 +1675,7 @@ function createChoiceChip({
   if (lock) {
     const lockNode = document.createElement("span");
     lockNode.className = "chip-lock";
-    lockNode.textContent = "🔒";
+    lockNode.textContent = "Недоступно";
     button.appendChild(lockNode);
   }
   if (!disabled && typeof onClick === "function") {
