@@ -320,7 +320,7 @@ const state = {
   publicDataLoadContext: "",
   publicDataLoadedContext: "",
   publicDataRequestToken: 0,
-  selectedTemplateFilter: "new",
+  selectedTemplateFilter: "showcase",
   templateVisibleCount: 0,
   templateRenderKey: "",
   activeTemplateModalId: "",
@@ -607,7 +607,19 @@ let templateFilterScrollerBound = false;
 let deferredStartupScheduled = false;
 
 const TEMPLATE_FILTER_NEW = "new";
+const TEMPLATE_FILTER_SHOWCASE = "showcase";
 const TEMPLATE_FILTER_PRIORITY = ["Полезности", "Мужское", "Семейные"];
+const TEMPLATE_SECTION_CATEGORY_PRIORITY = [
+  "Фэшн",
+  "Портрет",
+  "Студия",
+  "Цветы",
+  "Город",
+  "Мужское",
+  "Семейные",
+  "Полезности",
+];
+const TEMPLATE_SHOWCASE_SECTION_LIMIT = 10;
 const TEMPLATE_LIST_PATH = "/v1/templates?include_prompt=false";
 const ADMIN_CAMPAIGN_KIND_LABELS = Object.freeze({
   new_templates: "Новые шаблоны",
@@ -4715,6 +4727,23 @@ function isNewestTemplateFilter(filterId) {
   return String(filterId || "").trim() === TEMPLATE_FILTER_NEW;
 }
 
+function isShowcaseTemplateFilter(filterId) {
+  return String(filterId || "").trim() === TEMPLATE_FILTER_SHOWCASE;
+}
+
+function templateCountLabel(count) {
+  const normalized = Math.max(0, Math.floor(Number(count || 0)));
+  const mod10 = normalized % 10;
+  const mod100 = normalized % 100;
+  let word = "шаблонов";
+  if (mod10 === 1 && mod100 !== 11) {
+    word = "шаблон";
+  } else if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) {
+    word = "шаблона";
+  }
+  return `${normalized} ${word}`;
+}
+
 function templateLikesCount(item) {
   return normalizeTemplateCount(item && item.likes_count);
 }
@@ -4760,6 +4789,9 @@ function templatePreviewRatio(item) {
 }
 
 function templateFilterLabel(filterId) {
+  if (isShowcaseTemplateFilter(filterId)) {
+    return "Лента шаблонов";
+  }
   if (isNewestTemplateFilter(filterId)) {
     return "Новое";
   }
@@ -5247,6 +5279,85 @@ function templateFilters() {
   return [TEMPLATE_FILTER_NEW, "all", "favorites", ...priority, ...rest];
 }
 
+function orderedTemplateCategories(categories) {
+  const categoryList = Array.isArray(categories) ? categories.filter(Boolean) : [];
+  const seen = new Set(categoryList);
+  const priority = TEMPLATE_SECTION_CATEGORY_PRIORITY.filter((category) => seen.has(category));
+  const prioritySet = new Set(priority);
+  return [...priority, ...categoryList.filter((category) => !prioritySet.has(category))];
+}
+
+function templateSectionIconName(filterId) {
+  const label = String(filterId || "").toLowerCase();
+  if (isNewestTemplateFilter(filterId)) {
+    return "sparkles";
+  }
+  if (isFavoritesTemplateFilter(filterId)) {
+    return "heart";
+  }
+  if (label.includes("муж")) {
+    return "user";
+  }
+  if (label.includes("сем")) {
+    return "users";
+  }
+  if (label.includes("город")) {
+    return "map-pin";
+  }
+  if (label.includes("студ")) {
+    return "camera";
+  }
+  if (label.includes("полез")) {
+    return "wand-sparkles";
+  }
+  return "images";
+}
+
+function templateShowcaseSections() {
+  const sortedTemplates = [...state.templates].sort(compareTemplatesByFreshness);
+  const sections = [];
+  if (sortedTemplates.length) {
+    sections.push({
+      filterId: TEMPLATE_FILTER_NEW,
+      title: templateFilterLabel(TEMPLATE_FILTER_NEW),
+      items: sortedTemplates,
+      isFeatured: true,
+    });
+  }
+
+  const favoriteItems = sortedTemplates.filter((item) => templateLikedByMe(item));
+  if (favoriteItems.length) {
+    sections.push({
+      filterId: "favorites",
+      title: templateFilterLabel("favorites"),
+      items: favoriteItems,
+    });
+  }
+
+  const groupedByCategory = new Map();
+  for (const item of sortedTemplates) {
+    const category = normalizeTemplateCategory(item.category);
+    if (!groupedByCategory.has(category)) {
+      groupedByCategory.set(category, []);
+    }
+    groupedByCategory.get(category).push(item);
+  }
+
+  for (const category of orderedTemplateCategories([...groupedByCategory.keys()])) {
+    const items = groupedByCategory.get(category) || [];
+    if (!items.length) {
+      continue;
+    }
+    sections.push({
+      filterId: category,
+      title: category,
+      items,
+    });
+  }
+
+  return sections;
+}
+
 function renderTemplateFilters() {
   if (!templateFilterChips && !templateQuickFilters) {
     return;
@@ -5282,9 +5393,22 @@ function renderTemplateFilters() {
   refreshIcons();
 }
 
+function syncSelectedTemplateFilter() {
+  if (isShowcaseTemplateFilter(state.selectedTemplateFilter)) {
+    return;
+  }
+  if (!templateFilters().includes(state.selectedTemplateFilter)) {
+    state.selectedTemplateFilter = TEMPLATE_FILTER_SHOWCASE;
+    resetTemplateFeedPagination();
+  }
+}
+
 function filteredTemplateItems() {
   const sortedTemplates = [...state.templates].sort(compareTemplatesByFreshness);
   const reverseSortedTemplates = [...sortedTemplates].reverse();
+  if (isShowcaseTemplateFilter(state.selectedTemplateFilter)) {
+    return sortedTemplates;
+  }
   if (isNewestTemplateFilter(state.selectedTemplateFilter)) {
     return sortedTemplates;
   }
@@ -5401,6 +5525,9 @@ function renderTemplateFeedPagination({ shownCount = 0, totalCount = 0 } = {}) {
 }
 
 function revealMoreTemplateItems() {
+  if (isShowcaseTemplateFilter(state.selectedTemplateFilter)) {
+    return false;
+  }
   const items = filteredTemplateItems();
   if (!shouldPaginateTemplateFeed(items)) {
     return false;
@@ -5481,7 +5608,7 @@ function maybeAutoLoadMoreTemplates() {
   }
   templateFeedAutoLoadRaf = window.requestAnimationFrame(() => {
     templateFeedAutoLoadRaf = 0;
-    if (state.currentScreen !== "feed" || state.templatesLoading) {
+    if (state.currentScreen !== "feed" || state.templatesLoading || isShowcaseTemplateFilter(state.selectedTemplateFilter)) {
       return;
     }
     const items = filteredTemplateItems();
@@ -5532,116 +5659,259 @@ function renderTemplateSkeleton(count = 6) {
   renderTemplateGridCards(cards);
 }
 
-function renderTemplateCards() {
-  const items = filteredTemplateItems();
-  const visibleItems = visibleTemplateItems(items);
-  if (state.templatesLoading) {
-    renderTemplateSkeleton(visibleItems.length || items.length || 6);
-    renderTemplateFeedPagination({ shownCount: 0, totalCount: items.length });
+function scrollTemplateFeedTop() {
+  if (!isTelegramMiniAppRuntime() && isMobileBrowser()) {
+    window.scrollTo({ top: 0, behavior: "smooth" });
     return;
   }
+  if (appMain && typeof appMain.scrollTo === "function") {
+    appMain.scrollTo({ top: 0, behavior: "smooth" });
+  }
+}
+
+function showTemplateCollection(filterId, { scroll = true } = {}) {
+  const normalizedFilter = String(filterId || "").trim();
+  if (!normalizedFilter || isShowcaseTemplateFilter(normalizedFilter)) {
+    return;
+  }
+  state.selectedTemplateFilter = normalizedFilter;
+  resetTemplateFeedPagination();
+  renderTemplateCards();
+  if (scroll) {
+    scrollTemplateFeedTop();
+  }
+}
+
+function showTemplateShowcase({ scroll = true } = {}) {
+  state.selectedTemplateFilter = TEMPLATE_FILTER_SHOWCASE;
+  resetTemplateFeedPagination();
+  renderTemplateCards();
+  if (scroll) {
+    scrollTemplateFeedTop();
+  }
+}
+
+function createTemplateCard(item, { itemIndex = 0, totalItems = 0, layout = "grid", eager = false, priority = false } = {}) {
+  const card = document.createElement("article");
+  card.className = layout === "rail" ? "tool-card template-rail-card" : "tool-card";
+  card.setAttribute("role", "button");
+  card.setAttribute("tabindex", "0");
+  const imageUrl = templatePreviewUrl(item);
+  const ratio = Number(item.preview_ratio || templatePreviewRatio(item) || 1);
+  const newestBatchStart = Math.max(0, Number(totalItems || 0) - TEMPLATE_FEED_BATCH_SIZE);
+  const shouldEagerLoadImage =
+    Boolean(eager) || (layout !== "rail" && (itemIndex < 6 || itemIndex >= newestBatchStart));
+  const imageLoading = shouldEagerLoadImage ? "eager" : "lazy";
+  const imagePriority = priority && shouldEagerLoadImage ? ' fetchpriority="high"' : "";
+  card.style.setProperty("--template-ratio", Number.isFinite(ratio) && ratio > 0 ? String(ratio) : "1");
+  card.innerHTML = `
+    <div class="tool-media">
+      <img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(item.title)}" loading="${imageLoading}" decoding="async"${imagePriority} />
+    </div>
+    <div class="tool-card-top-actions">
+      <button class="template-like-btn tool-like-btn${templateLikedByMe(item) ? " is-liked" : ""}" data-action="toggle-like" type="button" aria-label="${templateLikedByMe(item) ? "Убрать лайк у шаблона" : "Лайкнуть шаблон"}" aria-pressed="${templateLikedByMe(item) ? "true" : "false"}">
+        <i data-lucide="heart"></i>
+        <span>${templateLikesCount(item)}</span>
+      </button>
+    </div>
+    <div class="tool-overlay">
+      <strong>${escapeHtml(item.title)}</strong>
+      <p>${escapeHtml(normalizeTemplateCategory(item.category))}</p>
+      <div class="template-card-stats">
+        <span class="template-usage-stat">
+          <i data-lucide="sparkles"></i>
+          <span>${templateUsageCount(item)}</span>
+        </span>
+      </div>
+    </div>
+  `;
+  const likeButton = card.querySelector('[data-action="toggle-like"]');
+  const warmTemplateAssets = () => {
+    preloadTemplateDetail(item.id);
+    preloadTemplateImage(templatePreviewUrl(item));
+    const fullUrl = templateFullUrl(item);
+    if (fullUrl && fullUrl !== templatePreviewUrl(item)) {
+      preloadTemplateImage(fullUrl);
+    }
+  };
+  likeButton.addEventListener("click", async (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const wasLiked = templateLikedByMe(item);
+    likeButton.disabled = true;
+    try {
+      await toggleTemplateLike(item.id, !wasLiked);
+    } catch (error) {
+      setNote(userFacingErrorMessage(error, "Не удалось обновить лайк шаблона."), true);
+    } finally {
+      likeButton.disabled = false;
+    }
+  });
+  card.addEventListener("click", () => {
+    warmTemplateAssets();
+    const cardImage = card.querySelector("img");
+    const initialPreviewUrl = cardImage && typeof cardImage.currentSrc === "string" ? cardImage.currentSrc : imageUrl;
+    openTemplateModal(item, initialPreviewUrl);
+  });
+  card.addEventListener("pointerenter", warmTemplateAssets, { passive: true });
+  card.addEventListener("pointerdown", warmTemplateAssets, { passive: true });
+  card.addEventListener("focus", warmTemplateAssets);
+  card.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      warmTemplateAssets();
+      const cardImage = card.querySelector("img");
+      const initialPreviewUrl = cardImage && typeof cardImage.currentSrc === "string" ? cardImage.currentSrc : imageUrl;
+      openTemplateModal(item, initialPreviewUrl);
+    }
+  });
+  return card;
+}
+
+function createTemplateCollectionHeader(filterId, totalCount) {
+  const header = document.createElement("div");
+  header.className = "template-collection-header";
+  header.innerHTML = `
+    <button class="template-back-btn" type="button" aria-label="Вернуться к категориям">
+      <i data-lucide="chevron-left"></i>
+      <span>Назад</span>
+    </button>
+    <div class="template-collection-title">
+      <span>${escapeHtml(isNewestTemplateFilter(filterId) ? "Свежие шаблоны" : "Категория")}</span>
+      <h3>${escapeHtml(templateFilterLabel(filterId))} <small>${escapeHtml(templateCountLabel(totalCount))}</small></h3>
+    </div>
+  `;
+  header.querySelector(".template-back-btn")?.addEventListener("click", () => showTemplateShowcase());
+  return header;
+}
+
+function renderTemplateEmptyState({ title = "Нет шаблонов", text = "Попробуй другой раздел" } = {}) {
+  templatesGrid.className = "template-feed-stage";
+  templatesGrid.innerHTML = `
+    <article class="template-empty-state">
+      <strong>${escapeHtml(title)}</strong>
+      <p>${escapeHtml(text)}</p>
+    </article>
+  `;
+  renderTemplateFeedPagination({ shownCount: 0, totalCount: 0 });
+}
+
+function renderTemplateShowcase() {
+  templatesGrid.className = "template-showcase";
   templatesGrid.innerHTML = "";
+  renderTemplateFeedPagination({ shownCount: 0, totalCount: 0 });
+
+  if (!state.templates.length) {
+    renderTemplateEmptyState({ title: "Пока нет шаблонов", text: "Загляни сюда чуть позже." });
+    return;
+  }
+
+  const sections = templateShowcaseSections();
+  const preloadItems = [];
+  for (const [sectionIndex, section] of sections.entries()) {
+    const sectionElement = document.createElement("section");
+    sectionElement.className = `template-showcase-section${section.isFeatured ? " is-featured" : ""}`;
+    const previewItems = section.items.slice(0, TEMPLATE_SHOWCASE_SECTION_LIMIT);
+    preloadItems.push(...previewItems.slice(0, 3));
+    sectionElement.innerHTML = `
+      <div class="template-section-header">
+        <div class="template-section-title">
+          <span class="template-section-icon"><i data-lucide="${escapeHtml(templateSectionIconName(section.filterId))}"></i></span>
+          <h3>${escapeHtml(section.title)} <small>${escapeHtml(templateCountLabel(section.items.length))}</small></h3>
+        </div>
+        <button class="template-section-open" type="button">
+          <span>все</span>
+          <i data-lucide="arrow-right"></i>
+        </button>
+      </div>
+      <div class="template-section-row"></div>
+    `;
+    sectionElement.querySelector(".template-section-open")?.addEventListener("click", () => {
+      showTemplateCollection(section.filterId);
+    });
+    const row = sectionElement.querySelector(".template-section-row");
+    for (const [itemIndex, item] of previewItems.entries()) {
+      const card = createTemplateCard(item, {
+        itemIndex,
+        totalItems: previewItems.length,
+        layout: "rail",
+        eager: sectionIndex === 0 && itemIndex < 4,
+        priority: sectionIndex === 0 && itemIndex < 3,
+      });
+      row.appendChild(card);
+    }
+    templatesGrid.appendChild(sectionElement);
+  }
+  refreshIcons();
+  const uniquePreloadItems = uniqueTemplatesById(preloadItems);
+  scheduleTemplateFeedPreload(uniquePreloadItems, uniquePreloadItems.slice(0, 6));
+}
+
+function renderTemplateCollection() {
+  const items = filteredTemplateItems();
+  const visibleItems = visibleTemplateItems(items);
+  const header = createTemplateCollectionHeader(state.selectedTemplateFilter, items.length);
   if (!items.length) {
+    templatesGrid.className = "template-collection";
+    templatesGrid.innerHTML = "";
+    templatesGrid.appendChild(header);
     const emptyTitle = isFavoritesTemplateFilter(state.selectedTemplateFilter)
       ? "Пока нет избранных шаблонов"
       : "Нет шаблонов";
     const emptyText = isFavoritesTemplateFilter(state.selectedTemplateFilter)
       ? "Лайкни понравившиеся идеи в ленте."
-      : "Попробуй другой фильтр";
-    templatesGrid.innerHTML = `<article class="tool-card"><div class="tool-overlay"><strong>${escapeHtml(emptyTitle)}</strong><p>${escapeHtml(emptyText)}</p></div></article>`;
+      : "Попробуй другой раздел.";
+    const emptyState = document.createElement("article");
+    emptyState.className = "template-empty-state";
+    emptyState.innerHTML = `<strong>${escapeHtml(emptyTitle)}</strong><p>${escapeHtml(emptyText)}</p>`;
+    templatesGrid.appendChild(emptyState);
     renderTemplateFeedPagination({ shownCount: 0, totalCount: 0 });
+    refreshIcons();
     return;
   }
 
-  const cards = [];
-  for (const [itemIndex, item] of visibleItems.entries()) {
-    const card = document.createElement("article");
-    card.className = "tool-card";
-    card.setAttribute("role", "button");
-    card.setAttribute("tabindex", "0");
-    const imageUrl = templatePreviewUrl(item);
-    const ratio = Number(item.preview_ratio || templatePreviewRatio(item) || 1);
-    const newestBatchStart = Math.max(0, visibleItems.length - TEMPLATE_FEED_BATCH_SIZE);
-    const shouldEagerLoadImage = itemIndex < 6 || itemIndex >= newestBatchStart;
-    const imageLoading = shouldEagerLoadImage ? "eager" : "lazy";
-    const imagePriority = itemIndex < 4 ? ' fetchpriority="high"' : "";
-    card.style.setProperty("--template-ratio", Number.isFinite(ratio) && ratio > 0 ? String(ratio) : "1");
-    card.innerHTML = `
-      <div class="tool-media">
-        <img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(item.title)}" loading="${imageLoading}" decoding="async"${imagePriority} />
-      </div>
-      <div class="tool-card-top-actions">
-        <button class="template-like-btn tool-like-btn${templateLikedByMe(item) ? " is-liked" : ""}" data-action="toggle-like" type="button" aria-label="${templateLikedByMe(item) ? "Убрать лайк у шаблона" : "Лайкнуть шаблон"}" aria-pressed="${templateLikedByMe(item) ? "true" : "false"}">
-          <i data-lucide="heart"></i>
-          <span>${templateLikesCount(item)}</span>
-        </button>
-      </div>
-      <div class="tool-overlay">
-        <strong>${escapeHtml(item.title)}</strong>
-        <p>${escapeHtml(normalizeTemplateCategory(item.category))}</p>
-        <div class="template-card-stats">
-          <span class="template-usage-stat">
-            <i data-lucide="sparkles"></i>
-            <span>${templateUsageCount(item)}</span>
-          </span>
-        </div>
-      </div>
-    `;
-    const likeButton = card.querySelector('[data-action="toggle-like"]');
-    const warmTemplateAssets = () => {
-      preloadTemplateDetail(item.id);
-      preloadTemplateImage(templatePreviewUrl(item));
-      const fullUrl = templateFullUrl(item);
-      if (fullUrl && fullUrl !== templatePreviewUrl(item)) {
-        preloadTemplateImage(fullUrl);
-      }
-    };
-    likeButton.addEventListener("click", async (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      const wasLiked = templateLikedByMe(item);
-      likeButton.disabled = true;
-      try {
-        await toggleTemplateLike(item.id, !wasLiked);
-      } catch (error) {
-        setNote(userFacingErrorMessage(error, "Не удалось обновить лайк шаблона."), true);
-      } finally {
-        likeButton.disabled = false;
-      }
-    });
-    card.addEventListener("click", () => {
-      warmTemplateAssets();
-      const cardImage = card.querySelector("img");
-      const initialPreviewUrl = cardImage && typeof cardImage.currentSrc === "string" ? cardImage.currentSrc : imageUrl;
-      openTemplateModal(item, initialPreviewUrl);
-    });
-    card.addEventListener("pointerenter", warmTemplateAssets, { passive: true });
-    card.addEventListener("pointerdown", warmTemplateAssets, { passive: true });
-    card.addEventListener("focus", warmTemplateAssets);
-    card.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault();
-        warmTemplateAssets();
-        const cardImage = card.querySelector("img");
-        const initialPreviewUrl = cardImage && typeof cardImage.currentSrc === "string" ? cardImage.currentSrc : imageUrl;
-        openTemplateModal(item, initialPreviewUrl);
-      }
-    });
-    cards.push(card);
-  }
-  renderTemplateGridCards(cards);
+  const cards = visibleItems.map((item, itemIndex) =>
+    createTemplateCard(item, {
+      itemIndex,
+      totalItems: visibleItems.length,
+      layout: "grid",
+      priority: itemIndex < 4,
+    })
+  );
+  renderTemplateGridCards(cards, { beforeElement: header });
   renderTemplateFeedPagination({ shownCount: visibleItems.length, totalCount: items.length });
   refreshIcons();
   scheduleTemplateFeedPreload(items, visibleItems);
   maybeAutoLoadMoreTemplates();
 }
 
+function renderTemplateCards() {
+  if (!templatesGrid) {
+    return;
+  }
+  if (state.templatesLoading) {
+    renderTemplateSkeleton(6);
+    renderTemplateFeedPagination({ shownCount: 0, totalCount: 0 });
+    return;
+  }
+  syncSelectedTemplateFilter();
+  if (isShowcaseTemplateFilter(state.selectedTemplateFilter)) {
+    renderTemplateShowcase();
+    return;
+  }
+  renderTemplateCollection();
+}
+
 function templateGridColumnCount() {
   return window.matchMedia("(max-width: 390px)").matches ? 1 : 2;
 }
 
-function renderTemplateGridCards(cards) {
+function renderTemplateGridCards(cards, { beforeElement = null } = {}) {
+  templatesGrid.className = "tools-grid";
   templatesGrid.innerHTML = "";
+  if (beforeElement) {
+    templatesGrid.appendChild(beforeElement);
+  }
   const items = Array.isArray(cards) ? cards : [];
   if (!items.length) {
     lastTemplateGridColumnCount = templateGridColumnCount();
