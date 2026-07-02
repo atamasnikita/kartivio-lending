@@ -10,7 +10,7 @@
     />
     <meta name="theme-color" content="#050507" />
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=20260612-landing-5" />
+    <link rel="stylesheet" href="./styles.css?v=20260702-landing-ref-1" />
   </head>
   <body>
     <!-- Yandex.Metrika counter -->
@@ -57,6 +57,7 @@
         <nav class="nav" aria-label="Навигация по лендингу">
           <a href="/app/">Приложение</a>
           <a href="#showcase">Примеры</a>
+          <a href="#reference-prompt">Референс</a>
           <a href="#how">Как это работает</a>
           <a href="#pricing">Тарифы</a>
           <a href="#faq">Вопросы</a>
@@ -77,7 +78,7 @@
         <div class="container hero-inner">
           <h1>ИИ-фотосессии по вашим фото за минуты</h1>
           <p class="lead">
-            Запускай фотосессии по промпту: загружай фото, выбирай стиль и получай готовые кадры.
+            Загружай фото, выбирай шаблон или референс, а Kartivio соберет промпт и готовые кадры.
             Работает в Telegram и web-приложении без VPN.
           </p>
           <div class="hero-actions">
@@ -179,8 +180,8 @@
                   </svg>
                 </span>
                 <div class="tone-body">
-                  <h3>Шаблоны под задачу</h3>
-                  <p>Берешь готовые шаблоны и дорабатываешь промпт под себя.</p>
+                  <h3>Шаблон или референс</h3>
+                  <p>Берешь готовую сцену или загружаешь референс — сервис соберет промпт.</p>
                 </div>
               </div>
             </article>
@@ -241,6 +242,52 @@
         </div>
       </section>
 
+      <section id="reference-prompt" class="section section-reference">
+        <div class="container reference-layout">
+          <div class="reference-copy">
+            <span class="section-kicker">Новая фича</span>
+            <h2>Промпт по референсу</h2>
+            <p>
+              Загрузи понравившийся кадр, а Kartivio разберет сцену, свет, позу, одежду и композицию.
+              На выходе получишь готовый промпт для генерации в своем образе.
+            </p>
+            <div class="reference-actions">
+              <a class="btn btn-primary" href="/app/">Попробовать в приложении</a>
+              <span class="reference-access">Доступно после первой оплаты</span>
+            </div>
+          </div>
+
+          <div class="reference-workspace" aria-label="Пример сборки промпта по референсу">
+            <figure class="reference-image-card">
+              <img src="/assets/landing/hero/hero_04.jpg" alt="Фото-референс для промпта" loading="lazy" decoding="async" />
+              <figcaption>Референс</figcaption>
+            </figure>
+            <div class="reference-prompt-card">
+              <div class="reference-prompt-head">
+                <span class="reference-prompt-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" focusable="false">
+                    <path d="M12 3v4m0 10v4M5.6 5.6l2.8 2.8m7.2 7.2l2.8 2.8M3 12h4m10 0h4M5.6 18.4l2.8-2.8m7.2-7.2l2.8-2.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+                  </svg>
+                </span>
+                <span>Собираем промпт</span>
+              </div>
+              <div class="reference-pills" aria-label="Что анализируем в референсе">
+                <span>сцена</span>
+                <span>свет</span>
+                <span>одежда</span>
+                <span>поза</span>
+                <span>композиция</span>
+                <span>детали</span>
+              </div>
+              <p class="reference-prompt-text">
+                Сохрани внешность пользователя. Собери кадр в похожей композиции:
+                мягкий дневной свет, естественная поза, натуральная кожа, одежда и фон как в референсе.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section id="how" class="section">
         <div class="container">
           <div class="section-head">
@@ -275,8 +322,8 @@
               >
                 <span class="how-step-index">02</span>
                 <span class="how-step-text">
-                  <strong>Выбираешь шаблон или пишешь промпт</strong>
-                  <span>Берешь готовую сцену из ленты и при необходимости уточняешь ее своим описанием.</span>
+                  <strong>Выбираешь шаблон, референс или промпт</strong>
+                  <span>Берешь сцену из ленты, загружаешь референс или уточняешь описание вручную.</span>
                 </span>
               </button>
               <button
@@ -332,7 +379,7 @@
               </section>
 
               <section class="how-scene" role="tabpanel" id="howScene2" aria-labelledby="howTab2" data-how-scene="2">
-                <span class="how-scene-title">Шаг 2 · Шаблон или свой промпт</span>
+                <span class="how-scene-title">Шаг 2 · Шаблон, референс или свой промпт</span>
                 <div class="how-prompt-layout">
                   <div id="howTemplateList" class="how-template-list" aria-label="Примеры сцен"></div>
                   <div class="how-prompt-box">
@@ -462,6 +509,10 @@
             <p>Результаты генерации храним 14 дней, загруженные референсы — до 7 дней, временные файлы — до 24 часов.</p>
           </details>
           <details>
+            <summary>Можно сделать кадр по референсу?</summary>
+            <p>Да. Можно загрузить фото-референс, а Kartivio разберет сцену, свет, позу, одежду и композицию и соберет промпт. Функция доступна после первой оплаты.</p>
+          </details>
+          <details>
             <summary>Есть подписка?</summary>
             <p>Сейчас только модель разовых пополнений пакетами кредитов.</p>
           </details>
@@ -532,7 +583,7 @@
         </div>
       </div>
     </footer>
-    <script src="/landing-media.js?v=20260612-landing-5"></script>
+    <script src="/landing-media.js?v=20260702-landing-ref-1"></script>
     <script>
       (function () {
         const keys = [
