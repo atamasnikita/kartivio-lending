@@ -620,6 +620,7 @@ const TEMPLATE_SECTION_CATEGORY_PRIORITY = [
   "Полезности",
 ];
 const TEMPLATE_SHOWCASE_SECTION_LIMIT = 10;
+const TEMPLATE_RAIL_WIDE_RATIO = 1.12;
 const TEMPLATE_LIST_PATH = "/v1/templates?include_prompt=false";
 const ADMIN_CAMPAIGN_KIND_LABELS = Object.freeze({
   new_templates: "Новые шаблоны",
@@ -5287,32 +5288,6 @@ function orderedTemplateCategories(categories) {
   return [...priority, ...categoryList.filter((category) => !prioritySet.has(category))];
 }
 
-function templateSectionIconName(filterId) {
-  const label = String(filterId || "").toLowerCase();
-  if (isNewestTemplateFilter(filterId)) {
-    return "sparkles";
-  }
-  if (isFavoritesTemplateFilter(filterId)) {
-    return "heart";
-  }
-  if (label.includes("муж")) {
-    return "user";
-  }
-  if (label.includes("сем")) {
-    return "users";
-  }
-  if (label.includes("город")) {
-    return "map-pin";
-  }
-  if (label.includes("студ")) {
-    return "camera";
-  }
-  if (label.includes("полез")) {
-    return "wand-sparkles";
-  }
-  return "images";
-}
-
 function templateShowcaseSections() {
   const sortedTemplates = [...state.templates].sort(compareTemplatesByFreshness);
   const sections = [];
@@ -5693,20 +5668,29 @@ function showTemplateShowcase({ scroll = true } = {}) {
 
 function createTemplateCard(item, { itemIndex = 0, totalItems = 0, layout = "grid", eager = false, priority = false } = {}) {
   const card = document.createElement("article");
-  card.className = layout === "rail" ? "tool-card template-rail-card" : "tool-card";
-  card.setAttribute("role", "button");
-  card.setAttribute("tabindex", "0");
   const imageUrl = templatePreviewUrl(item);
   const ratio = Number(item.preview_ratio || templatePreviewRatio(item) || 1);
+  const isRailLayout = layout === "rail";
+  const isWideRailCard = isRailLayout && Number.isFinite(ratio) && ratio > TEMPLATE_RAIL_WIDE_RATIO;
+  card.className = isRailLayout
+    ? `tool-card template-rail-card${isWideRailCard ? " is-wide" : ""}`
+    : "tool-card";
+  card.setAttribute("role", "button");
+  card.setAttribute("tabindex", "0");
   const newestBatchStart = Math.max(0, Number(totalItems || 0) - TEMPLATE_FEED_BATCH_SIZE);
   const shouldEagerLoadImage =
-    Boolean(eager) || (layout !== "rail" && (itemIndex < 6 || itemIndex >= newestBatchStart));
+    Boolean(eager) || (!isRailLayout && (itemIndex < 6 || itemIndex >= newestBatchStart));
   const imageLoading = shouldEagerLoadImage ? "eager" : "lazy";
   const imagePriority = priority && shouldEagerLoadImage ? ' fetchpriority="high"' : "";
-  card.style.setProperty("--template-ratio", Number.isFinite(ratio) && ratio > 0 ? String(ratio) : "1");
+  const displayRatio = isWideRailCard ? "3 / 4" : Number.isFinite(ratio) && ratio > 0 ? String(ratio) : "1";
+  card.style.setProperty("--template-ratio", displayRatio);
+  const wideBackgroundImage = isWideRailCard
+    ? `<img class="tool-media-bg" src="${escapeHtml(imageUrl)}" alt="" aria-hidden="true" loading="${imageLoading}" decoding="async" />`
+    : "";
   card.innerHTML = `
     <div class="tool-media">
-      <img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(item.title)}" loading="${imageLoading}" decoding="async"${imagePriority} />
+      ${wideBackgroundImage}
+      <img class="tool-media-image" src="${escapeHtml(imageUrl)}" alt="${escapeHtml(item.title)}" loading="${imageLoading}" decoding="async"${imagePriority} />
     </div>
     <div class="tool-card-top-actions">
       <button class="template-like-btn tool-like-btn${templateLikedByMe(item) ? " is-liked" : ""}" data-action="toggle-like" type="button" aria-label="${templateLikedByMe(item) ? "Убрать лайк у шаблона" : "Лайкнуть шаблон"}" aria-pressed="${templateLikedByMe(item) ? "true" : "false"}">
@@ -5749,7 +5733,7 @@ function createTemplateCard(item, { itemIndex = 0, totalItems = 0, layout = "gri
   });
   card.addEventListener("click", () => {
     warmTemplateAssets();
-    const cardImage = card.querySelector("img");
+    const cardImage = card.querySelector(".tool-media-image");
     const initialPreviewUrl = cardImage && typeof cardImage.currentSrc === "string" ? cardImage.currentSrc : imageUrl;
     openTemplateModal(item, initialPreviewUrl);
   });
@@ -5760,7 +5744,7 @@ function createTemplateCard(item, { itemIndex = 0, totalItems = 0, layout = "gri
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
       warmTemplateAssets();
-      const cardImage = card.querySelector("img");
+      const cardImage = card.querySelector(".tool-media-image");
       const initialPreviewUrl = cardImage && typeof cardImage.currentSrc === "string" ? cardImage.currentSrc : imageUrl;
       openTemplateModal(item, initialPreviewUrl);
     }
@@ -5816,7 +5800,6 @@ function renderTemplateShowcase() {
     sectionElement.innerHTML = `
       <div class="template-section-header">
         <div class="template-section-title">
-          <span class="template-section-icon"><i data-lucide="${escapeHtml(templateSectionIconName(section.filterId))}"></i></span>
           <h3>${escapeHtml(section.title)} <small>${escapeHtml(templateCountLabel(section.items.length))}</small></h3>
         </div>
         <button class="template-section-open" type="button">
