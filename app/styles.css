@@ -415,7 +415,7 @@ body.is-web-runtime.is-mobile-browser .app-main {
   border: 0;
   border-radius: 999px;
   background: transparent;
-  color: #ffe08a;
+  color: var(--accent);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -452,6 +452,8 @@ body.is-web-runtime.is-mobile-browser .app-main {
   grid-auto-columns: minmax(180px, 24%);
   gap: 10px;
   overflow-x: auto;
+  overflow-y: hidden;
+  align-items: start;
   overscroll-behavior-inline: contain;
   scroll-snap-type: x proximity;
   padding: 0 2px 8px 0;
@@ -478,22 +480,18 @@ body.is-web-runtime.is-mobile-browser .app-main {
   scroll-snap-align: start;
 }
 
-.tool-media-image {
-  position: relative;
-  z-index: 1;
-}
-
 .template-rail-card .tool-overlay {
-  padding: 34px 10px 10px;
-  background: linear-gradient(to top, rgba(4, 4, 6, 0.88), rgba(4, 4, 6, 0.46) 58%, rgba(4, 4, 6, 0));
+  padding: 22px 10px 9px;
+  background: linear-gradient(to top, rgba(4, 4, 6, 0.88), rgba(4, 4, 6, 0.36) 62%, rgba(4, 4, 6, 0));
 }
 
 .template-rail-card .tool-overlay strong {
-  display: -webkit-box;
+  display: block;
   overflow: hidden;
   font-size: 15px;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .template-rail-card .tool-overlay p,
@@ -550,8 +548,8 @@ body.is-web-runtime.is-mobile-browser .app-main {
 @media (hover: hover) and (pointer: fine) {
   .template-section-open:hover,
   .template-back-btn:hover {
-    color: #fff0ad;
-    background: rgba(255, 224, 138, 0.08);
+    color: #6ef2de;
+    background: rgba(var(--accent-rgb), 0.1);
   }
 }
 
@@ -3940,7 +3938,7 @@ body.is-web-runtime.is-mobile-browser.nav-hidden .bottom-nav {
   }
 
   .template-rail-card .tool-overlay {
-    padding: 30px 9px 9px;
+    padding: 20px 9px 8px;
   }
 
   .template-rail-card .tool-overlay strong {
