@@ -1540,6 +1540,15 @@ a {
   font-weight: 700;
 }
 
+.price-models {
+  display: none;
+  margin: 8px 0 0;
+  color: #c8d2eb;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
 .price-card ul {
   margin: 14px 0 0;
   padding: 0;
@@ -2002,12 +2011,21 @@ a {
 
   .reference-workspace {
     grid-template-columns: 1fr;
-    padding: 14px;
+    gap: 12px;
+    padding: 12px;
     border-radius: 18px;
   }
 
   .reference-image-card {
-    aspect-ratio: 16 / 10;
+    aspect-ratio: 1 / 1;
+  }
+
+  .reference-image-card img {
+    object-position: center center;
+  }
+
+  .reference-image-card::after {
+    height: 36%;
   }
 
   .reference-prompt-card {
@@ -2036,28 +2054,86 @@ a {
   }
 
   .pricing-paywall {
-    padding: 14px;
+    padding: 12px;
     border-radius: 18px;
   }
 
   .pricing-benefits {
+    flex-wrap: nowrap;
     gap: 8px;
+    overflow-x: auto;
+    margin-bottom: 12px;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+  }
+
+  .pricing-benefits::-webkit-scrollbar {
+    display: none;
   }
 
   .pricing-benefits span {
-    width: 100%;
+    width: auto;
+    flex: 0 0 auto;
     justify-content: center;
     text-align: center;
+    white-space: nowrap;
+    min-height: 32px;
+    font-size: 13px;
+  }
+
+  .pricing-paywall .pricing-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
   }
 
   .price-card {
-    padding: 18px;
+    min-height: 176px;
+    padding: 14px;
+    border-radius: 16px;
+  }
+
+  .price-card h3 {
+    font-size: 19px;
+  }
+
+  .price {
+    margin-top: 8px !important;
+    font-size: 34px !important;
+  }
+
+  .credits {
+    margin-top: 6px !important;
+    font-size: 14px !important;
+  }
+
+  .price-models {
+    display: block;
+  }
+
+  .price-card ul {
+    display: none;
+  }
+
+  .badge {
+    margin-bottom: 8px;
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+
+  .price-badges {
+    gap: 6px;
+    margin-bottom: 8px;
   }
 
   .pricing-summary {
+    margin-top: 14px;
     flex-direction: column;
     align-items: stretch;
     text-align: center;
+  }
+
+  .pricing-summary span {
+    font-size: 14px;
   }
 
   .pricing-summary .btn {

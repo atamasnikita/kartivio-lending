@@ -1,5 +1,5 @@
 (function () {
-  const MANIFEST_URL = "/assets/landing/manifest.json?v=20260702-landing-ref-2";
+  const MANIFEST_URL = "/assets/landing/manifest.json?v=20260702-landing-ref-3";
 
   const HERO_FALLBACK = [
     { src: "https://picsum.photos/seed/kartivio-1/420/560", alt: "Пример генерации 1" },
