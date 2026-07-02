@@ -10,7 +10,7 @@
     />
     <meta name="theme-color" content="#050507" />
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=20260702-landing-ref-1" />
+    <link rel="stylesheet" href="./styles.css?v=20260702-landing-ref-2" />
   </head>
   <body>
     <!-- Yandex.Metrika counter -->
@@ -249,11 +249,12 @@
             <h2>Промпт по референсу</h2>
             <p>
               Загрузи понравившийся кадр, а Kartivio разберет сцену, свет, позу, одежду и композицию.
-              На выходе получишь готовый промпт для генерации в своем образе.
+              На выходе получишь готовый промпт для генерации.
             </p>
             <div class="reference-actions">
               <a class="btn btn-primary" href="/app/">Попробовать в приложении</a>
               <span class="reference-access">Доступно после первой оплаты</span>
+              <span class="reference-credit-note">Без списания кредитов</span>
             </div>
           </div>
 
@@ -280,8 +281,9 @@
                 <span>детали</span>
               </div>
               <p class="reference-prompt-text">
-                Сохрани внешность пользователя. Собери кадр в похожей композиции:
-                мягкий дневной свет, естественная поза, натуральная кожа, одежда и фон как в референсе.
+                Создай реалистичный fashion-портрет в похожей сцене: низкая точка съемки,
+                мягкий дневной свет, белый костюм, уверенная поза и городской фон.
+                Сохрани внешность пользователя по его фото, без пластиковой ретуши.
               </p>
             </div>
           </div>
@@ -439,54 +441,60 @@
             <h2>Пополнение кредитов</h2>
             <p>Разовая покупка без срока сгорания. Чем больше пакет, тем ниже цена одной генерации.</p>
           </div>
-          <div class="grid grid-4">
-            <article class="card price-card">
-              <h3>Старт</h3>
-              <p class="price">200 ₽</p>
-              <p class="credits">100 кредитов</p>
-              <ul>
-                <li>10 фото Nano Banana 2</li>
-                <li>5 фото Nano Banana Pro</li>
-              </ul>
-            </article>
-            <article class="card price-card">
-              <span class="badge badge-muted">Выгода 9%</span>
-              <h3>Базовый</h3>
-              <p class="price">399 ₽</p>
-              <p class="credits">220 кредитов</p>
-              <ul>
-                <li>22 фото Nano Banana 2</li>
-                <li>11 фото Nano Banana Pro</li>
-              </ul>
-            </article>
-            <article class="card price-card featured">
-              <div class="price-badges">
-                <span class="badge">Популярный</span>
-                <span class="badge badge-muted">Выгода 19%</span>
-              </div>
-              <h3>Продвинутый</h3>
-              <p class="price">899 ₽</p>
-              <p class="credits">560 кредитов</p>
-              <ul>
-                <li>56 фото Nano Banana 2</li>
-                <li>28 фото Nano Banana Pro</li>
-              </ul>
-            </article>
-            <article class="card price-card">
-              <span class="badge badge-muted">Выгода 26%</span>
-              <h3>Максимум</h3>
-              <p class="price">1790 ₽</p>
-              <p class="credits">1200 кредитов</p>
-              <ul>
-                <li>120 фото Nano Banana 2</li>
-                <li>60 фото Nano Banana Pro</li>
-              </ul>
-            </article>
-          </div>
-          <div class="center-actions">
-            <a class="btn btn-primary" href="/app/"
-              >Открыть покупку в приложении</a
-            >
+          <div class="pricing-paywall">
+            <div class="pricing-benefits" aria-label="Преимущества пакетов кредитов">
+              <span>Кредиты не сгорают</span>
+              <span>Списание видно заранее</span>
+              <span>Промпт по референсу без списания кредитов</span>
+            </div>
+            <div class="grid grid-4 pricing-grid">
+              <article class="card price-card">
+                <h3>Старт</h3>
+                <p class="price">200 ₽</p>
+                <p class="credits">100 кредитов</p>
+                <ul>
+                  <li>10 фото Nano Banana 2</li>
+                  <li>5 фото Nano Banana Pro</li>
+                </ul>
+              </article>
+              <article class="card price-card">
+                <span class="badge badge-muted">Выгода 9%</span>
+                <h3>Базовый</h3>
+                <p class="price">399 ₽</p>
+                <p class="credits">220 кредитов</p>
+                <ul>
+                  <li>22 фото Nano Banana 2</li>
+                  <li>11 фото Nano Banana Pro</li>
+                </ul>
+              </article>
+              <article class="card price-card featured">
+                <div class="price-badges">
+                  <span class="badge">Популярный</span>
+                  <span class="badge badge-muted">Выгода 19%</span>
+                </div>
+                <h3>Продвинутый</h3>
+                <p class="price">899 ₽</p>
+                <p class="credits">560 кредитов</p>
+                <ul>
+                  <li>56 фото Nano Banana 2</li>
+                  <li>28 фото Nano Banana Pro</li>
+                </ul>
+              </article>
+              <article class="card price-card">
+                <span class="badge badge-muted">Выгода 26%</span>
+                <h3>Максимум</h3>
+                <p class="price">1790 ₽</p>
+                <p class="credits">1200 кредитов</p>
+                <ul>
+                  <li>120 фото Nano Banana 2</li>
+                  <li>60 фото Nano Banana Pro</li>
+                </ul>
+              </article>
+            </div>
+            <div class="pricing-summary">
+              <span>Пакеты открывают платные функции и пополняют единый баланс в web и Telegram.</span>
+              <a class="btn btn-primary" href="/app/">Выбрать пакет</a>
+            </div>
           </div>
         </div>
       </section>
@@ -513,16 +521,8 @@
             <p>Да. Можно загрузить фото-референс, а Kartivio разберет сцену, свет, позу, одежду и композицию и соберет промпт. Функция доступна после первой оплаты.</p>
           </details>
           <details>
-            <summary>Есть подписка?</summary>
-            <p>Сейчас только модель разовых пополнений пакетами кредитов.</p>
-          </details>
-          <details>
             <summary>Можно и генерировать, и редактировать фото?</summary>
             <p>Да, доступны оба режима: генерация по тексту и редактирование загруженного изображения.</p>
-          </details>
-          <details>
-            <summary>Будет веб-версия?</summary>
-            <p>Да, уже доступна web-версия и Telegram-бот с единым балансом кредитов.</p>
           </details>
           <details>
             <summary>Какие фото лучше загружать для фотосессии?</summary>
@@ -583,7 +583,7 @@
         </div>
       </div>
     </footer>
-    <script src="/landing-media.js?v=20260702-landing-ref-1"></script>
+    <script src="/landing-media.js?v=20260702-landing-ref-2"></script>
     <script>
       (function () {
         const keys = [

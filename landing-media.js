@@ -1,5 +1,5 @@
 (function () {
-  const MANIFEST_URL = "/assets/landing/manifest.json?v=20260702-landing-ref-1";
+  const MANIFEST_URL = "/assets/landing/manifest.json?v=20260702-landing-ref-2";
 
   const HERO_FALLBACK = [
     { src: "https://picsum.photos/seed/kartivio-1/420/560", alt: "Пример генерации 1" },
@@ -572,15 +572,10 @@
         const caption = document.createElement("figcaption");
         caption.className = "showcase-card-caption";
 
-        const badge = document.createElement("span");
-        badge.className = "showcase-card-badge";
-        badge.textContent = item.badge || group.label;
-
         const title = document.createElement("span");
         title.className = "showcase-card-title";
         title.textContent = item.title || item.alt;
 
-        caption.appendChild(badge);
         caption.appendChild(title);
         figure.appendChild(image);
         figure.appendChild(caption);

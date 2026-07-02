@@ -627,19 +627,6 @@ a {
   gap: 7px;
 }
 
-.showcase-card-badge {
-  width: fit-content;
-  max-width: 100%;
-  border-radius: 999px;
-  padding: 4px 9px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(9, 13, 20, 0.42);
-  backdrop-filter: blur(10px);
-  color: #dbe4f9;
-  font-size: 12px;
-  font-weight: 600;
-}
-
 .showcase-card-title {
   font-size: 21px;
   line-height: 1.1;
@@ -706,6 +693,19 @@ a {
   font-weight: 600;
 }
 
+.reference-credit-note {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  border-radius: 999px;
+  padding: 8px 13px;
+  border: 1px solid rgba(106, 222, 209, 0.28);
+  background: rgba(16, 74, 74, 0.22);
+  color: #a9f5eb;
+  font-size: 15px;
+  font-weight: 600;
+}
+
 .reference-workspace {
   position: relative;
   display: grid;
@@ -714,23 +714,12 @@ a {
   min-width: 0;
   padding: 18px;
   border-radius: 22px;
-  border: 1px solid #27314a;
+  border: 1px solid rgba(61, 76, 112, 0.72);
   background:
-    linear-gradient(135deg, rgba(22, 35, 58, 0.88), rgba(9, 13, 23, 0.98)),
-    repeating-linear-gradient(135deg, rgba(98, 221, 207, 0.06) 0 1px, transparent 1px 34px);
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.03),
-    0 24px 60px rgba(0, 0, 0, 0.26);
+    radial-gradient(70% 90% at 14% 12%, rgba(25, 199, 181, 0.18), transparent 58%),
+    linear-gradient(135deg, rgba(20, 31, 51, 0.9), rgba(9, 13, 23, 0.98));
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.26);
   overflow: hidden;
-}
-
-.reference-workspace::before {
-  content: "";
-  position: absolute;
-  inset: 14px;
-  border-radius: 18px;
-  border: 1px solid rgba(113, 232, 218, 0.13);
-  pointer-events: none;
 }
 
 .reference-image-card,
@@ -745,8 +734,9 @@ a {
   aspect-ratio: 4 / 5;
   border-radius: 16px;
   overflow: hidden;
-  border: 1px solid #35425e;
+  border: 0;
   background: #09101a;
+  box-shadow: 0 0 0 1px rgba(82, 103, 148, 0.4);
 }
 
 .reference-image-card img {
@@ -784,12 +774,13 @@ a {
   min-width: 0;
   align-self: stretch;
   border-radius: 16px;
-  border: 1px solid rgba(76, 95, 138, 0.72);
+  border: 0;
   background: linear-gradient(180deg, rgba(14, 21, 36, 0.94), rgba(10, 15, 26, 0.96));
   padding: 18px;
   display: grid;
   align-content: center;
   gap: 16px;
+  box-shadow: inset 0 0 0 1px rgba(82, 103, 148, 0.32);
 }
 
 .reference-prompt-head {
@@ -828,8 +819,8 @@ a {
   min-height: 34px;
   border-radius: 999px;
   padding: 7px 12px;
-  border: 1px solid #34415f;
-  background: #101827;
+  border: 1px solid rgba(63, 77, 114, 0.78);
+  background: rgba(16, 24, 39, 0.72);
   color: #aeb8d2;
   font-size: 14px;
   font-weight: 700;
@@ -846,8 +837,8 @@ a {
 .reference-prompt-text {
   margin: 0;
   border-radius: 14px;
-  border: 1px solid #26324a;
-  background: rgba(8, 13, 23, 0.72);
+  border: 0;
+  background: rgba(8, 13, 23, 0.64);
   padding: 16px;
   color: #d8e2f6;
   font-size: clamp(16px, 1.45vw, 19px);
@@ -1470,10 +1461,69 @@ a {
   }
 }
 
+.pricing-paywall {
+  position: relative;
+  border-radius: 22px;
+  border: 1px solid #242d43;
+  background:
+    radial-gradient(72% 110% at 50% 0%, rgba(25, 199, 181, 0.12), transparent 58%),
+    linear-gradient(180deg, #101622, #080d15);
+  padding: 18px;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.025),
+    0 26px 70px rgba(0, 0, 0, 0.22);
+}
+
+.pricing-benefits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.pricing-benefits span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  border-radius: 999px;
+  padding: 7px 12px;
+  border: 1px solid rgba(87, 108, 155, 0.46);
+  background: rgba(12, 18, 30, 0.62);
+  color: #b7c1d9;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.pricing-grid {
+  align-items: stretch;
+}
+
 .price-card {
   min-height: 100%;
   display: flex;
   flex-direction: column;
+  position: relative;
+  overflow: hidden;
+  padding: 20px;
+  border-color: rgba(45, 56, 83, 0.82);
+  background: linear-gradient(180deg, rgba(17, 24, 38, 0.96), rgba(10, 15, 25, 0.98));
+  transition:
+    transform 180ms var(--ease-out),
+    border-color 220ms var(--ease-out),
+    box-shadow 220ms var(--ease-out);
+}
+
+.price-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(85, 111, 158, 0.88);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.24);
+}
+
+.price-card h3 {
+  color: #f5f8ff;
+  font-size: 24px;
+  line-height: 1.1;
 }
 
 .price {
@@ -1485,19 +1535,31 @@ a {
 }
 
 .credits {
-  font-size: 16px !important;
+  color: #b5c0d8 !important;
+  font-size: 17px !important;
+  font-weight: 700;
 }
 
 .price-card ul {
   margin: 14px 0 0;
-  padding-left: 18px;
-  color: var(--muted);
-  line-height: 1.65;
+  padding: 0;
+  list-style: none;
+  color: #a7b2cc;
+  line-height: 1.6;
+}
+
+.price-card li + li {
+  margin-top: 4px;
 }
 
 .featured {
-  border-color: #23c4b3;
-  box-shadow: 0 0 0 1px rgba(35, 196, 179, 0.34);
+  border-color: rgba(78, 222, 207, 0.78);
+  background:
+    radial-gradient(88% 80% at 50% 0%, rgba(25, 199, 181, 0.22), transparent 58%),
+    linear-gradient(180deg, rgba(17, 34, 47, 0.98), rgba(9, 16, 26, 0.98));
+  box-shadow:
+    0 0 0 1px rgba(35, 196, 179, 0.22),
+    0 22px 60px rgba(25, 199, 181, 0.12);
 }
 
 .badge {
@@ -1524,15 +1586,23 @@ a {
 }
 
 .badge-muted {
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--muted);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.055);
+  color: #b4bfd7;
+  border: 1px solid rgba(255, 255, 255, 0.11);
 }
 
-.center-actions {
+.pricing-summary {
   margin-top: 24px;
   display: flex;
-  justify-content: center;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+.pricing-summary span {
+  color: #aab5cc;
+  font-size: 16px;
+  line-height: 1.45;
 }
 
 .faq {
@@ -1925,7 +1995,8 @@ a {
   }
 
   .reference-actions .btn,
-  .reference-access {
+  .reference-access,
+  .reference-credit-note {
     width: 100%;
   }
 
@@ -1933,11 +2004,6 @@ a {
     grid-template-columns: 1fr;
     padding: 14px;
     border-radius: 18px;
-  }
-
-  .reference-workspace::before {
-    inset: 10px;
-    border-radius: 15px;
   }
 
   .reference-image-card {
@@ -1967,6 +2033,35 @@ a {
   .reference-prompt-text {
     font-size: 16px;
     padding: 13px;
+  }
+
+  .pricing-paywall {
+    padding: 14px;
+    border-radius: 18px;
+  }
+
+  .pricing-benefits {
+    gap: 8px;
+  }
+
+  .pricing-benefits span {
+    width: 100%;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .price-card {
+    padding: 18px;
+  }
+
+  .pricing-summary {
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
+  }
+
+  .pricing-summary .btn {
+    width: 100%;
   }
 
   .how-step {
