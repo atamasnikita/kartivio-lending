@@ -5729,7 +5729,9 @@ function createTemplateCard(item, { itemIndex = 0, totalItems = 0, layout = "gri
     const initialPreviewUrl = cardImage && typeof cardImage.currentSrc === "string" ? cardImage.currentSrc : imageUrl;
     openTemplateModal(item, initialPreviewUrl);
   });
-  card.addEventListener("pointerenter", warmTemplateAssets, { passive: true });
+  if (!isTelegramMiniAppRuntime()) {
+    card.addEventListener("pointerenter", warmTemplateAssets, { passive: true });
+  }
   card.addEventListener("pointerdown", warmTemplateAssets, { passive: true });
   card.addEventListener("focus", warmTemplateAssets);
   card.addEventListener("keydown", (event) => {

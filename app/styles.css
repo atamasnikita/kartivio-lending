@@ -556,6 +556,7 @@ body.is-web-runtime.is-mobile-browser .app-main {
 .tool-card {
   --template-ratio: 1;
   position: relative;
+  isolation: isolate;
   width: 100%;
   display: block;
   border-radius: 8px;
@@ -563,7 +564,8 @@ body.is-web-runtime.is-mobile-browser .app-main {
   border: 1px solid #253043;
   background: #11161f;
   cursor: pointer;
-  transform: translateY(0) scale(1);
+  transform: translate3d(0, 0, 0) scale(1);
+  backface-visibility: hidden;
   transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.22s ease, box-shadow 0.28s ease;
 }
 
@@ -574,13 +576,19 @@ body.is-web-runtime.is-mobile-browser .app-main {
   z-index: 3;
   display: flex;
   justify-content: flex-end;
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
 }
 
 .tool-media {
+  position: relative;
+  z-index: 1;
   width: 100%;
   aspect-ratio: var(--template-ratio);
   background: #0f1521;
   overflow: hidden;
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
 }
 
 .tool-card img {
@@ -588,29 +596,20 @@ body.is-web-runtime.is-mobile-browser .app-main {
   height: 100%;
   object-fit: cover;
   display: block;
-  transform: scale(1.001);
+  transform: translate3d(0, 0, 0) scale(1.001);
+  backface-visibility: hidden;
   transition: transform 0.44s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 @media (hover: hover) {
   .tool-card:hover {
-    transform: translateY(-2px) scale(1.006);
+    transform: translate3d(0, -2px, 0) scale(1.006);
     border-color: #32425f;
     box-shadow: 0 14px 34px rgba(2, 5, 12, 0.42);
   }
 
   .tool-card:hover img {
-    transform: scale(1.03);
-  }
-
-  .template-rail-card:hover {
-    transform: none;
-    border-color: #32425f;
-    box-shadow: 0 10px 24px rgba(2, 5, 12, 0.34);
-  }
-
-  .template-rail-card:hover img {
-    transform: scale(1.001);
+    transform: translate3d(0, 0, 0) scale(1.03);
   }
 
   .reference-dropzone:hover {
@@ -644,6 +643,8 @@ body.is-web-runtime.is-mobile-browser .app-main {
   display: grid;
   gap: 4px;
   pointer-events: none;
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
 }
 
 .template-card-stats {
