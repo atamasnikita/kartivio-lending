@@ -620,7 +620,6 @@ const TEMPLATE_SECTION_CATEGORY_PRIORITY = [
   "Полезности",
 ];
 const TEMPLATE_SHOWCASE_SECTION_LIMIT = 10;
-const TEMPLATE_RAIL_WIDE_RATIO = 1.12;
 const TEMPLATE_LIST_PATH = "/v1/templates?include_prompt=false";
 const ADMIN_CAMPAIGN_KIND_LABELS = Object.freeze({
   new_templates: "Новые шаблоны",
@@ -5671,10 +5670,7 @@ function createTemplateCard(item, { itemIndex = 0, totalItems = 0, layout = "gri
   const imageUrl = templatePreviewUrl(item);
   const ratio = Number(item.preview_ratio || templatePreviewRatio(item) || 1);
   const isRailLayout = layout === "rail";
-  const isWideRailCard = isRailLayout && Number.isFinite(ratio) && ratio > TEMPLATE_RAIL_WIDE_RATIO;
-  card.className = isRailLayout
-    ? `tool-card template-rail-card${isWideRailCard ? " is-wide" : ""}`
-    : "tool-card";
+  card.className = isRailLayout ? "tool-card template-rail-card" : "tool-card";
   card.setAttribute("role", "button");
   card.setAttribute("tabindex", "0");
   const newestBatchStart = Math.max(0, Number(totalItems || 0) - TEMPLATE_FEED_BATCH_SIZE);
@@ -5682,14 +5678,10 @@ function createTemplateCard(item, { itemIndex = 0, totalItems = 0, layout = "gri
     Boolean(eager) || (!isRailLayout && (itemIndex < 6 || itemIndex >= newestBatchStart));
   const imageLoading = shouldEagerLoadImage ? "eager" : "lazy";
   const imagePriority = priority && shouldEagerLoadImage ? ' fetchpriority="high"' : "";
-  const displayRatio = isWideRailCard ? "3 / 4" : Number.isFinite(ratio) && ratio > 0 ? String(ratio) : "1";
+  const displayRatio = isRailLayout ? "4 / 5" : Number.isFinite(ratio) && ratio > 0 ? String(ratio) : "1";
   card.style.setProperty("--template-ratio", displayRatio);
-  const wideBackgroundImage = isWideRailCard
-    ? `<img class="tool-media-bg" src="${escapeHtml(imageUrl)}" alt="" aria-hidden="true" loading="${imageLoading}" decoding="async" />`
-    : "";
   card.innerHTML = `
     <div class="tool-media">
-      ${wideBackgroundImage}
       <img class="tool-media-image" src="${escapeHtml(imageUrl)}" alt="${escapeHtml(item.title)}" loading="${imageLoading}" decoding="async"${imagePriority} />
     </div>
     <div class="tool-card-top-actions">
