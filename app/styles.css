@@ -571,7 +571,7 @@ body.is-web-runtime.is-mobile-browser .app-main {
   position: absolute;
   top: 10px;
   right: 10px;
-  z-index: 2;
+  z-index: 3;
   display: flex;
   justify-content: flex-end;
 }
@@ -603,6 +603,16 @@ body.is-web-runtime.is-mobile-browser .app-main {
     transform: scale(1.03);
   }
 
+  .template-rail-card:hover {
+    transform: none;
+    border-color: #32425f;
+    box-shadow: 0 10px 24px rgba(2, 5, 12, 0.34);
+  }
+
+  .template-rail-card:hover img {
+    transform: scale(1.001);
+  }
+
   .reference-dropzone:hover {
     transform: translateY(-1px);
     border-color: #45567e;
@@ -628,10 +638,12 @@ body.is-web-runtime.is-mobile-browser .app-main {
 .tool-overlay {
   position: absolute;
   inset: auto 0 0 0;
+  z-index: 2;
   padding: 10px;
   background: linear-gradient(to top, rgba(4, 4, 6, 0.86), rgba(4, 4, 6, 0));
   display: grid;
   gap: 4px;
+  pointer-events: none;
 }
 
 .template-card-stats {
