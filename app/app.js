@@ -321,6 +321,7 @@ const state = {
   publicDataLoadedContext: "",
   publicDataRequestToken: 0,
   selectedTemplateFilter: "showcase",
+  templateSearchQuery: "",
   templateVisibleCount: 0,
   templateRenderKey: "",
   activeTemplateModalId: "",
@@ -468,6 +469,8 @@ const templateFilterPrev = document.getElementById("templateFilterPrev");
 const templateFilterNext = document.getElementById("templateFilterNext");
 const templateQuickFilters = document.getElementById("templateQuickFilters");
 const templateFilterChips = document.getElementById("templateFilterChips");
+const templateSearchInput = document.getElementById("templateSearchInput");
+const templateSearchClear = document.getElementById("templateSearchClear");
 const templatesGrid = document.getElementById("templatesGrid");
 const templateFeedPagination = document.getElementById("templateFeedPagination");
 const templateFeedMoreButton = document.getElementById("templateFeedMoreButton");
@@ -621,6 +624,29 @@ const TEMPLATE_SECTION_CATEGORY_PRIORITY = [
 ];
 const TEMPLATE_SHOWCASE_SECTION_LIMIT = 10;
 const TEMPLATE_LIST_PATH = "/v1/templates?include_prompt=false";
+const TEMPLATE_SEARCH_SYNONYMS = Object.freeze({
+  др: ["день рождения", "birthday", "торт", "свечи", "шары", "шарик"],
+  днюха: ["день рождения", "birthday", "торт", "свечи"],
+  день: ["день рождения", "др", "birthday"],
+  рождение: ["день рождения", "др", "birthday"],
+  birthday: ["день рождения", "др", "торт", "свечи"],
+  очки: ["glasses", "sunglasses", "солнцезащитные"],
+  glasses: ["очки", "sunglasses"],
+  семья: ["семейные", "мама", "папа", "дети", "ребенок"],
+  семейные: ["семья", "мама", "папа", "дети", "ребенок"],
+  ребенок: ["дети", "семья", "семейные"],
+  ребёнок: ["дети", "семья", "семейные"],
+  дети: ["ребенок", "ребёнок", "семья", "семейные"],
+  мужчина: ["мужское", "мужской", "парень"],
+  мужское: ["мужчина", "мужской", "парень"],
+  цветы: ["букет", "сад", "поле", "сирень"],
+  цветок: ["цветы", "букет"],
+  город: ["улица", "street", "urban"],
+  деловой: ["бизнес", "офис", "костюм"],
+  бизнес: ["деловой", "офис", "костюм"],
+  студия: ["studio", "портрет", "фон"],
+  портрет: ["portrait", "лицо", "студия"],
+});
 const ADMIN_CAMPAIGN_KIND_LABELS = Object.freeze({
   new_templates: "Новые шаблоны",
   promo_discount: "Персональный оффер",
@@ -4894,6 +4920,9 @@ function normalizeTemplateDetail(raw) {
     full_image_url: String(item.full_image_url || "").trim(),
     preview_width: Number(item.preview_width || 0),
     preview_height: Number(item.preview_height || 0),
+    description: String(item.description || "").trim(),
+    search_keywords: flattenTemplateSearchField(item.search_keywords || item.keywords).trim(),
+    tags: Array.isArray(item.tags) ? item.tags.map((tag) => String(tag || "").trim()).filter(Boolean) : [],
     usage_count: normalizeTemplateCount(item.usage_count),
     likes_count: normalizeTemplateCount(item.likes_count),
     liked_by_me: Boolean(item.liked_by_me),
@@ -4915,6 +4944,9 @@ function mergeTemplateDetail(raw) {
     full_image_url: detail.full_image_url,
     preview_width: detail.preview_width,
     preview_height: detail.preview_height,
+    description: detail.description,
+    search_keywords: detail.search_keywords,
+    tags: detail.tags,
     usage_count: detail.usage_count,
     likes_count: detail.likes_count,
     liked_by_me: detail.liked_by_me,
@@ -5395,6 +5427,149 @@ function filteredTemplateItems() {
   return sortedTemplates.filter((item) => normalizeTemplateCategory(item.category) === state.selectedTemplateFilter);
 }
 
+function normalizeTemplateSearchText(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/ё/g, "е")
+    .replace(/[^0-9a-zа-я]+/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizedTemplateSearchQuery() {
+  return normalizeTemplateSearchText(state.templateSearchQuery);
+}
+
+function isTemplateSearchActive() {
+  return Boolean(normalizedTemplateSearchQuery());
+}
+
+function templateSearchWords(value) {
+  return normalizeTemplateSearchText(value).split(" ").filter(Boolean);
+}
+
+function templateSearchTermVariants(term) {
+  const normalizedTerm = normalizeTemplateSearchText(term);
+  if (!normalizedTerm) {
+    return [];
+  }
+  const variants = new Set([normalizedTerm]);
+  const synonyms = TEMPLATE_SEARCH_SYNONYMS[normalizedTerm] || [];
+  for (const synonym of synonyms) {
+    const normalizedSynonym = normalizeTemplateSearchText(synonym);
+    if (normalizedSynonym) {
+      variants.add(normalizedSynonym);
+    }
+  }
+  return [...variants];
+}
+
+function templateSearchGroups(query) {
+  return templateSearchWords(query)
+    .map((word) => templateSearchTermVariants(word))
+    .filter((group) => group.length);
+}
+
+function flattenTemplateSearchField(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => flattenTemplateSearchField(item)).join(" ");
+  }
+  if (value && typeof value === "object") {
+    return Object.values(value).map((item) => flattenTemplateSearchField(item)).join(" ");
+  }
+  return String(value || "");
+}
+
+function templateSearchFields(item) {
+  return {
+    title: normalizeTemplateSearchText(item?.title),
+    category: normalizeTemplateSearchText(normalizeTemplateCategory(item?.category)),
+    keywords: normalizeTemplateSearchText(flattenTemplateSearchField([
+      item?.tags,
+      item?.search_keywords,
+      item?.keywords,
+      item?.description,
+    ])),
+    prompt: normalizeTemplateSearchText(item?.prompt),
+    id: normalizeTemplateSearchText(item?.id),
+  };
+}
+
+function templateSearchFieldMatches(field, variants) {
+  return variants.some((variant) => field.includes(variant));
+}
+
+function templateSearchScore(item, rawQuery) {
+  const query = normalizeTemplateSearchText(rawQuery);
+  if (!query) {
+    return 0;
+  }
+  const groups = templateSearchGroups(query);
+  if (!groups.length) {
+    return 0;
+  }
+
+  const fields = templateSearchFields(item);
+  const haystack = normalizeTemplateSearchText(Object.values(fields).join(" "));
+  if (!groups.every((group) => templateSearchFieldMatches(haystack, group))) {
+    return 0;
+  }
+
+  let score = 1;
+  if (fields.title.includes(query)) {
+    score += 260;
+  }
+  if (fields.category.includes(query)) {
+    score += 180;
+  }
+  if (fields.keywords.includes(query)) {
+    score += 130;
+  }
+  if (fields.prompt.includes(query)) {
+    score += 70;
+  }
+
+  for (const group of groups) {
+    if (templateSearchFieldMatches(fields.title, group)) {
+      score += 90;
+    } else if (templateSearchFieldMatches(fields.category, group)) {
+      score += 68;
+    } else if (templateSearchFieldMatches(fields.keywords, group)) {
+      score += 48;
+    } else if (templateSearchFieldMatches(fields.prompt, group)) {
+      score += 28;
+    } else if (templateSearchFieldMatches(fields.id, group)) {
+      score += 12;
+    }
+  }
+
+  return score;
+}
+
+function searchedTemplateItems() {
+  const query = normalizedTemplateSearchQuery();
+  if (!query) {
+    return [];
+  }
+  return state.templates
+    .map((item) => ({
+      item,
+      score: templateSearchScore(item, query),
+    }))
+    .filter((entry) => entry.score > 0)
+    .sort((left, right) => {
+      if (left.score !== right.score) {
+        return right.score - left.score;
+      }
+      return compareTemplatesByFreshness(left.item, right.item);
+    })
+    .map((entry) => entry.item);
+}
+
+function currentTemplateListItems() {
+  return isTemplateSearchActive() ? searchedTemplateItems() : filteredTemplateItems();
+}
+
 function compareTemplatesByFreshness(left, right) {
   const leftSortIndex = Number(left?.sort_index || 0);
   const rightSortIndex = Number(right?.sort_index || 0);
@@ -5429,7 +5604,7 @@ function templateRenderKey(items) {
   const list = Array.isArray(items) ? items : [];
   const firstId = String(list[0]?.id || "");
   const lastId = String(list[list.length - 1]?.id || "");
-  return `${state.selectedTemplateFilter}:${list.length}:${firstId}:${lastId}`;
+  return `${state.selectedTemplateFilter}:${normalizedTemplateSearchQuery()}:${list.length}:${firstId}:${lastId}`;
 }
 
 function shouldPaginateTemplateFeed(items) {
@@ -5499,10 +5674,10 @@ function renderTemplateFeedPagination({ shownCount = 0, totalCount = 0 } = {}) {
 }
 
 function revealMoreTemplateItems() {
-  if (isShowcaseTemplateFilter(state.selectedTemplateFilter)) {
+  if (!isTemplateSearchActive() && isShowcaseTemplateFilter(state.selectedTemplateFilter)) {
     return false;
   }
-  const items = filteredTemplateItems();
+  const items = currentTemplateListItems();
   if (!shouldPaginateTemplateFeed(items)) {
     return false;
   }
@@ -5582,10 +5757,14 @@ function maybeAutoLoadMoreTemplates() {
   }
   templateFeedAutoLoadRaf = window.requestAnimationFrame(() => {
     templateFeedAutoLoadRaf = 0;
-    if (state.currentScreen !== "feed" || state.templatesLoading || isShowcaseTemplateFilter(state.selectedTemplateFilter)) {
+    if (
+      state.currentScreen !== "feed" ||
+      state.templatesLoading ||
+      (!isTemplateSearchActive() && isShowcaseTemplateFilter(state.selectedTemplateFilter))
+    ) {
       return;
     }
-    const items = filteredTemplateItems();
+    const items = currentTemplateListItems();
     if (!shouldPaginateTemplateFeed(items) || state.templateVisibleCount >= items.length) {
       return;
     }
@@ -5662,6 +5841,28 @@ function showTemplateShowcase({ scroll = true } = {}) {
   renderTemplateCards();
   if (scroll) {
     scrollTemplateFeedTop();
+  }
+}
+
+function setTemplateSearchQuery(value, { scroll = false } = {}) {
+  const nextQuery = String(value || "");
+  if (state.templateSearchQuery === nextQuery) {
+    renderTemplateSearchControls();
+    return;
+  }
+  state.templateSearchQuery = nextQuery;
+  resetTemplateFeedPagination();
+  renderTemplateCards();
+  if (scroll) {
+    scrollTemplateFeedTop();
+  }
+}
+
+function clearTemplateSearch() {
+  setTemplateSearchQuery("", { scroll: true });
+  if (templateSearchInput) {
+    templateSearchInput.value = "";
+    templateSearchInput.focus();
   }
 }
 
@@ -5774,6 +5975,70 @@ function renderTemplateEmptyState({ title = "Нет шаблонов", text = "�
   renderTemplateFeedPagination({ shownCount: 0, totalCount: 0 });
 }
 
+function renderTemplateSearchControls() {
+  const active = isTemplateSearchActive();
+  if (templateSearchInput && templateSearchInput.value !== state.templateSearchQuery) {
+    templateSearchInput.value = state.templateSearchQuery;
+  }
+  const searchShell = templateSearchInput?.closest(".template-search");
+  searchShell?.classList.toggle("is-active", active);
+  templateSearchClear?.classList.toggle("is-hidden", !active);
+}
+
+function createTemplateSearchHeader(totalCount) {
+  const header = document.createElement("div");
+  header.className = "template-search-results-header";
+  header.innerHTML = `
+    <div class="template-search-results-title">
+      <span>Поиск</span>
+      <h3>Результаты <small>${escapeHtml(templateCountLabel(totalCount))}</small></h3>
+    </div>
+    <button class="template-search-reset" type="button">
+      <i data-lucide="x"></i>
+      <span>Очистить</span>
+    </button>
+  `;
+  header.querySelector(".template-search-reset")?.addEventListener("click", clearTemplateSearch);
+  return header;
+}
+
+function renderTemplateSearchResults() {
+  const items = searchedTemplateItems();
+  const visibleItems = visibleTemplateItems(items);
+  const header = createTemplateSearchHeader(items.length);
+
+  if (!items.length) {
+    templatesGrid.className = "template-collection template-search-results";
+    templatesGrid.innerHTML = "";
+    templatesGrid.appendChild(header);
+    const emptyState = document.createElement("article");
+    emptyState.className = "template-empty-state";
+    emptyState.innerHTML = `
+      <strong>Ничего не нашлось</strong>
+      <p>Попробуй: день рождения, семья, портрет, очки, цветы.</p>
+    `;
+    templatesGrid.appendChild(emptyState);
+    renderTemplateFeedPagination({ shownCount: 0, totalCount: 0 });
+    refreshIcons();
+    return;
+  }
+
+  const cards = visibleItems.map((item, itemIndex) =>
+    createTemplateCard(item, {
+      itemIndex,
+      totalItems: visibleItems.length,
+      layout: "grid",
+      priority: itemIndex < 4,
+    })
+  );
+  renderTemplateGridCards(cards, { beforeElement: header });
+  templatesGrid.classList.add("template-search-results");
+  renderTemplateFeedPagination({ shownCount: visibleItems.length, totalCount: items.length });
+  refreshIcons();
+  scheduleTemplateFeedPreload(items, visibleItems);
+  maybeAutoLoadMoreTemplates();
+}
+
 function renderTemplateShowcase() {
   templatesGrid.className = "template-showcase";
   templatesGrid.innerHTML = "";
@@ -5866,9 +6131,14 @@ function renderTemplateCards() {
   if (!templatesGrid) {
     return;
   }
+  renderTemplateSearchControls();
   if (state.templatesLoading) {
     renderTemplateSkeleton(6);
     renderTemplateFeedPagination({ shownCount: 0, totalCount: 0 });
+    return;
+  }
+  if (isTemplateSearchActive()) {
+    renderTemplateSearchResults();
     return;
   }
   syncSelectedTemplateFilter();
@@ -5934,6 +6204,9 @@ function renderTemplates(payload) {
     full_image_url: String(item.full_image_url || "").trim(),
     preview_width: Number(item.preview_width || 0),
     preview_height: Number(item.preview_height || 0),
+    description: String(item.description || "").trim(),
+    search_keywords: flattenTemplateSearchField(item.search_keywords || item.keywords).trim(),
+    tags: Array.isArray(item.tags) ? item.tags.map((tag) => String(tag || "").trim()).filter(Boolean) : [],
     usage_count: normalizeTemplateCount(item.usage_count),
     likes_count: normalizeTemplateCount(item.likes_count),
     liked_by_me: Boolean(item.liked_by_me),
@@ -7154,6 +7427,17 @@ function bindEvents() {
     templateFeedMoreButton.addEventListener("click", () => {
       revealMoreTemplateItems();
     });
+  }
+  if (templateSearchInput) {
+    templateSearchInput.addEventListener("input", () => {
+      setTemplateSearchQuery(templateSearchInput.value);
+    });
+    templateSearchInput.addEventListener("search", () => {
+      setTemplateSearchQuery(templateSearchInput.value);
+    });
+  }
+  if (templateSearchClear) {
+    templateSearchClear.addEventListener("click", clearTemplateSearch);
   }
   clearTemplateButton.addEventListener("click", () => {
     clearSelectedTemplate({ clearPrompt: true });

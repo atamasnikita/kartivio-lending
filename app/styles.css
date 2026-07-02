@@ -324,6 +324,88 @@ body.is-web-runtime.is-mobile-browser .app-main {
   color: var(--muted);
 }
 
+.template-search {
+  min-height: 48px;
+  border: 1px solid #263146;
+  border-radius: 12px;
+  background: rgba(16, 22, 33, 0.82);
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) 36px;
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px 0 14px;
+  color: #8f99af;
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.2s ease,
+    background-color 0.18s ease;
+}
+
+.template-search:focus-within,
+.template-search.is-active {
+  border-color: rgba(var(--accent-rgb), 0.64);
+  background: rgba(14, 25, 33, 0.9);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.08);
+}
+
+.template-search > svg {
+  width: 20px;
+  height: 20px;
+  stroke-width: 2.2px;
+}
+
+.template-search input {
+  min-width: 0;
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #f3f7ff;
+  font: inherit;
+  font-size: 16px;
+  line-height: 1.2;
+}
+
+.template-search input::placeholder {
+  color: #768196;
+}
+
+.template-search input::-webkit-search-decoration,
+.template-search input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.template-search-clear {
+  width: 36px;
+  height: 36px;
+  border: 1px solid #2b354a;
+  border-radius: 999px;
+  background: rgba(14, 20, 31, 0.86);
+  color: #d9e1f2;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition:
+    border-color 0.16s ease,
+    color 0.16s ease,
+    transform 0.16s ease;
+}
+
+.template-search-clear.is-hidden {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.template-search-clear svg {
+  width: 18px;
+  height: 18px;
+  stroke-width: 2.2px;
+}
+
+.template-search-clear:active {
+  transform: scale(0.94);
+}
+
 .icon-btn {
   width: 36px;
   height: 36px;
@@ -545,11 +627,86 @@ body.is-web-runtime.is-mobile-browser .app-main {
   color: #9fa8bc;
 }
 
+.template-search-results {
+  align-items: start;
+}
+
+.template-collection.template-search-results {
+  display: grid;
+  gap: 10px;
+}
+
+.template-search-results-header {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  padding: 2px 0 4px;
+}
+
+.template-search-results-title {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.template-search-results-title > span {
+  color: #8fe5d9;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.template-search-results-title h3 {
+  margin: 0;
+  color: #f4f7ff;
+  font-size: 24px;
+  line-height: 1.1;
+  letter-spacing: 0;
+}
+
+.template-search-results-title small {
+  color: #9fa8bc;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.template-search-reset {
+  min-height: 36px;
+  border: 1px solid #2a3346;
+  border-radius: 999px;
+  background: #111722;
+  color: #dce6f8;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 12px 0 10px;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.template-search-reset svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 2.4px;
+}
+
 @media (hover: hover) and (pointer: fine) {
   .template-section-open:hover,
-  .template-back-btn:hover {
+  .template-back-btn:hover,
+  .template-search-reset:hover {
     color: #6ef2de;
     background: rgba(var(--accent-rgb), 0.1);
+  }
+
+  .template-search-clear:hover {
+    border-color: rgba(var(--accent-rgb), 0.5);
+    color: #b8fff3;
   }
 }
 
@@ -3911,6 +4068,23 @@ body.is-web-runtime.is-mobile-browser.nav-hidden .bottom-nav {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .template-search {
+    min-height: 46px;
+    grid-template-columns: 20px minmax(0, 1fr) 34px;
+    gap: 8px;
+    padding: 0 8px 0 12px;
+    border-radius: 10px;
+  }
+
+  .template-search input {
+    font-size: 15px;
+  }
+
+  .template-search-clear {
+    width: 34px;
+    height: 34px;
+  }
+
   .template-showcase {
     gap: 20px;
   }
@@ -3925,12 +4099,24 @@ body.is-web-runtime.is-mobile-browser.nav-hidden .bottom-nav {
   }
 
   .template-section-title h3,
-  .template-collection-title h3 {
+  .template-collection-title h3,
+  .template-search-results-title h3 {
     font-size: 22px;
   }
 
   .template-section-title small,
-  .template-collection-title small {
+  .template-collection-title small,
+  .template-search-results-title small {
+    font-size: 13px;
+  }
+
+  .template-search-results-header {
+    gap: 10px;
+  }
+
+  .template-search-reset {
+    min-height: 34px;
+    padding: 0 10px;
     font-size: 13px;
   }
 
