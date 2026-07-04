@@ -2255,18 +2255,20 @@ a {
   }
 
   .landing-paywall-gallery {
-    height: 248px;
+    height: 268px;
   }
 
   .landing-paywall-gallery-track {
-    top: -12px;
-    grid-template-columns: repeat(5, 126px);
-    grid-template-rows: repeat(2, 126px);
-    gap: 7px;
+    top: 12px;
+    width: calc(100% + 32px);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-rows: repeat(2, 124px);
+    gap: 8px;
+    transform: translateX(-50%) rotate(-0.6deg);
   }
 
   .landing-paywall-eyebrow {
-    top: calc(248px - 19px);
+    top: calc(268px - 19px);
     min-height: 38px;
     padding: 7px 14px;
     font-size: 14px;
