@@ -1711,6 +1711,7 @@ a {
 }
 
 .landing-paywall-cta {
+  display: flex;
   width: min(100%, 440px);
   min-height: 58px;
   margin: 0 auto;
