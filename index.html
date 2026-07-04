@@ -10,7 +10,7 @@
     />
     <meta name="theme-color" content="#050507" />
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=20260702-landing-ref-3" />
+    <link rel="stylesheet" href="./styles.css?v=20260704-paywall-1" />
   </head>
   <body>
     <!-- Yandex.Metrika counter -->
@@ -435,69 +435,138 @@
         </div>
       </section>
 
-      <section id="pricing" class="section">
+      <section id="pricing" class="section landing-paywall-section">
         <div class="container">
-          <div class="section-head">
-            <h2>Пополнение кредитов</h2>
-            <p>Разовая покупка без срока сгорания. Чем больше пакет, тем ниже цена одной генерации.</p>
-          </div>
-          <div class="pricing-paywall">
-            <div class="pricing-benefits" aria-label="Преимущества пакетов кредитов">
-              <span>Кредиты не сгорают</span>
-              <span>Списание видно заранее</span>
-              <span>Промпт по референсу без списания кредитов</span>
+          <div class="landing-paywall">
+            <div class="landing-paywall-gallery" aria-label="Примеры фотографий, созданных в Kartivio">
+              <div class="landing-paywall-gallery-track">
+                <img src="/app/assets/paywall/forest.jpg?v=20260624b" alt="Портрет в лесу" loading="lazy" decoding="async" />
+                <img src="/app/assets/paywall/lilac.jpg?v=20260624b" alt="Девушка с сиренью" loading="lazy" decoding="async" />
+                <img
+                  src="/app/assets/paywall/mirror-flowers.jpg?v=20260624b"
+                  alt="Портрет в зеркале среди цветов"
+                  loading="lazy"
+                  decoding="async"
+                />
+                <img
+                  src="/app/assets/paywall/couple-mirror.jpg?v=20260624b"
+                  alt="Пара в зеркале мотоцикла"
+                  loading="lazy"
+                  decoding="async"
+                />
+                <img
+                  src="/app/assets/paywall/family-field.jpg?v=20260624b"
+                  alt="Семейный портрет в поле"
+                  loading="lazy"
+                  decoding="async"
+                />
+                <img src="/app/assets/paywall/studio.jpg?v=20260624b" alt="Студийный портрет" loading="lazy" decoding="async" />
+                <img
+                  src="/app/assets/paywall/red-dress.jpg?v=20260624b"
+                  alt="Портрет в красном платье"
+                  loading="lazy"
+                  decoding="async"
+                />
+                <img
+                  src="/app/assets/paywall/red-wall.jpg?v=20260624b"
+                  alt="Девушка у красной стены"
+                  loading="lazy"
+                  decoding="async"
+                />
+                <img
+                  src="/app/assets/paywall/man-field.jpg?v=20260624b"
+                  alt="Мужской портрет в поле"
+                  loading="lazy"
+                  decoding="async"
+                />
+                <img
+                  src="/app/assets/paywall/cardigan.jpg?v=20260624b"
+                  alt="Портрет в бордовом кардигане"
+                  loading="lazy"
+                  decoding="async"
+                />
+              </div>
             </div>
-            <div class="grid grid-4 pricing-grid">
-              <article class="card price-card">
-                <h3>Старт</h3>
-                <p class="price">200 ₽</p>
-                <p class="credits">100 кредитов</p>
-                <p class="price-models">10 NB2 · 5 Pro</p>
-                <ul>
-                  <li>10 фото Nano Banana 2</li>
-                  <li>5 фото Nano Banana Pro</li>
-                </ul>
-              </article>
-              <article class="card price-card">
-                <span class="badge badge-muted">Выгода 9%</span>
-                <h3>Базовый</h3>
-                <p class="price">399 ₽</p>
-                <p class="credits">220 кредитов</p>
-                <p class="price-models">22 NB2 · 11 Pro</p>
-                <ul>
-                  <li>22 фото Nano Banana 2</li>
-                  <li>11 фото Nano Banana Pro</li>
-                </ul>
-              </article>
-              <article class="card price-card featured">
-                <div class="price-badges">
-                  <span class="badge">Популярный</span>
-                  <span class="badge badge-muted">Выгода 19%</span>
+            <span class="landing-paywall-eyebrow">Кредиты не сгорают</span>
+
+            <div class="landing-paywall-content">
+              <header class="landing-paywall-intro">
+                <h2>Создавай больше удачных кадров</h2>
+                <p>Выбери пакет под свои идеи. Разовая покупка без подписки и автосписаний.</p>
+              </header>
+
+              <div class="landing-paywall-panel">
+                <h3>Выбери пакет</h3>
+                <div class="landing-plan-list" aria-label="Пакеты кредитов">
+                  <a class="landing-plan" href="/app/" aria-label="Выбрать пакет Старт за 200 рублей">
+                    <span class="landing-plan-radio" aria-hidden="true"></span>
+                    <span class="landing-plan-main">
+                      <span class="landing-plan-name-row">
+                        <strong>Старт</strong>
+                      </span>
+                      <span class="landing-plan-result">10 фото NB2 или 5 Pro · 100 кредитов</span>
+                    </span>
+                    <span class="landing-plan-price">
+                      <strong>200 ₽</strong>
+                      <span>разово</span>
+                    </span>
+                  </a>
+
+                  <a class="landing-plan" href="/app/" aria-label="Выбрать пакет Базовый за 399 рублей">
+                    <span class="landing-plan-radio" aria-hidden="true"></span>
+                    <span class="landing-plan-main">
+                      <span class="landing-plan-name-row">
+                        <strong>Базовый</strong>
+                        <span class="landing-plan-saving">Выгода 9%</span>
+                      </span>
+                      <span class="landing-plan-result">22 фото NB2 или 11 Pro · 220 кредитов</span>
+                    </span>
+                    <span class="landing-plan-price">
+                      <strong>399 ₽</strong>
+                      <span>разово</span>
+                    </span>
+                  </a>
+
+                  <a class="landing-plan is-selected" href="/app/" aria-label="Выбрать популярный пакет Продвинутый за 899 рублей">
+                    <span class="landing-plan-popular">Популярный</span>
+                    <span class="landing-plan-radio" aria-hidden="true"></span>
+                    <span class="landing-plan-main">
+                      <span class="landing-plan-name-row">
+                        <strong>Продвинутый</strong>
+                        <span class="landing-plan-saving">Выгода 19%</span>
+                      </span>
+                      <span class="landing-plan-result">56 фото NB2 или 28 Pro · 560 кредитов</span>
+                    </span>
+                    <span class="landing-plan-price">
+                      <strong>899 ₽</strong>
+                      <span>разово</span>
+                    </span>
+                  </a>
+
+                  <a class="landing-plan" href="/app/" aria-label="Выбрать пакет Максимум за 1790 рублей">
+                    <span class="landing-plan-radio" aria-hidden="true"></span>
+                    <span class="landing-plan-main">
+                      <span class="landing-plan-name-row">
+                        <strong>Максимум</strong>
+                        <span class="landing-plan-saving">Выгода 26%</span>
+                      </span>
+                      <span class="landing-plan-result">120 фото NB2 или 60 Pro · 1200 кредитов</span>
+                    </span>
+                    <span class="landing-plan-price">
+                      <strong>1790 ₽</strong>
+                      <span>разово</span>
+                    </span>
+                  </a>
                 </div>
-                <h3>Продвинутый</h3>
-                <p class="price">899 ₽</p>
-                <p class="credits">560 кредитов</p>
-                <p class="price-models">56 NB2 · 28 Pro</p>
-                <ul>
-                  <li>56 фото Nano Banana 2</li>
-                  <li>28 фото Nano Banana Pro</li>
-                </ul>
-              </article>
-              <article class="card price-card">
-                <span class="badge badge-muted">Выгода 26%</span>
-                <h3>Максимум</h3>
-                <p class="price">1790 ₽</p>
-                <p class="credits">1200 кредитов</p>
-                <p class="price-models">120 NB2 · 60 Pro</p>
-                <ul>
-                  <li>120 фото Nano Banana 2</li>
-                  <li>60 фото Nano Banana Pro</li>
-                </ul>
-              </article>
-            </div>
-            <div class="pricing-summary">
-              <span>Пакеты открывают платные функции и пополняют единый баланс в web и Telegram.</span>
-              <a class="btn btn-primary" href="/app/">Выбрать пакет</a>
+
+                <div class="landing-paywall-trust" aria-label="Условия покупки">
+                  <span>Без подписки</span>
+                  <span>Без автосписаний</span>
+                  <span>Оплата российской картой</span>
+                </div>
+                <a class="btn btn-primary landing-paywall-cta" href="/app/">Получить 560 кредитов за 899&nbsp;₽</a>
+                <p class="landing-paywall-note">Безопасная оплата через ЮKassa</p>
+              </div>
             </div>
           </div>
         </div>
@@ -587,7 +656,7 @@
         </div>
       </div>
     </footer>
-    <script src="/landing-media.js?v=20260702-landing-ref-3"></script>
+    <script src="/landing-media.js?v=20260704-paywall-1"></script>
     <script>
       (function () {
         const keys = [
