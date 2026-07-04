@@ -43,6 +43,7 @@ echo "==> Sync static site"
 rsync_remote \
   --exclude ".git" \
   --exclude ".DS_Store" \
+  --exclude "tmp" \
   --exclude "deploy" \
   --exclude ".gitignore" \
   "$REPO_ROOT/" \
