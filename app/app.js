@@ -17,7 +17,7 @@ const TELEGRAM_WEB_APP_SDK_SRC = "./vendor/telegram-web-app.js?v=62";
 const AUTH_BRIDGE_HASH_KEY = "auth_bridge";
 const API_HEALTHCHECK_TIMEOUT_MS = 2500;
 const API_FETCH_TIMEOUT_MS = 12000;
-const API_MULTIPART_TIMEOUT_MS = 20000;
+const API_MULTIPART_TIMEOUT_MS = 45000;
 const REFERENCE_PROMPT_TIMEOUT_MS = 50000;
 const YANDEX_OAUTH_STORAGE_KEYS = {
   state: "kartivio.yandex_oauth_state",
