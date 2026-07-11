@@ -82,10 +82,83 @@
     refreshToken: "kartivio.refresh_token",
     lastAuthProvider: "kartivio.last_auth_provider",
     telegramWebLoginToken: "kartivio.telegram_web_login_token",
+    acquisitionAnonymousId: "kartivio.acquisition_anonymous_id",
+    productSessionId: "kartivio.product_session_id",
   };
 
   const DEFAULT_PROD_API_BASE = "https://api.kartivio-ai.ru";
   const DEFAULT_LOCAL_API_BASE = "http://127.0.0.1:8093";
+
+  function productEventUuid() {
+    if (window.crypto && typeof window.crypto.randomUUID === "function") {
+      return window.crypto.randomUUID();
+    }
+    const randomHex = () => Math.floor(Math.random() * 16).toString(16);
+    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (symbol) => {
+      const value = Number.parseInt(randomHex(), 16);
+      return (symbol === "x" ? value : (value & 0x3) | 0x8).toString(16);
+    });
+  }
+
+  function storedProductIdentifier(storage, key) {
+    try {
+      const existing = String(storage.getItem(key) || "").trim();
+      if (existing) {
+        return existing;
+      }
+      const nextValue = productEventUuid();
+      storage.setItem(key, nextValue);
+      return nextValue;
+    } catch (_error) {
+      return productEventUuid();
+    }
+  }
+
+  function landingEventSource(anchor) {
+    if (!(anchor instanceof Element)) {
+      return "landing";
+    }
+    if (anchor.id) {
+      return anchor.id.slice(0, 80);
+    }
+    const section = anchor.closest("section[id]");
+    return String(section?.id || "header").slice(0, 80);
+  }
+
+  function trackLandingEvent(eventName, properties = {}) {
+    const apiBase = pickLandingApiBase();
+    const accessToken = String(localStorage.getItem(AUTH_STORAGE_KEYS.accessToken) || "").trim();
+    const event = {
+      client_event_id: productEventUuid(),
+      event_name: eventName,
+      anonymous_id: storedProductIdentifier(localStorage, AUTH_STORAGE_KEYS.acquisitionAnonymousId),
+      session_id: storedProductIdentifier(sessionStorage, AUTH_STORAGE_KEYS.productSessionId),
+      platform: window.matchMedia("(max-width: 760px)").matches ? "landing-mobile" : "landing-desktop",
+      path: window.location.pathname,
+      occurred_at: new Date().toISOString(),
+      properties,
+    };
+    fetch(`${apiBase}/v1/events/batch`, {
+      method: "POST",
+      credentials: "include",
+      headers: apiHeaders(apiBase, { accessToken, json: true }),
+      body: JSON.stringify({ events: [event] }),
+      keepalive: true,
+    }).catch(() => {});
+  }
+
+  function initLandingProductEvents() {
+    trackLandingEvent("landing_viewed", {
+      source: document.referrer ? "referral" : "direct",
+    });
+    for (const anchor of document.querySelectorAll('a[href^="/app/"]')) {
+      anchor.addEventListener("click", () => {
+        trackLandingEvent("app_cta_clicked", {
+          source: landingEventSource(anchor),
+        });
+      });
+    }
+  }
 
   function trimApiBase(raw) {
     return String(raw || "")
@@ -1020,6 +1093,7 @@
     const howTemplateList = document.getElementById("howTemplateList");
     const howPromptText = document.getElementById("howPromptText");
 
+    initLandingProductEvents();
     const manifest = await loadManifest();
     initTopbarAuth().catch(() => {});
 

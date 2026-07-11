@@ -11,7 +11,7 @@
     />
     <meta name="kartivio-yandex-metrika-id" content="109102691" />
     <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=20260702f" />
+    <link rel="stylesheet" href="./styles.css?v=20260711-analytics-1" />
     <script src="./vendor/lucide.min.js?v=1.18.0" defer></script>
   </head>
   <body>
@@ -463,14 +463,82 @@
               <i data-lucide="arrow-left"></i>
             </button>
           </div>
-          <p class="subtitle">Шаблоны ленты, Telegram-only кампании и персональные офферы.</p>
+          <p class="subtitle">Продуктовые метрики, шаблоны, Telegram-кампании и персональные офферы.</p>
 
           <section class="panel-card admin-marketing-panel">
             <div id="marketingAdminTabs" class="segmented admin-marketing-tabs">
+              <button class="segmented-btn is-active" type="button" data-admin-tab="analytics">Аналитика</button>
               <button class="segmented-btn" type="button" data-admin-tab="templates">Шаблоны</button>
-              <button class="segmented-btn is-active" type="button" data-admin-tab="campaigns">Кампании</button>
+              <button class="segmented-btn" type="button" data-admin-tab="campaigns">Кампании</button>
               <button class="segmented-btn" type="button" data-admin-tab="offers">Офферы</button>
             </div>
+          </section>
+
+          <section id="marketingAnalyticsPanel" class="admin-marketing-panel">
+            <section class="panel-card admin-analytics-panel">
+              <div class="admin-analytics-head">
+                <div>
+                  <h3>Продукт</h3>
+                  <p id="adminAnalyticsUpdated" class="note">Загружаю данные...</p>
+                </div>
+                <button id="refreshAdminAnalyticsButton" class="icon-btn" type="button" aria-label="Обновить аналитику">
+                  <i data-lucide="refresh-cw"></i>
+                </button>
+              </div>
+
+              <div id="adminAnalyticsPeriod" class="segmented admin-analytics-period" aria-label="Период аналитики">
+                <button class="segmented-btn" type="button" data-analytics-period="7d">7 дней</button>
+                <button class="segmented-btn is-active" type="button" data-analytics-period="30d">30 дней</button>
+                <button class="segmented-btn" type="button" data-analytics-period="all">Всё время</button>
+              </div>
+
+              <div id="adminAnalyticsKpis" class="admin-analytics-kpis" aria-live="polite"></div>
+
+              <section class="admin-analytics-section">
+                <div class="admin-analytics-section-head">
+                  <h4>Воронка по пользователям</h4>
+                  <span>исторические данные БД</span>
+                </div>
+                <div id="adminAnalyticsCohort" class="admin-analytics-funnel"></div>
+              </section>
+
+              <div class="admin-analytics-columns">
+                <section class="admin-analytics-section">
+                  <div class="admin-analytics-section-head">
+                    <h4>Путь в интерфейсе</h4>
+                    <span>события с 11.07.2026</span>
+                  </div>
+                  <div id="adminAnalyticsEventFunnel" class="admin-analytics-table"></div>
+                </section>
+                <section class="admin-analytics-section">
+                  <div class="admin-analytics-section-head">
+                    <h4>Стартовые кредиты</h4>
+                    <span>не A/B-тест</span>
+                  </div>
+                  <div id="adminAnalyticsWelcome" class="admin-analytics-table"></div>
+                </section>
+              </div>
+
+              <div class="admin-analytics-columns">
+                <section class="admin-analytics-section">
+                  <div class="admin-analytics-section-head">
+                    <h4>Надежность генераций</h4>
+                    <span>по источнику промпта</span>
+                  </div>
+                  <div id="adminAnalyticsReliability" class="admin-analytics-table"></div>
+                </section>
+                <section class="admin-analytics-section">
+                  <div class="admin-analytics-section-head">
+                    <h4>Лучшие шаблоны</h4>
+                    <span>успешные генерации</span>
+                  </div>
+                  <div id="adminAnalyticsTemplates" class="admin-analytics-table"></div>
+                </section>
+              </div>
+
+              <div id="adminAnalyticsAttribution" class="admin-analytics-attribution"></div>
+              <p id="adminAnalyticsNote" class="note"></p>
+            </section>
           </section>
 
           <section id="marketingTemplatesPanel" class="admin-marketing-panel is-hidden">
@@ -522,7 +590,7 @@
             </section>
           </section>
 
-          <section id="marketingCampaignsPanel" class="admin-marketing-panel">
+          <section id="marketingCampaignsPanel" class="admin-marketing-panel is-hidden">
             <section class="panel-card admin-form-card">
               <div class="section-row section-row-tight">
                 <h3>Новая кампания</h3>
@@ -725,6 +793,6 @@
       </article>
     </div>
 
-    <script src="./app.js?v=20260705a" defer></script>
+    <script src="./app.js?v=20260711-analytics-1" defer></script>
   </body>
 </html>

@@ -3413,7 +3413,219 @@ body.is-web-runtime.is-mobile-browser .app-main {
 }
 
 .admin-marketing-tabs {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.admin-analytics-panel {
+  display: grid;
+  gap: 18px;
+}
+
+.admin-analytics-head,
+.admin-analytics-section-head,
+.admin-analytics-row,
+.admin-analytics-attribution {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.admin-analytics-head h3,
+.admin-analytics-section h4 {
+  margin: 0;
+}
+
+.admin-analytics-head .note {
+  margin: 4px 0 0;
+}
+
+.admin-analytics-period {
+  width: min(100%, 420px);
   grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.admin-analytics-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-block: 1px solid #283145;
+}
+
+.admin-analytics-kpi {
+  min-width: 0;
+  padding: 16px 14px;
+  border-right: 1px solid #283145;
+}
+
+.admin-analytics-kpi:last-child {
+  border-right: 0;
+}
+
+.admin-analytics-kpi span,
+.admin-analytics-section-head span,
+.admin-analytics-row span,
+.admin-analytics-row small {
+  color: var(--muted);
+}
+
+.admin-analytics-kpi span {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 12px;
+}
+
+.admin-analytics-kpi strong {
+  display: block;
+  overflow: hidden;
+  font-size: 25px;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+}
+
+.admin-analytics-kpi small {
+  display: block;
+  margin-top: 5px;
+  color: #8f9ab0;
+}
+
+.admin-analytics-section {
+  min-width: 0;
+  padding-top: 16px;
+  border-top: 1px solid #283145;
+}
+
+.admin-analytics-section-head {
+  align-items: baseline;
+  margin-bottom: 12px;
+}
+
+.admin-analytics-section-head h4 {
+  font-size: 16px;
+}
+
+.admin-analytics-section-head span {
+  font-size: 11px;
+  text-align: right;
+}
+
+.admin-analytics-funnel {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.admin-analytics-stage {
+  position: relative;
+  min-width: 0;
+  padding: 4px 14px 8px 0;
+}
+
+.admin-analytics-stage:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: 25px;
+  right: 8px;
+  width: 1px;
+  height: 26px;
+  background: #283145;
+}
+
+.admin-analytics-stage span,
+.admin-analytics-stage small {
+  display: block;
+  color: var(--muted);
+}
+
+.admin-analytics-stage span {
+  min-height: 30px;
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.admin-analytics-stage strong {
+  display: block;
+  margin-top: 7px;
+  font-size: 22px;
+}
+
+.admin-analytics-stage small {
+  margin-top: 3px;
+  font-size: 11px;
+}
+
+.admin-analytics-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 22px;
+}
+
+.admin-analytics-table {
+  display: grid;
+}
+
+.admin-analytics-row {
+  min-height: 38px;
+  padding: 7px 0;
+  border-bottom: 1px solid rgba(40, 49, 69, 0.72);
+}
+
+.admin-analytics-row:last-child {
+  border-bottom: 0;
+}
+
+.admin-analytics-row-label {
+  min-width: 0;
+}
+
+.admin-analytics-row-label strong,
+.admin-analytics-row-label span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-analytics-row-label strong {
+  font-size: 13px;
+}
+
+.admin-analytics-row-label span {
+  margin-top: 2px;
+  font-size: 11px;
+}
+
+.admin-analytics-row-value {
+  flex: 0 0 auto;
+  text-align: right;
+}
+
+.admin-analytics-row-value strong,
+.admin-analytics-row-value small {
+  display: block;
+}
+
+.admin-analytics-row-value strong {
+  font-size: 14px;
+}
+
+.admin-analytics-row-value small {
+  margin-top: 2px;
+  font-size: 10px;
+}
+
+.admin-analytics-attribution {
+  min-height: 44px;
+  padding: 10px 12px;
+  border-left: 2px solid rgba(var(--accent-rgb), 0.72);
+  background: rgba(var(--accent-rgb), 0.06);
+}
+
+.admin-analytics-attribution span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.admin-analytics-attribution strong {
+  font-size: 15px;
 }
 
 .admin-form-card,
@@ -3531,6 +3743,56 @@ body.is-web-runtime.is-mobile-browser .app-main {
   padding: 16px;
   color: var(--muted);
   background: rgba(17, 24, 39, 0.5);
+}
+
+@media (max-width: 700px) {
+  .admin-marketing-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-analytics-panel {
+    gap: 15px;
+  }
+
+  .admin-analytics-kpis,
+  .admin-analytics-columns {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-analytics-columns {
+    grid-template-columns: 1fr;
+    gap: 15px;
+  }
+
+  .admin-analytics-kpi:nth-child(2) {
+    border-right: 0;
+  }
+
+  .admin-analytics-kpi:nth-child(-n + 2) {
+    border-bottom: 1px solid #283145;
+  }
+
+  .admin-analytics-funnel {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px 14px;
+  }
+
+  .admin-analytics-stage {
+    padding-right: 0;
+  }
+
+  .admin-analytics-stage:not(:last-child)::after {
+    display: none;
+  }
+
+  .admin-analytics-stage span {
+    min-height: 0;
+  }
+
+  .admin-analytics-attribution {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 }
 
 .admin-record-card {

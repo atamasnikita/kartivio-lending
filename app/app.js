@@ -6,6 +6,7 @@ const STORAGE_KEYS = {
   telegramWebLoginToken: "kartivio.telegram_web_login_token",
   acquisitionAnonymousId: "kartivio.acquisition_anonymous_id",
   acquisitionFirstTouch: "kartivio.acquisition_first_touch",
+  productSessionId: "kartivio.product_session_id",
 };
 
 const DEFAULT_PROD_API_BASE = "https://api.kartivio-ai.ru";
@@ -350,7 +351,9 @@ const state = {
   historyRequestToken: 0,
   historyNextOffset: 0,
   historyHasMore: false,
-  adminTab: "campaigns",
+  adminTab: "analytics",
+  adminAnalytics: null,
+  adminAnalyticsPeriod: "30d",
   adminTemplates: [],
   adminCampaigns: [],
   adminOffers: [],
@@ -360,6 +363,7 @@ const state = {
   adminCampaignDraftKind: "new_templates",
   adminCampaignAudienceMode: "auto",
   adminTemplateLocalPreviewUrl: "",
+  trackedResultJobIds: new Set(),
 };
 
 let tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
@@ -374,6 +378,110 @@ const TEMPLATE_FEED_PRELOAD_IMAGE_COUNT = 36;
 const TEMPLATE_FEED_PRELOAD_PROMPT_COUNT = 12;
 const ADMIN_TEMPLATE_FILE_NOTE_DEFAULT =
   "PNG/JPG/WEBP до 10 MB. Превью и full соберутся автоматически. Файл нужен только для нового шаблона.";
+const PRODUCT_EVENT_FLUSH_DELAY_MS = 350;
+const PRODUCT_EVENT_BATCH_SIZE = 10;
+let productEventQueue = [];
+let productEventFlushTimer = null;
+
+function productEventUuid() {
+  if (window.crypto && typeof window.crypto.randomUUID === "function") {
+    return window.crypto.randomUUID();
+  }
+  const bytes = new Uint8Array(16);
+  window.crypto.getRandomValues(bytes);
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+function ensureProductSessionId() {
+  try {
+    const existing = String(window.sessionStorage.getItem(STORAGE_KEYS.productSessionId) || "").trim();
+    if (existing) {
+      return existing;
+    }
+    const nextValue = productEventUuid();
+    window.sessionStorage.setItem(STORAGE_KEYS.productSessionId, nextValue);
+    return nextValue;
+  } catch (_error) {
+    return productEventUuid();
+  }
+}
+
+function productEventPlatform() {
+  if (isTelegramMiniAppRuntime()) {
+    return "telegram-miniapp";
+  }
+  return window.matchMedia("(max-width: 760px)").matches ? "web-mobile" : "web-desktop";
+}
+
+function productEventErrorCode(error) {
+  return String(error?.code || error?.name || error?.status || "request_failed").slice(0, 160);
+}
+
+function productFileSizeBucket(files) {
+  const totalBytes = (Array.isArray(files) ? files : []).reduce(
+    (sum, file) => sum + Number(file?.size || 0),
+    0,
+  );
+  if (totalBytes < 1_000_000) return "under_1mb";
+  if (totalBytes < 5_000_000) return "1_5mb";
+  if (totalBytes < 10_000_000) return "5_10mb";
+  return "over_10mb";
+}
+
+function trackProductEvent(eventName, properties = {}) {
+  const normalizedName = String(eventName || "").trim();
+  if (!normalizedName) {
+    return;
+  }
+  productEventQueue.push({
+    client_event_id: productEventUuid(),
+    event_name: normalizedName,
+    anonymous_id: ensureAcquisitionAnonymousId(),
+    session_id: ensureProductSessionId(),
+    platform: productEventPlatform(),
+    path: window.location.pathname,
+    occurred_at: new Date().toISOString(),
+    properties,
+  });
+  if (productEventQueue.length >= PRODUCT_EVENT_BATCH_SIZE) {
+    flushProductEvents();
+    return;
+  }
+  if (productEventFlushTimer) {
+    return;
+  }
+  productEventFlushTimer = window.setTimeout(() => {
+    productEventFlushTimer = null;
+    flushProductEvents();
+  }, PRODUCT_EVENT_FLUSH_DELAY_MS);
+}
+
+function flushProductEvents({ keepalive = false } = {}) {
+  if (!state.apiBase || !productEventQueue.length) {
+    return;
+  }
+  const events = productEventQueue.splice(0, 20);
+  const headers = { "Content-Type": "application/json" };
+  if (state.accessToken) {
+    headers.Authorization = `Bearer ${state.accessToken}`;
+  }
+  fetch(`${state.apiBase}/v1/events/batch`, {
+    method: "POST",
+    credentials: "include",
+    headers,
+    body: JSON.stringify({ events }),
+    keepalive,
+  }).catch(() => {});
+  if (productEventQueue.length && !keepalive) {
+    productEventFlushTimer = window.setTimeout(() => {
+      productEventFlushTimer = null;
+      flushProductEvents();
+    }, PRODUCT_EVENT_FLUSH_DELAY_MS);
+  }
+}
 
 const bootSplash = document.getElementById("bootSplash");
 const appShell = document.getElementById("appShell");
@@ -405,9 +513,21 @@ const plansNote = document.getElementById("plansNote");
 const paywallGalleryImages = document.querySelectorAll(".paywall-gallery-image[data-src]");
 const marketingBackButton = document.getElementById("marketingBackButton");
 const marketingAdminTabs = document.getElementById("marketingAdminTabs");
+const marketingAnalyticsPanel = document.getElementById("marketingAnalyticsPanel");
 const marketingTemplatesPanel = document.getElementById("marketingTemplatesPanel");
 const marketingCampaignsPanel = document.getElementById("marketingCampaignsPanel");
 const marketingOffersPanel = document.getElementById("marketingOffersPanel");
+const adminAnalyticsPeriod = document.getElementById("adminAnalyticsPeriod");
+const refreshAdminAnalyticsButton = document.getElementById("refreshAdminAnalyticsButton");
+const adminAnalyticsKpis = document.getElementById("adminAnalyticsKpis");
+const adminAnalyticsCohort = document.getElementById("adminAnalyticsCohort");
+const adminAnalyticsEventFunnel = document.getElementById("adminAnalyticsEventFunnel");
+const adminAnalyticsWelcome = document.getElementById("adminAnalyticsWelcome");
+const adminAnalyticsReliability = document.getElementById("adminAnalyticsReliability");
+const adminAnalyticsTemplates = document.getElementById("adminAnalyticsTemplates");
+const adminAnalyticsAttribution = document.getElementById("adminAnalyticsAttribution");
+const adminAnalyticsUpdated = document.getElementById("adminAnalyticsUpdated");
+const adminAnalyticsNote = document.getElementById("adminAnalyticsNote");
 const adminTemplateStateBadge = document.getElementById("adminTemplateStateBadge");
 const adminTemplateTitleInput = document.getElementById("adminTemplateTitleInput");
 const adminTemplateCategoryInput = document.getElementById("adminTemplateCategoryInput");
@@ -2228,6 +2348,11 @@ function switchScreen(nextScreen) {
   }
   closeTemplateModal();
   state.currentScreen = target;
+  if (target === "feed") {
+    trackProductEvent("feed_viewed", { screen: "feed" });
+  } else if (target === "tokens") {
+    trackProductEvent("paywall_viewed", { screen: "tokens", source: "navigation" });
+  }
   appShell.classList.toggle("is-paywall-active", target === "tokens");
   for (const screen of screens) {
     screen.classList.toggle("screen-active", screen.dataset.screen === target);
@@ -2247,6 +2372,10 @@ function switchScreen(nextScreen) {
       );
       setCampaignFormNote(message, true);
       setAdminTemplateFormNote(message, true);
+      setAdminAnalyticsNote(message, true);
+      if (adminAnalyticsUpdated) {
+        adminAnalyticsUpdated.textContent = "Не удалось обновить";
+      }
     });
   } else if (target === "feed") {
     window.requestAnimationFrame(() => maybeAutoLoadMoreTemplates());
@@ -2855,6 +2984,12 @@ function handleSourceImageChange() {
   }
 
   const { skipped } = appendSourceImages(pickedFiles);
+  const selected = sourceImageFiles();
+  trackProductEvent("photo_upload_selected", {
+    file_count: selected.length,
+    total_size_bucket: productFileSizeBucket(selected),
+    source: "own_photo",
+  });
   if (skipped > 0) {
     setCreateNote(`Добавлено до ${MAX_SOURCE_IMAGES} уникальных фото. Лишние пропущены.`, true);
   } else {
@@ -3287,6 +3422,199 @@ function formatAdminDateTime(raw) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(parsed));
+}
+
+function formatAnalyticsNumber(raw, maximumFractionDigits = 0) {
+  const value = Number(raw || 0);
+  return new Intl.NumberFormat("ru-RU", { maximumFractionDigits }).format(
+    Number.isFinite(value) ? value : 0,
+  );
+}
+
+function formatAnalyticsRub(raw) {
+  return `${formatAnalyticsNumber(raw, 2)} ₽`;
+}
+
+function formatAnalyticsPercent(raw) {
+  return `${formatAnalyticsNumber(raw, 1)}%`;
+}
+
+function setAdminAnalyticsNote(message, isError = false) {
+  if (!adminAnalyticsNote) {
+    return;
+  }
+  adminAnalyticsNote.textContent = String(message || "");
+  adminAnalyticsNote.style.color = isError ? "#ff8080" : "";
+}
+
+function adminAnalyticsEmpty(label) {
+  return `<div class="admin-analytics-row"><div class="admin-analytics-row-label"><span>${escapeHtml(label)}</span></div></div>`;
+}
+
+function renderAdminAnalytics() {
+  const payload = state.adminAnalytics;
+  if (adminAnalyticsPeriod) {
+    for (const button of adminAnalyticsPeriod.querySelectorAll("[data-analytics-period]")) {
+      button.classList.toggle(
+        "is-active",
+        button.dataset.analyticsPeriod === state.adminAnalyticsPeriod,
+      );
+    }
+  }
+  if (!payload) {
+    if (adminAnalyticsKpis) {
+      adminAnalyticsKpis.innerHTML = ["Регистрации", "Генерировали", "Покупатели", "Выручка"]
+        .map(
+          (label) => `<div class="admin-analytics-kpi"><span>${label}</span><strong>—</strong></div>`,
+        )
+        .join("");
+    }
+    return;
+  }
+
+  const cohort = payload.cohort || {};
+  const activity = payload.activity || {};
+  if (adminAnalyticsUpdated) {
+    adminAnalyticsUpdated.textContent = `Обновлено ${formatAdminDateTime(payload.generated_at)}`;
+  }
+  if (adminAnalyticsKpis) {
+    const kpis = [
+      ["Регистрации", cohort.registrations, `${formatAnalyticsPercent(cohort.start_rate)} начали генерацию`],
+      ["Генерировали", cohort.generation_succeeded, `${formatAnalyticsNumber(activity.successful_jobs)} успешных кадров`],
+      ["Покупатели", cohort.buyers, `${formatAnalyticsNumber(activity.successful_payments)} успешных оплат`],
+      ["Выручка", formatAnalyticsRub(activity.revenue_rub), `${formatAnalyticsPercent(activity.success_rate)} успешных задач`],
+    ];
+    adminAnalyticsKpis.innerHTML = kpis
+      .map(
+        ([label, value, detail]) => `
+          <div class="admin-analytics-kpi">
+            <span>${escapeHtml(String(label))}</span>
+            <strong>${escapeHtml(String(value))}</strong>
+            <small>${escapeHtml(String(detail))}</small>
+          </div>
+        `,
+      )
+      .join("");
+  }
+
+  if (adminAnalyticsCohort) {
+    const stages = [
+      ["Регистрации", cohort.registrations, 100],
+      ["Начали генерацию", cohort.generation_started, cohort.start_rate],
+      ["Получили результат", cohort.generation_succeeded, cohort.generation_rate],
+      ["Создали оплату", cohort.checkout_started, cohort.checkout_rate],
+      ["Оплатили", cohort.buyers, cohort.buyer_rate],
+    ];
+    adminAnalyticsCohort.innerHTML = stages
+      .map(
+        ([label, value, rate]) => `
+          <div class="admin-analytics-stage">
+            <span>${escapeHtml(String(label))}</span>
+            <strong>${formatAnalyticsNumber(value)}</strong>
+            <small>${formatAnalyticsPercent(rate)} от регистраций</small>
+          </div>
+        `,
+      )
+      .join("");
+  }
+
+  if (adminAnalyticsEventFunnel) {
+    const rows = Array.isArray(payload.event_funnel) ? payload.event_funnel : [];
+    adminAnalyticsEventFunnel.innerHTML = rows.length
+      ? rows
+          .map(
+            (item) => `
+              <div class="admin-analytics-row">
+                <div class="admin-analytics-row-label">
+                  <strong>${escapeHtml(String(item.label || item.event_name || "Событие"))}</strong>
+                </div>
+                <div class="admin-analytics-row-value">
+                  <strong>${formatAnalyticsNumber(item.actors)}</strong>
+                  <small>${formatAnalyticsNumber(item.events)} событий</small>
+                </div>
+              </div>
+            `,
+          )
+          .join("")
+      : adminAnalyticsEmpty("Событий пока нет.");
+  }
+
+  if (adminAnalyticsWelcome) {
+    const rows = Array.isArray(payload.welcome_cohorts) ? payload.welcome_cohorts : [];
+    adminAnalyticsWelcome.innerHTML = rows.length
+      ? rows
+          .map(
+            (item) => `
+              <div class="admin-analytics-row">
+                <div class="admin-analytics-row-label">
+                  <strong>${formatAnalyticsNumber(item.welcome_credits)} кредитов</strong>
+                  <span>${formatAnalyticsNumber(item.users)} пользователей · ${formatAnalyticsNumber(item.checkout_users)} оплат начали</span>
+                </div>
+                <div class="admin-analytics-row-value">
+                  <strong>${formatAnalyticsNumber(item.buyers)} покупок</strong>
+                  <small>${formatAnalyticsPercent(item.generation_rate)} ген. · ${formatAnalyticsPercent(item.buyer_rate)} оплатили</small>
+                </div>
+              </div>
+            `,
+          )
+          .join("")
+      : adminAnalyticsEmpty("Нет welcome-когорт за период.");
+  }
+
+  if (adminAnalyticsReliability) {
+    const rows = Array.isArray(payload.reliability) ? payload.reliability : [];
+    adminAnalyticsReliability.innerHTML = rows.length
+      ? rows
+          .map(
+            (item) => `
+              <div class="admin-analytics-row">
+                <div class="admin-analytics-row-label">
+                  <strong>${escapeHtml(String(item.label || item.source || "Источник"))}</strong>
+                  <span>${formatAnalyticsNumber(item.successful_jobs)} успешно · ${formatAnalyticsNumber(item.failed_jobs)} ошибок</span>
+                </div>
+                <div class="admin-analytics-row-value">
+                  <strong>${formatAnalyticsPercent(item.success_rate)}</strong>
+                  <small>успешность</small>
+                </div>
+              </div>
+            `,
+          )
+          .join("")
+      : adminAnalyticsEmpty("Нет генераций за период.");
+  }
+
+  if (adminAnalyticsTemplates) {
+    const rows = Array.isArray(payload.top_templates) ? payload.top_templates : [];
+    adminAnalyticsTemplates.innerHTML = rows.length
+      ? rows
+          .map(
+            (item) => `
+              <div class="admin-analytics-row">
+                <div class="admin-analytics-row-label">
+                  <strong>${escapeHtml(String(item.title || "Шаблон"))}</strong>
+                  <span>${escapeHtml(String(item.category || "Без категории"))}</span>
+                </div>
+                <div class="admin-analytics-row-value">
+                  <strong>${formatAnalyticsNumber(item.uses)}</strong>
+                  <small>${formatAnalyticsNumber(item.users)} пользователей</small>
+                </div>
+              </div>
+            `,
+          )
+          .join("")
+      : adminAnalyticsEmpty("Шаблоны пока не использовались.");
+  }
+
+  if (adminAnalyticsAttribution) {
+    const attribution = payload.attribution || {};
+    adminAnalyticsAttribution.innerHTML = `
+      <span>Атрибуция first touch</span>
+      <strong>${formatAnalyticsPercent(attribution.coverage_rate)} пользователей · ${formatAnalyticsNumber(attribution.attributed_buyers)} из ${formatAnalyticsNumber(attribution.buyers)} покупателей</strong>
+    `;
+  }
+  setAdminAnalyticsNote(
+    "Событийная воронка накапливается с этой версии. Остальные блоки рассчитаны по существующим пользователям, генерациям и оплатам.",
+  );
 }
 
 function formatOfferCreditsMeta(credits) {
@@ -3766,6 +4094,9 @@ function renderAdminTabs() {
   for (const button of buttons) {
     button.classList.toggle("is-active", button.dataset.adminTab === state.adminTab);
   }
+  if (marketingAnalyticsPanel) {
+    marketingAnalyticsPanel.classList.toggle("is-hidden", state.adminTab !== "analytics");
+  }
   if (marketingTemplatesPanel) {
     marketingTemplatesPanel.classList.toggle("is-hidden", state.adminTab !== "templates");
   }
@@ -4040,6 +4371,17 @@ async function loadAdminCampaigns() {
   renderSelectedCampaignSummary();
 }
 
+async function loadAdminAnalytics() {
+  if (adminAnalyticsUpdated) {
+    adminAnalyticsUpdated.textContent = "Обновляю данные...";
+  }
+  const payload = await authorizedFetch(
+    `/v1/admin/analytics?period=${encodeURIComponent(state.adminAnalyticsPeriod)}`,
+  );
+  state.adminAnalytics = payload;
+  renderAdminAnalytics();
+}
+
 async function loadAdminOffers() {
   const payload = await authorizedFetch("/v1/admin/promo-offers?limit=100&offset=0");
   state.adminOffers = Array.isArray(payload.items) ? payload.items : [];
@@ -4068,7 +4410,12 @@ async function loadAdminData() {
   if (!isAdminUser()) {
     return;
   }
-  await Promise.all([loadAdminTemplates(), loadAdminCampaigns(), loadAdminOffers()]);
+  await Promise.all([
+    loadAdminAnalytics(),
+    loadAdminTemplates(),
+    loadAdminCampaigns(),
+    loadAdminOffers(),
+  ]);
 }
 
 async function createAdminTemplate() {
@@ -4608,6 +4955,12 @@ async function buyPackage(code) {
       idempotencyKey: idem,
     });
     if (result.checkout_url) {
+      const selectedPackage = state.topups.find((item) => item.code === code);
+      trackProductEvent("checkout_opened", {
+        package_code: code,
+        credits: Number(selectedPackage?.credits || 0),
+        price_rub: Number(selectedPackage?.price_rub || 0),
+      });
       openCheckout(result.checkout_url, { popupHandle });
       setPlansNote(`Пакет ${code} готов к оплате.`);
     } else {
@@ -4698,6 +5051,11 @@ function renderPlans(payload) {
     `;
     card.addEventListener("click", () => {
       selectTopup(item.code);
+      trackProductEvent("package_selected", {
+        package_code: item.code,
+        credits,
+        price_rub: Number(item.price_rub || 0),
+      });
       setPlansNote("Безопасная оплата через ЮKassa");
     });
     plansGrid.appendChild(card);
@@ -4708,6 +5066,10 @@ function renderPlans(payload) {
 
 async function selectTemplate(item) {
   const resolvedItem = await ensureTemplatePrompt(item);
+  trackProductEvent("template_selected", {
+    template_id: resolvedItem.id,
+    category: resolvedItem.category,
+  });
   state.referencePromptExpanded = false;
   if (referenceImageFile()) {
     clearReferenceImage({ preserveNote: true });
@@ -5169,6 +5531,10 @@ function openTemplateModal(item, initialPreviewUrl = "") {
   };
   state.activeTemplateModalId = modalItem.id;
   state.activeTemplateModalItem = { ...modalItem };
+  trackProductEvent("template_viewed", {
+    template_id: modalItem.id,
+    category: modalItem.category,
+  });
   if (!templateModal) {
     return;
   }
@@ -6450,6 +6816,17 @@ function renderActiveJob(job) {
   activeJobMeta.textContent = `${status} · ${activeJobDetailsLabel(job)}`;
 
   if (job.result_image_url) {
+    const jobId = String(job.id || "").trim();
+    if (jobId && !state.trackedResultJobIds.has(jobId)) {
+      state.trackedResultJobIds.add(jobId);
+      trackProductEvent("result_viewed", {
+        job_id: jobId,
+        image_model: job.provider_model,
+        output_size: job.output_size,
+        has_photo: Boolean(job.is_edit),
+        template_id: job.template_id || "",
+      });
+    }
     const renderToken = ++state.activeImageRenderToken;
     renderActiveResultState({
       variant: "loading",
@@ -6881,6 +7258,9 @@ async function handleBuildReferencePrompt() {
     state.referencePromptBusy = true;
     syncReferencePromptControls();
     setReferencePromptNote("Описываем референс... Обычно это занимает 3–8 секунд.");
+    trackProductEvent("reference_prompt_started", {
+      total_size_bucket: productFileSizeBucket([file]),
+    });
 
     const previousPrompt = String(promptInput.value || "");
     const payload = await createReferencePromptFromImage(file);
@@ -6898,7 +7278,9 @@ async function handleBuildReferencePrompt() {
     setReferencePromptNote("Промпт собран. Его можно отредактировать перед генерацией.");
     setCreateNote("Промпт собран по фото-референсу.");
     renderReferenceImage();
+    trackProductEvent("reference_prompt_succeeded");
   } catch (error) {
+    trackProductEvent("reference_prompt_failed", { error_code: productEventErrorCode(error) });
     setReferencePromptNote(userFacingErrorMessage(error, "Не удалось собрать промпт по референсу."), true);
   } finally {
     state.referencePromptBusy = false;
@@ -6990,11 +7372,30 @@ async function handleCreate() {
     setCreateNote(`Списываю ${formatCredits(cost)} и ставлю задачу в очередь.`);
 
     const clientRequestId = buildClientRequestId();
+    const eventProperties = {
+      image_model: imageModel,
+      output_size: outputSize,
+      has_photo: sourceImages.length > 0,
+      file_count: sourceImages.length,
+      prompt_source: state.promptSource,
+      template_id: state.selectedTemplateId || "",
+    };
+    if (sourceImages.length > 0) {
+      trackProductEvent("photo_upload_started", {
+        file_count: sourceImages.length,
+        total_size_bucket: productFileSizeBucket(sourceImages),
+      });
+    }
     const job = sourceImages.length > 0
       ? await createEditGeneration(prompt, imageModel, outputSize, sourceImages, clientRequestId)
       : await createTextGeneration(prompt, imageModel, outputSize, clientRequestId);
 
     state.activeJobId = job.id;
+    trackProductEvent("generation_submitted", {
+      ...eventProperties,
+      job_id: job.id,
+      status: job.status,
+    });
     renderActiveJob(job);
     setCreateNote("Задача создана. Статус и результат появятся ниже.");
     await Promise.allSettled([loadPrivateData(), loadTemplates()]);
@@ -7003,6 +7404,23 @@ async function handleCreate() {
   } catch (error) {
     setCreateNote(userFacingErrorMessage(error, "Не удалось запустить генерацию."), true);
     if (requestStarted) {
+      const errorCode = productEventErrorCode(error);
+      trackProductEvent("generation_submit_failed", {
+        image_model: imageModel,
+        output_size: outputSize || "unknown",
+        has_photo: sourceImages.length > 0,
+        file_count: sourceImages.length,
+        prompt_source: state.promptSource,
+        template_id: state.selectedTemplateId || "",
+        error_code: errorCode,
+      });
+      if (sourceImages.length > 0) {
+        trackProductEvent("photo_upload_failed", {
+          file_count: sourceImages.length,
+          total_size_bucket: productFileSizeBucket(sourceImages),
+          error_code: errorCode,
+        });
+      }
       renderActiveResultState({
         variant: "error",
         icon: "circle-alert",
@@ -7380,6 +7798,7 @@ function bindEvents() {
 
   if (authButton) {
     authButton.addEventListener("click", () => {
+      trackProductEvent("auth_started", { auth_provider: "telegram" });
       let popupHandle = null;
       if (!isTelegramMiniAppRuntime()) {
         popupHandle = window.open("about:blank", "_blank");
@@ -7394,6 +7813,7 @@ function bindEvents() {
   }
   if (yandexAuthButton) {
     yandexAuthButton.addEventListener("click", () => {
+      trackProductEvent("auth_started", { auth_provider: "yandex" });
       loginViaYandex().catch((error) => {
         setYandexAuthButtonIdle();
         setNote(userFacingErrorMessage(error, "Не удалось выполнить вход через Яндекс."), true);
@@ -7639,8 +8059,45 @@ function bindEvents() {
       if (!(button instanceof HTMLButtonElement)) {
         return;
       }
-      state.adminTab = String(button.dataset.adminTab || "campaigns").trim() || "campaigns";
+      state.adminTab = String(button.dataset.adminTab || "analytics").trim() || "analytics";
       renderAdminTabs();
+    });
+  }
+  if (adminAnalyticsPeriod) {
+    adminAnalyticsPeriod.addEventListener("click", (event) => {
+      const button = event.target instanceof Element
+        ? event.target.closest("[data-analytics-period]")
+        : null;
+      if (!(button instanceof HTMLButtonElement)) {
+        return;
+      }
+      const period = String(button.dataset.analyticsPeriod || "").trim();
+      if (!period || period === state.adminAnalyticsPeriod) {
+        return;
+      }
+      state.adminAnalyticsPeriod = period;
+      renderAdminAnalytics();
+      loadAdminAnalytics().catch((error) => {
+        setAdminAnalyticsNote(
+          userFacingErrorMessage(error, "Не удалось обновить аналитику."),
+          true,
+        );
+      });
+    });
+  }
+  if (refreshAdminAnalyticsButton) {
+    refreshAdminAnalyticsButton.addEventListener("click", () => {
+      refreshAdminAnalyticsButton.disabled = true;
+      loadAdminAnalytics()
+        .catch((error) => {
+          setAdminAnalyticsNote(
+            userFacingErrorMessage(error, "Не удалось обновить аналитику."),
+            true,
+          );
+        })
+        .finally(() => {
+          refreshAdminAnalyticsButton.disabled = false;
+        });
     });
   }
   for (const input of [
@@ -7940,6 +8397,7 @@ function bindEvents() {
   });
 
   window.addEventListener("beforeunload", () => {
+    flushProductEvents({ keepalive: true });
     revokeReferenceImagePreview();
     revokeSourceImagePreview();
   });
@@ -8052,6 +8510,9 @@ async function bootstrap() {
   }
 
   await apiBasePromise;
+  trackProductEvent("app_opened", {
+    source: isTelegramMiniAppRuntime() ? "telegram" : "web",
+  });
 
   try {
     const consumedGoogleCallback = await consumeGoogleOidcCallback();
