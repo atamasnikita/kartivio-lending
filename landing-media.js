@@ -84,6 +84,7 @@
     telegramWebLoginToken: "kartivio.telegram_web_login_token",
     acquisitionAnonymousId: "kartivio.acquisition_anonymous_id",
     productSessionId: "kartivio.product_session_id",
+    productAnalyticsDisabled: "kartivio.product_analytics_disabled",
   };
 
   const DEFAULT_PROD_API_BASE = "https://api.kartivio-ai.ru";
@@ -126,6 +127,13 @@
   }
 
   function trackLandingEvent(eventName, properties = {}) {
+    try {
+      if (localStorage.getItem(AUTH_STORAGE_KEYS.productAnalyticsDisabled) === "1") {
+        return;
+      }
+    } catch (_error) {
+      // The authenticated API still filters administrator events server-side.
+    }
     const apiBase = pickLandingApiBase();
     const accessToken = String(localStorage.getItem(AUTH_STORAGE_KEYS.accessToken) || "").trim();
     const event = {

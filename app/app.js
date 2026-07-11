@@ -7,6 +7,7 @@ const STORAGE_KEYS = {
   acquisitionAnonymousId: "kartivio.acquisition_anonymous_id",
   acquisitionFirstTouch: "kartivio.acquisition_first_touch",
   productSessionId: "kartivio.product_session_id",
+  productAnalyticsDisabled: "kartivio.product_analytics_disabled",
 };
 
 const DEFAULT_PROD_API_BASE = "https://api.kartivio-ai.ru";
@@ -383,6 +384,30 @@ const PRODUCT_EVENT_BATCH_SIZE = 10;
 let productEventQueue = [];
 let productEventFlushTimer = null;
 
+function isProductAnalyticsDisabled() {
+  if (state.me?.is_admin) {
+    return true;
+  }
+  try {
+    return window.localStorage.getItem(STORAGE_KEYS.productAnalyticsDisabled) === "1";
+  } catch (_error) {
+    return false;
+  }
+}
+
+function disableProductAnalyticsForAdmin() {
+  try {
+    window.localStorage.setItem(STORAGE_KEYS.productAnalyticsDisabled, "1");
+  } catch (_error) {
+    // Server-side admin filtering remains the source of truth.
+  }
+  productEventQueue = [];
+  if (productEventFlushTimer) {
+    window.clearTimeout(productEventFlushTimer);
+    productEventFlushTimer = null;
+  }
+}
+
 function productEventUuid() {
   if (window.crypto && typeof window.crypto.randomUUID === "function") {
     return window.crypto.randomUUID();
@@ -432,6 +457,9 @@ function productFileSizeBucket(files) {
 }
 
 function trackProductEvent(eventName, properties = {}) {
+  if (isProductAnalyticsDisabled()) {
+    return;
+  }
   const normalizedName = String(eventName || "").trim();
   if (!normalizedName) {
     return;
@@ -460,6 +488,10 @@ function trackProductEvent(eventName, properties = {}) {
 }
 
 function flushProductEvents({ keepalive = false } = {}) {
+  if (isProductAnalyticsDisabled()) {
+    productEventQueue = [];
+    return;
+  }
   if (!state.apiBase || !productEventQueue.length) {
     return;
   }
@@ -808,7 +840,7 @@ function yandexMetrikaIdFromMeta() {
 }
 
 function shouldLoadDeferredAnalytics() {
-  return !isTelegramContextHint();
+  return !isTelegramContextHint() && !isProductAnalyticsDisabled();
 }
 
 function loadYandexMetrika() {
@@ -4909,6 +4941,9 @@ function renderUser(me, wallet) {
   const tgId = String(me.telegram_user_id || "—");
 
   state.me = me;
+  if (me.is_admin) {
+    disableProductAnalyticsForAdmin();
+  }
   userName.textContent = display;
   userTgId.textContent = tgId;
   renderWalletBalance(wallet);
