@@ -457,6 +457,8 @@ body.is-web-runtime.is-mobile-browser .app-main {
   display: grid;
   gap: 10px;
   min-width: 0;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 310px;
 }
 
 .template-section-header,

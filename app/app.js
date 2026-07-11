@@ -374,7 +374,7 @@ const TEMPLATE_FEED_INCREMENTAL_THRESHOLD = 24;
 const TEMPLATE_FEED_INITIAL_BATCH_SIZE = 18;
 const TEMPLATE_FEED_BATCH_SIZE = 18;
 const TEMPLATE_FEED_PRELOAD_DISTANCE_PX = 2200;
-const TEMPLATE_FEED_PRELOAD_IMAGE_COUNT = 36;
+const TEMPLATE_FEED_PRELOAD_IMAGE_COUNT = 6;
 const TEMPLATE_FEED_PRELOAD_PROMPT_COUNT = 12;
 const ADMIN_TEMPLATE_FILE_NOTE_DEFAULT =
   "PNG/JPG/WEBP до 10 MB. Превью и full соберутся автоматически. Файл нужен только для нового шаблона.";
@@ -2294,24 +2294,39 @@ async function authorizedBlobFetch(path) {
   }
 }
 
-async function downloadGenerationImage(jobId, fallbackBase = "kartivio-image") {
-  const normalizedJobId = String(jobId || "").trim();
+function triggerGenerationDownload(url, filename = "") {
+  const normalizedUrl = normalizeImageUrl(url);
+  if (!normalizedUrl) {
+    return false;
+  }
+  const link = document.createElement("a");
+  link.href = normalizedUrl;
+  if (filename) {
+    link.download = filename;
+  }
+  link.rel = "noopener";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  return true;
+}
+
+async function downloadGenerationImage(job, fallbackBase = "kartivio-image") {
+  const normalizedJobId = String(job?.id || job || "").trim();
   if (!normalizedJobId) {
     throw new Error("Идентификатор генерации не найден.");
+  }
+
+  const directUrl = normalizeImageUrl(job?.result_image_download_url || "");
+  if (directUrl && triggerGenerationDownload(directUrl)) {
+    return;
   }
 
   const { blob, contentType } = await authorizedBlobFetch(`/v1/generations/${normalizedJobId}/download`);
   const objectUrl = URL.createObjectURL(blob);
   const ext = extensionFromContentType(contentType || blob.type) || "png";
   const filename = `${fallbackBase}-${Date.now()}.${ext}`;
-
-  const link = document.createElement("a");
-  link.href = objectUrl;
-  link.download = filename;
-  link.rel = "noopener";
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
+  triggerGenerationDownload(objectUrl, filename);
   window.setTimeout(() => URL.revokeObjectURL(objectUrl), 2500);
 }
 
@@ -4892,18 +4907,22 @@ async function authorizedGetWithRetry(path, retries = 1) {
 function renderUser(me, wallet) {
   const display = String(me.display_name || me.telegram_user_id || "—");
   const tgId = String(me.telegram_user_id || "—");
-  const balance = Number(wallet.balance_credits || 0);
 
   state.me = me;
   userName.textContent = display;
   userTgId.textContent = tgId;
-  creditsValue.textContent = formatCredits(balance);
-  creditsBadge.textContent = String(balance);
+  renderWalletBalance(wallet);
   profileAvatar.textContent = display === "—" ? "K" : display[0].toUpperCase();
   renderReferenceImage();
   setReferencePromptNote(defaultReferencePromptNote());
   renderIdentityActions();
   renderAdminAccess();
+}
+
+function renderWalletBalance(wallet) {
+  const balance = Number(wallet?.balance_credits || 0);
+  creditsValue.textContent = formatCredits(balance);
+  creditsBadge.textContent = String(balance);
 }
 
 function openCheckout(url, { popupHandle = null } = {}) {
@@ -6781,7 +6800,7 @@ async function renderActiveImage(job, renderToken) {
     const downloadBtn = activeResult.querySelector('[data-action="download"]');
     if (downloadBtn) {
       downloadBtn.addEventListener("click", () => {
-        downloadGenerationImage(job.id, `kartivio-${job.id}`).catch((error) => {
+        downloadGenerationImage(job, `kartivio-${job.id}`).catch((error) => {
           setCreateNote(userFacingErrorMessage(error, "Не удалось скачать изображение."), true);
         });
       });
@@ -6947,7 +6966,7 @@ function renderHistory(payload) {
         if (!job.result_image_url) {
           return;
         }
-        downloadGenerationImage(job.id, `kartivio-${job.id}`).catch((error) => {
+        downloadGenerationImage(job, `kartivio-${job.id}`).catch((error) => {
           setCreateNote(userFacingErrorMessage(error, "Не удалось скачать изображение."), true);
         });
       });
@@ -7152,6 +7171,15 @@ async function loadPrivateData({ forceServerCheck = false } = {}) {
   renderUser(me, wallet);
 }
 
+async function refreshWalletBalance() {
+  if (!hasActiveSession()) {
+    return null;
+  }
+  const wallet = await authorizedGetWithRetry("/v1/wallet?limit=1", 1);
+  renderWalletBalance(wallet);
+  return wallet;
+}
+
 async function finalizeAuthSession(payload, provider) {
   const accessToken = String(payload && payload.access_token ? payload.access_token : "").trim();
   const refreshToken = String(payload && payload.refresh_token ? payload.refresh_token : "").trim();
@@ -7313,7 +7341,7 @@ async function pollActiveJob(jobId) {
       state.activePollTimer = window.setTimeout(() => pollActiveJob(jobId), 2500);
       return;
     }
-    await Promise.allSettled([loadPrivateData(), loadTemplates()]);
+    await refreshWalletBalance().catch(() => null);
     if (state.currentScreen === "history") {
       await loadHistory({ forceServerCheck: true });
     } else {
@@ -7398,13 +7426,14 @@ async function handleCreate() {
     });
     renderActiveJob(job);
     setCreateNote("Задача создана. Статус и результат появятся ниже.");
-    await Promise.allSettled([loadPrivateData(), loadTemplates()]);
+    refreshWalletBalance().catch(() => null);
     markHistoryCacheStale();
     await pollActiveJob(job.id);
   } catch (error) {
+    const errorCode = productEventErrorCode(error);
+    const hasInsufficientCredits = errorCode === "insufficient_credits";
     setCreateNote(userFacingErrorMessage(error, "Не удалось запустить генерацию."), true);
     if (requestStarted) {
-      const errorCode = productEventErrorCode(error);
       trackProductEvent("generation_submit_failed", {
         image_model: imageModel,
         output_size: outputSize || "unknown",
@@ -7423,13 +7452,15 @@ async function handleCreate() {
       }
       renderActiveResultState({
         variant: "error",
-        icon: "circle-alert",
-        title: "Не удалось запустить генерацию",
-        body: userFacingErrorMessage(error, "Попробуй еще раз."),
+        icon: hasInsufficientCredits ? "wallet-cards" : "circle-alert",
+        title: hasInsufficientCredits ? "Недостаточно кредитов" : "Не удалось запустить генерацию",
+        body: hasInsufficientCredits
+          ? `Для выбранной модели нужно ${formatCredits(cost)}.`
+          : userFacingErrorMessage(error, "Попробуй еще раз."),
         action: {
-          label: "Попробовать снова",
-          icon: "refresh-cw",
-          onClick: () => handleCreate(),
+          label: hasInsufficientCredits ? "Выбрать пакет" : "Попробовать снова",
+          icon: hasInsufficientCredits ? "wallet-cards" : "refresh-cw",
+          onClick: hasInsufficientCredits ? () => switchScreen("tokens") : () => handleCreate(),
         },
       });
       scrollActiveResultIntoView();
