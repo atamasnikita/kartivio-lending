@@ -19,7 +19,9 @@ const TELEGRAM_WEB_APP_SDK_SRC = "./vendor/telegram-web-app.js?v=62";
 const AUTH_BRIDGE_HASH_KEY = "auth_bridge";
 const API_HEALTHCHECK_TIMEOUT_MS = 2500;
 const API_FETCH_TIMEOUT_MS = 12000;
-const API_MULTIPART_TIMEOUT_MS = 45000;
+const API_MULTIPART_BASE_TIMEOUT_MS = 90000;
+const API_MULTIPART_TIMEOUT_PER_MB_MS = 12000;
+const API_MULTIPART_MAX_TIMEOUT_MS = 300000;
 const REFERENCE_PROMPT_TIMEOUT_MS = 50000;
 const YANDEX_OAUTH_STORAGE_KEYS = {
   state: "kartivio.yandex_oauth_state",
@@ -27,6 +29,7 @@ const YANDEX_OAUTH_STORAGE_KEYS = {
   returnTo: "kartivio.yandex_oauth_return_to",
 };
 const MAX_SOURCE_IMAGES = 3;
+const MAX_SOURCE_IMAGE_BYTES = 10_000_000;
 const PROMPT_MAX_LENGTH = 3000;
 const PROMPT_COUNTER_VISIBLE_AT = Math.floor(PROMPT_MAX_LENGTH * 0.72);
 const PROMPT_COUNTER_WARNING_AT = Math.floor(PROMPT_MAX_LENGTH * 0.9);
@@ -1679,8 +1682,8 @@ function setCreateButtonIdleLabel() {
   createButton.classList.remove("is-loading");
 }
 
-function setCreateButtonBusyLabel() {
-  createButton.textContent = "Генерация...";
+function setCreateButtonBusyLabel(label = "Генерация...") {
+  createButton.textContent = label;
   createButton.classList.add("is-loading");
 }
 
@@ -4787,7 +4790,42 @@ async function apiFetch(path, { method = "GET", body, auth = false, idempotencyK
   return payload;
 }
 
-async function apiMultipart(path, formData, { auth = false, idempotencyKey, timeoutMs } = {}) {
+function multipartFileBytes(formData) {
+  let totalBytes = 0;
+  if (!formData || typeof formData.forEach !== "function") {
+    return totalBytes;
+  }
+  formData.forEach((value) => {
+    if (value instanceof Blob) {
+      totalBytes += Number(value.size || 0);
+    }
+  });
+  return totalBytes;
+}
+
+function multipartRequestTimeoutMs(formData, requestedTimeoutMs = 0) {
+  const megabytes = Math.ceil(multipartFileBytes(formData) / (1024 * 1024));
+  const sizeAwareTimeout =
+    API_MULTIPART_BASE_TIMEOUT_MS + megabytes * API_MULTIPART_TIMEOUT_PER_MB_MS;
+  return Math.min(
+    API_MULTIPART_MAX_TIMEOUT_MS,
+    Math.max(Number(requestedTimeoutMs || 0), sizeAwareTimeout),
+  );
+}
+
+function multipartRequestError(message, code, status = 0, rawMessage = "") {
+  const error = new Error(message);
+  error.code = code;
+  error.status = status;
+  error.rawMessage = rawMessage || message;
+  return error;
+}
+
+async function apiMultipart(
+  path,
+  formData,
+  { auth = false, idempotencyKey, timeoutMs, onUploadProgress } = {},
+) {
   const headers = headersForApiBase(state.apiBase);
   if (auth && state.accessToken) {
     headers.Authorization = `Bearer ${state.accessToken}`;
@@ -4796,34 +4834,67 @@ async function apiMultipart(path, formData, { auth = false, idempotencyKey, time
     headers["Idempotency-Key"] = idempotencyKey;
   }
 
-  const response = await fetchWithTimeout(
-    `${state.apiBase}${path}`,
-    {
-      method: "POST",
-      credentials: "include",
-      headers,
-      body: formData,
-    },
-    timeoutMs || API_MULTIPART_TIMEOUT_MS
-  );
-  const payload = await parseJsonResponse(response);
-  if (!response.ok) {
-    const rawMessage = extractErrorMessage(payload, `HTTP ${response.status}`);
-    const errorCode =
-      (payload && typeof payload.code === "string" && payload.code) ||
-      (payload && payload.detail && typeof payload.detail.code === "string" && payload.detail.code) ||
-      "";
-    const message = userFacingErrorMessage(
-      { code: errorCode, status: response.status, rawMessage },
-      fallbackMessageByStatus(response.status)
-    );
-    const error = new Error(message);
-    error.status = response.status;
-    error.code = errorCode;
-    error.rawMessage = rawMessage;
-    throw error;
-  }
-  return payload;
+  const requestTimeoutMs = multipartRequestTimeoutMs(formData, timeoutMs);
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `${state.apiBase}${path}`, true);
+    xhr.withCredentials = true;
+    xhr.timeout = requestTimeoutMs;
+    for (const [name, value] of Object.entries(headers)) {
+      xhr.setRequestHeader(name, value);
+    }
+
+    if (typeof onUploadProgress === "function") {
+      xhr.upload.addEventListener("progress", (event) => {
+        const total = Number(event.total || multipartFileBytes(formData));
+        const loaded = Math.min(Number(event.loaded || 0), total || Number(event.loaded || 0));
+        const percent = total > 0 ? Math.min(100, Math.round((loaded / total) * 100)) : 0;
+        onUploadProgress({ loaded, total, percent });
+      });
+      xhr.upload.addEventListener("load", () => {
+        const total = multipartFileBytes(formData);
+        onUploadProgress({ loaded: total, total, percent: 100 });
+      });
+    }
+
+    xhr.addEventListener("load", () => {
+      let payload = null;
+      try {
+        payload = xhr.responseText ? JSON.parse(xhr.responseText) : null;
+      } catch (_error) {
+        payload = null;
+      }
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(payload);
+        return;
+      }
+      const rawMessage = extractErrorMessage(payload, xhr.responseText || `HTTP ${xhr.status}`);
+      const errorCode =
+        (payload && typeof payload.code === "string" && payload.code) ||
+        (payload && payload.detail && typeof payload.detail.code === "string" && payload.detail.code) ||
+        "";
+      const message = userFacingErrorMessage(
+        { code: errorCode, status: xhr.status, rawMessage },
+        fallbackMessageByStatus(xhr.status),
+      );
+      reject(multipartRequestError(message, errorCode, xhr.status, rawMessage));
+    });
+    xhr.addEventListener("error", () => {
+      reject(
+        multipartRequestError(
+          "Нет соединения с сервером. Проверь интернет и попробуй снова.",
+          "network_error",
+        ),
+      );
+    });
+    xhr.addEventListener("timeout", () => {
+      reject(multipartRequestError("Request timed out.", "request_timeout"));
+    });
+    xhr.addEventListener("abort", () => {
+      reject(multipartRequestError("Upload was aborted.", "request_aborted"));
+    });
+    xhr.send(formData);
+  });
 }
 
 async function resolveApiBase() {
@@ -7269,7 +7340,14 @@ async function createTextGeneration(prompt, imageModel, outputSize, clientReques
   });
 }
 
-async function createEditGeneration(prompt, imageModel, outputSize, sourceImages, clientRequestId) {
+async function createEditGeneration(
+  prompt,
+  imageModel,
+  outputSize,
+  sourceImages,
+  clientRequestId,
+  onUploadProgress,
+) {
   const form = new FormData();
   form.append("prompt", prompt);
   form.append("image_model", imageModel);
@@ -7283,6 +7361,7 @@ async function createEditGeneration(prompt, imageModel, outputSize, sourceImages
   }
   return authorizedMultipart("/v1/generations/edit", form, {
     idempotencyKey: clientRequestId,
+    onUploadProgress,
   });
 }
 
@@ -7298,7 +7377,7 @@ function validateReferenceImageFile(file) {
   if (!(file instanceof File)) {
     throw new Error("Сначала добавь фото-референс.");
   }
-  const maxBytes = 10 * 1024 * 1024;
+  const maxBytes = MAX_SOURCE_IMAGE_BYTES;
   const allowedMime = new Set(["image/png", "image/jpeg", "image/webp"]);
   const mime = String(file.type || "").toLowerCase();
   if (!file.size) {
@@ -7411,7 +7490,7 @@ async function handleCreate() {
       throw new Error(`Можно загрузить не более ${MAX_SOURCE_IMAGES} фото.`);
     }
     if (sourceImages.length > 0) {
-      const maxBytes = 10 * 1024 * 1024;
+      const maxBytes = MAX_SOURCE_IMAGE_BYTES;
       const allowedMime = new Set(["image/png", "image/jpeg", "image/webp"]);
       for (const sourceImage of sourceImages) {
         const mime = String(sourceImage.type || "").toLowerCase();
@@ -7449,8 +7528,34 @@ async function handleCreate() {
         total_size_bucket: productFileSizeBucket(sourceImages),
       });
     }
+    let lastUploadPercent = -1;
+    const onUploadProgress = sourceImages.length > 0
+      ? ({ percent }) => {
+          const normalizedPercent = Math.max(0, Math.min(100, Number(percent || 0)));
+          if (normalizedPercent === lastUploadPercent) {
+            return;
+          }
+          lastUploadPercent = normalizedPercent;
+          if (normalizedPercent >= 100) {
+            setCreateButtonBusyLabel("Создаю задачу...");
+            setCreateNote("Фото загружено без сжатия. Создаю задачу.");
+            return;
+          }
+          setCreateButtonBusyLabel(`Загрузка фото · ${normalizedPercent}%`);
+          setCreateNote(
+            `Загружаю ${sourceImageTotalSizeLabel(sourceImages)} без сжатия · ${normalizedPercent}%.`,
+          );
+        }
+      : undefined;
     const job = sourceImages.length > 0
-      ? await createEditGeneration(prompt, imageModel, outputSize, sourceImages, clientRequestId)
+      ? await createEditGeneration(
+          prompt,
+          imageModel,
+          outputSize,
+          sourceImages,
+          clientRequestId,
+          onUploadProgress,
+        )
       : await createTextGeneration(prompt, imageModel, outputSize, clientRequestId);
 
     state.activeJobId = job.id;
