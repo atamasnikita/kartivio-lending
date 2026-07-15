@@ -186,8 +186,9 @@ const API_ERROR_MESSAGES = Object.freeze({
   reference_prompt_invalid_request: "Не удалось собрать промпт по этому файлу.",
   reference_prompt_invalid_response: "Сервис вернул пустой результат. Попробуй другой референс.",
   reference_prompt_failed: "Не удалось собрать промпт по фото-референсу.",
-  unsupported_campaign_media_type: "Для рассылки подходят только PNG, JPG и WEBP.",
-  campaign_media_too_large: "Файл для рассылки слишком большой. Используй изображение до 10 MB.",
+  unsupported_campaign_media_type: "Для рассылки подходят PNG, JPG, WEBP или MP4.",
+  campaign_media_too_large: "Файл для рассылки слишком большой. Используй изображение до 10 MB или MP4 до 20 MB.",
+  invalid_campaign_video: "Не удалось прочитать MP4. Выбери другой файл.",
   unsupported_feed_template_media_type: "Для шаблона подходят PNG, JPG, WEBP или MP4.",
   unsupported_feed_template_image_type: "Для шаблона подходят PNG, JPG, WEBP или MP4.",
   feed_template_media_too_large: "Файл шаблона слишком большой. Используй файл до 20 MB.",
@@ -388,6 +389,7 @@ const TEMPLATE_FEED_PRELOAD_IMAGE_COUNT = 6;
 const TEMPLATE_FEED_PRELOAD_PROMPT_COUNT = 12;
 const TEMPLATE_VIDEO_URL_RE = /\.mp4(?:[?#].*)?$/i;
 const ADMIN_TEMPLATE_MAX_MEDIA_BYTES = 20 * 1024 * 1024;
+const ADMIN_CAMPAIGN_MAX_MEDIA_BYTES = 20 * 1024 * 1024;
 const ADMIN_TEMPLATE_FILE_NOTE_DEFAULT =
   "PNG/JPG/WEBP до 10 MB или MP4 до 20 MB. Файл нужен только для нового шаблона.";
 const PRODUCT_EVENT_FLUSH_DELAY_MS = 350;
@@ -600,7 +602,6 @@ const campaignMediaFileInput = document.getElementById("campaignMediaFileInput")
 const campaignMediaUploadButton = document.getElementById("campaignMediaUploadButton");
 const campaignMediaUploadNote = document.getElementById("campaignMediaUploadNote");
 const campaignMediaPreview = document.getElementById("campaignMediaPreview");
-const campaignMediaPreviewImage = document.getElementById("campaignMediaPreviewImage");
 const campaignPromoOfferField = document.getElementById("campaignPromoOfferField");
 const campaignPromoOfferSelect = document.getElementById("campaignPromoOfferSelect");
 const campaignTestChatIdInput = document.getElementById("campaignTestChatIdInput");
@@ -2242,6 +2243,42 @@ function validateAdminTemplateFile(file) {
     throw new Error("Для шаблона подходят PNG, JPG, WEBP или MP4.");
   }
   const maxBytes = adminTemplateFileSizeLimit(file);
+  if (Number(file.size || 0) > maxBytes) {
+    throw new Error(
+      mediaType === "video"
+        ? "MP4 слишком большой. Используй файл до 20 MB."
+        : "Изображение слишком большое. Используй файл до 10 MB.",
+    );
+  }
+  return mediaType;
+}
+
+function adminCampaignFileMediaType(file) {
+  if (!(file instanceof File)) {
+    return "";
+  }
+  const type = String(file.type || "").split(";", 1)[0].trim().toLowerCase();
+  if (type === "video/mp4" || String(file.name || "").trim().toLowerCase().endsWith(".mp4")) {
+    return "video";
+  }
+  if (["image/png", "image/jpeg", "image/webp"].includes(type)) {
+    return "image";
+  }
+  return "";
+}
+
+function adminCampaignFileSizeLimit(file) {
+  return adminCampaignFileMediaType(file) === "video"
+    ? ADMIN_CAMPAIGN_MAX_MEDIA_BYTES
+    : MAX_SOURCE_IMAGE_BYTES;
+}
+
+function validateAdminCampaignMediaFile(file) {
+  const mediaType = adminCampaignFileMediaType(file);
+  if (!mediaType) {
+    throw new Error("Для рассылки подходят PNG, JPG, WEBP или MP4.");
+  }
+  const maxBytes = adminCampaignFileSizeLimit(file);
   if (Number(file.size || 0) > maxBytes) {
     throw new Error(
       mediaType === "video"
@@ -4232,15 +4269,18 @@ function renderCampaignDraftVisibility() {
 
 function setCampaignMediaPreview(url) {
   const normalized = normalizeImageUrl(url);
-  if (!campaignMediaPreview || !campaignMediaPreviewImage) {
+  if (!campaignMediaPreview) {
     return;
   }
   if (!normalized) {
     campaignMediaPreview.classList.add("is-hidden");
-    campaignMediaPreviewImage.removeAttribute("src");
+    campaignMediaPreview.innerHTML = "";
     return;
   }
-  campaignMediaPreviewImage.src = normalized;
+  campaignMediaPreview.innerHTML = renderTemplateMediaMarkup(normalized, "Медиа кампании", {
+    className: "admin-campaign-media-preview",
+    controls: isTemplateVideoUrl(normalized),
+  });
   campaignMediaPreview.classList.remove("is-hidden");
 }
 
@@ -4316,6 +4356,7 @@ function renderCampaignsList() {
   campaignsList.innerHTML = state.adminCampaigns.map((item) => {
     const isSelected = item.id === state.selectedAdminCampaignId;
     const hasMedia = Boolean(item.media_url);
+    const mediaLabel = isTemplateVideoUrl(item.media_url) ? "video" : "photo";
     const audienceLabel = adminAudienceLabel(item.audience_segment);
     const explicitAudienceCount = Array.isArray(item.audience_user_ids) ? item.audience_user_ids.length : 0;
     const meta = [
@@ -4344,7 +4385,7 @@ function renderCampaignsList() {
         <div class="admin-record-meta">
           <span>${escapeHtml(audienceMeta)}</span>
           <span>${escapeHtml(formatAdminDateTime(item.created_at))}</span>
-          ${hasMedia ? '<span class="plan-badge plan-badge-muted">photo</span>' : ""}
+          ${hasMedia ? `<span class="plan-badge plan-badge-muted">${escapeHtml(mediaLabel)}</span>` : ""}
         </div>
       </article>
     `;
@@ -4693,6 +4734,7 @@ async function uploadCampaignMedia(file) {
   if (!(file instanceof File)) {
     throw new Error("Файл не выбран.");
   }
+  validateAdminCampaignMediaFile(file);
   const form = new FormData();
   form.append("file", file);
   const payload = await authorizedMultipart("/v1/admin/notification-media", form);

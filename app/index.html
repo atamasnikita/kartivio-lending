@@ -11,7 +11,7 @@
     />
     <meta name="kartivio-yandex-metrika-id" content="109102691" />
     <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=20260715-template-video-1" />
+    <link rel="stylesheet" href="./styles.css?v=20260715-campaign-video-1" />
     <script src="./vendor/lucide.min.js?v=1.18.0" defer></script>
   </head>
   <body>
@@ -624,13 +624,11 @@
                   <input id="campaignMediaUrlInput" type="url" maxlength="2048" placeholder="https://..." />
                 </div>
                 <div class="admin-media-upload-row">
-                  <input id="campaignMediaFileInput" class="visually-hidden-input" type="file" accept="image/png,image/jpeg,image/webp" />
+                  <input id="campaignMediaFileInput" class="visually-hidden-input" type="file" accept="image/png,image/jpeg,image/webp,video/mp4,.mp4" />
                   <button id="campaignMediaUploadButton" class="soft-btn" type="button">Загрузить файл</button>
-                  <span id="campaignMediaUploadNote" class="note">Можно вставить URL или загрузить PNG/JPG/WEBP до 10 MB.</span>
+                  <span id="campaignMediaUploadNote" class="note">Можно вставить URL или загрузить PNG/JPG/WEBP до 10 MB, MP4 до 20 MB.</span>
                 </div>
-                <div id="campaignMediaPreview" class="admin-media-preview is-hidden">
-                  <img id="campaignMediaPreviewImage" src="" alt="Превью коллажа" loading="lazy" />
-                </div>
+                <div id="campaignMediaPreview" class="admin-media-preview is-hidden"></div>
               </div>
               <div id="campaignPromoOfferField" class="field is-hidden">
                 <span>Promo offer</span>
@@ -785,6 +783,6 @@
       </article>
     </div>
 
-    <script src="./app.js?v=20260715-template-video-1" defer></script>
+    <script src="./app.js?v=20260715-campaign-video-1" defer></script>
   </body>
 </html>
