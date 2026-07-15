@@ -4175,9 +4175,7 @@ function buildCampaignDraftBody() {
     audience_segment: audienceMode === "explicit_user_ids" ? "explicit_user_ids" : defaultAudienceSegmentForKind(kind),
     audience_user_ids: audienceMode === "explicit_user_ids" ? audienceUserIds : [],
   };
-  if (kind === "new_templates") {
-    body.media_url = normalizeDraftText(campaignMediaUrlInput && campaignMediaUrlInput.value);
-  }
+  body.media_url = normalizeDraftText(campaignMediaUrlInput && campaignMediaUrlInput.value);
   if (kind === "promo_discount") {
     body.promo_offer_id = normalizeDraftText(campaignPromoOfferSelect && campaignPromoOfferSelect.value);
   }
@@ -4207,7 +4205,7 @@ function selectedCampaignDiffersFromDraft() {
   if (normalizeDraftText(selected.cta_text) !== normalizeDraftText(draft.cta_text)) {
     return true;
   }
-  if (draft.kind === "new_templates" && normalizeDraftText(selected.media_url) !== normalizeDraftText(draft.media_url)) {
+  if (normalizeDraftText(selected.media_url) !== normalizeDraftText(draft.media_url)) {
     return true;
   }
   if (draft.kind === "promo_discount" && normalizeDraftText(selected.promo_offer_id) !== normalizeDraftText(draft.promo_offer_id)) {
@@ -4253,16 +4251,13 @@ function renderCampaignDraftVisibility() {
   const isPromo = isPromoCampaignDraft();
   const explicitAudience = String(campaignAudienceModeSelect && campaignAudienceModeSelect.value || "").trim() === "explicit_user_ids";
   if (campaignMediaFields) {
-    campaignMediaFields.classList.toggle("is-hidden", isPromo);
+    campaignMediaFields.classList.remove("is-hidden");
   }
   if (campaignPromoOfferField) {
     campaignPromoOfferField.classList.toggle("is-hidden", !isPromo);
   }
   if (campaignAudienceUserIdsField) {
     campaignAudienceUserIdsField.classList.toggle("is-hidden", !explicitAudience);
-  }
-  if (campaignMediaPreview && isPromo) {
-    campaignMediaPreview.classList.add("is-hidden");
   }
   renderSelectedCampaignSummary();
 }
