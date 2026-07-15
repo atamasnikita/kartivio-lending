@@ -750,7 +750,7 @@ body.is-web-runtime.is-mobile-browser .app-main {
   backface-visibility: hidden;
 }
 
-.tool-card img {
+.tool-card .tool-media-image {
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -767,7 +767,7 @@ body.is-web-runtime.is-mobile-browser .app-main {
     box-shadow: 0 14px 34px rgba(2, 5, 12, 0.42);
   }
 
-  .tool-card:hover img {
+  .tool-card:hover .tool-media-image {
     transform: translate3d(0, 0, 0) scale(1.03);
   }
 
@@ -1099,8 +1099,29 @@ body.is-web-runtime.is-mobile-browser .app-main {
   height: 72px;
   border-radius: 8px;
   border: 1px solid #2c3550;
+  display: block;
+  overflow: hidden;
+  background: #0b1019;
+}
+
+.selected-template-preview-media {
+  width: 100%;
+  height: 100%;
   object-fit: cover;
   display: block;
+}
+
+.selected-template-preview video {
+  pointer-events: none;
+}
+
+.template-modal-media-slot {
+  width: 100%;
+  background: #080d14;
+}
+
+.template-modal-media-slot.is-loading {
+  opacity: 0.78;
 }
 
 .selected-template-body {
@@ -3702,7 +3723,8 @@ body.is-web-runtime.is-mobile-browser .app-main {
   background: #0b1019;
 }
 
-.admin-media-preview img {
+.admin-media-preview img,
+.admin-media-preview video {
   display: block;
   width: 100%;
   height: auto;
@@ -3871,7 +3893,8 @@ body.is-web-runtime.is-mobile-browser .app-main {
   background: #0b1019;
 }
 
-.admin-template-thumb img {
+.admin-template-thumb img,
+.admin-template-thumb video {
   display: block;
   width: 100%;
   height: 100%;
@@ -4483,7 +4506,7 @@ body.is-web-runtime.is-mobile-browser.nav-hidden .bottom-nav {
   .reference-primary-btn,
   .reference-inline-btn,
   .tool-card,
-  .tool-card img,
+  .tool-card .tool-media-image,
   .template-modal,
   .template-modal-card,
   .choice-chip,

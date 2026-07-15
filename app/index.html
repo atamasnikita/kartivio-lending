@@ -11,7 +11,7 @@
     />
     <meta name="kartivio-yandex-metrika-id" content="109102691" />
     <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=20260711-speed-1" />
+    <link rel="stylesheet" href="./styles.css?v=20260715-template-video-1" />
     <script src="./vendor/lucide.min.js?v=1.18.0" defer></script>
   </head>
   <body>
@@ -128,13 +128,7 @@
             </div>
 
             <section id="selectedTemplateCard" class="selected-template is-hidden">
-              <img
-                id="selectedTemplatePreview"
-                class="selected-template-preview"
-                src="https://picsum.photos/seed/kartivio-template/320/320"
-                alt="Выбранный шаблон"
-                loading="lazy"
-              />
+              <div id="selectedTemplatePreview" class="selected-template-preview"></div>
               <div class="selected-template-body">
                 <strong id="selectedTemplateTitle">Шаблон</strong>
                 <span id="selectedTemplateMeta">Готовый промпт для старта</span>
@@ -562,13 +556,11 @@
                 <textarea id="adminTemplatePromptInput" rows="8" maxlength="3000" placeholder="Полный промпт шаблона"></textarea>
               </label>
               <div class="admin-media-upload-row">
-                <input id="adminTemplateFileInput" class="visually-hidden-input" type="file" accept="image/png,image/jpeg,image/webp" />
+                <input id="adminTemplateFileInput" class="visually-hidden-input" type="file" accept="image/png,image/jpeg,image/webp,video/mp4,.mp4" />
                 <button id="adminTemplatePickFileButton" class="soft-btn" type="button">Выбрать файл</button>
-                <span id="adminTemplateFileNote" class="note">PNG/JPG/WEBP до 10 MB. Превью и full соберутся автоматически. Файл нужен только для нового шаблона.</span>
+                <span id="adminTemplateFileNote" class="note">PNG/JPG/WEBP до 10 MB или MP4 до 20 MB. Файл нужен только для нового шаблона.</span>
               </div>
-              <div id="adminTemplatePreview" class="admin-media-preview is-hidden">
-                <img id="adminTemplatePreviewImage" src="" alt="Превью шаблона" loading="lazy" />
-              </div>
+              <div id="adminTemplatePreview" class="admin-media-preview is-hidden"></div>
               <div id="adminTemplateMeta" class="note admin-selected-summary"></div>
               <div class="admin-form-actions">
                 <button id="adminTemplateCreateButton" class="primary-action admin-primary-action" type="button">Загрузить новый</button>
@@ -755,7 +747,7 @@
       <article class="template-modal-card">
         <div class="template-modal-media">
           <button id="templateModalClose" class="template-modal-close" type="button" aria-label="Закрыть">×</button>
-          <img id="templateModalImage" class="template-modal-image" src="" alt="Превью шаблона" loading="eager" decoding="async" />
+          <div id="templateModalMediaSlot" class="template-modal-media-slot"></div>
           <div class="template-modal-stats template-modal-stats-overlay">
             <button id="templateLikeButton" class="template-like-btn template-modal-like-btn" type="button" aria-label="Лайкнуть шаблон">
               <i data-lucide="heart"></i>
@@ -793,6 +785,6 @@
       </article>
     </div>
 
-    <script src="./app.js?v=20260712-upload-1" defer></script>
+    <script src="./app.js?v=20260715-template-video-1" defer></script>
   </body>
 </html>

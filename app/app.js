@@ -188,6 +188,11 @@ const API_ERROR_MESSAGES = Object.freeze({
   reference_prompt_failed: "Не удалось собрать промпт по фото-референсу.",
   unsupported_campaign_media_type: "Для рассылки подходят только PNG, JPG и WEBP.",
   campaign_media_too_large: "Файл для рассылки слишком большой. Используй изображение до 10 MB.",
+  unsupported_feed_template_media_type: "Для шаблона подходят PNG, JPG, WEBP или MP4.",
+  unsupported_feed_template_image_type: "Для шаблона подходят PNG, JPG, WEBP или MP4.",
+  feed_template_media_too_large: "Файл шаблона слишком большой. Используй файл до 20 MB.",
+  feed_template_image_too_large: "Файл шаблона слишком большой. Используй файл до 20 MB.",
+  invalid_feed_template_video: "Не удалось прочитать MP4. Выбери другой файл.",
   unsupported_campaign_kind: "Выбран неподдерживаемый тип кампании.",
   unsupported_audience_segment: "Выбран неподдерживаемый сегмент аудитории.",
   explicit_user_ids_required: "Для точечной рассылки нужен хотя бы один user_id.",
@@ -367,6 +372,7 @@ const state = {
   adminCampaignDraftKind: "new_templates",
   adminCampaignAudienceMode: "auto",
   adminTemplateLocalPreviewUrl: "",
+  adminTemplateLocalPreviewMediaType: "",
   trackedResultJobIds: new Set(),
 };
 
@@ -380,8 +386,10 @@ const TEMPLATE_FEED_BATCH_SIZE = 18;
 const TEMPLATE_FEED_PRELOAD_DISTANCE_PX = 2200;
 const TEMPLATE_FEED_PRELOAD_IMAGE_COUNT = 6;
 const TEMPLATE_FEED_PRELOAD_PROMPT_COUNT = 12;
+const TEMPLATE_VIDEO_URL_RE = /\.mp4(?:[?#].*)?$/i;
+const ADMIN_TEMPLATE_MAX_MEDIA_BYTES = 20 * 1024 * 1024;
 const ADMIN_TEMPLATE_FILE_NOTE_DEFAULT =
-  "PNG/JPG/WEBP до 10 MB. Превью и full соберутся автоматически. Файл нужен только для нового шаблона.";
+  "PNG/JPG/WEBP до 10 MB или MP4 до 20 MB. Файл нужен только для нового шаблона.";
 const PRODUCT_EVENT_FLUSH_DELAY_MS = 350;
 const PRODUCT_EVENT_BATCH_SIZE = 10;
 let productEventQueue = [];
@@ -571,7 +579,6 @@ const adminTemplateFileInput = document.getElementById("adminTemplateFileInput")
 const adminTemplatePickFileButton = document.getElementById("adminTemplatePickFileButton");
 const adminTemplateFileNote = document.getElementById("adminTemplateFileNote");
 const adminTemplatePreview = document.getElementById("adminTemplatePreview");
-const adminTemplatePreviewImage = document.getElementById("adminTemplatePreviewImage");
 const adminTemplateMeta = document.getElementById("adminTemplateMeta");
 const adminTemplateCreateButton = document.getElementById("adminTemplateCreateButton");
 const adminTemplateSaveButton = document.getElementById("adminTemplateSaveButton");
@@ -691,7 +698,7 @@ const historyMoreButton = document.getElementById("historyMoreButton");
 const historyMoreNote = document.getElementById("historyMoreNote");
 const templateModal = document.getElementById("templateModal");
 const templateModalClose = document.getElementById("templateModalClose");
-const templateModalImage = document.getElementById("templateModalImage");
+const templateModalMediaSlot = document.getElementById("templateModalMediaSlot");
 const templateModalTitle = document.getElementById("templateModalTitle");
 const templateModalCategory = document.getElementById("templateModalCategory");
 const templateLikeButton = document.getElementById("templateLikeButton");
@@ -2205,6 +2212,96 @@ function normalizeImageUrl(rawUrl) {
   }
 }
 
+function isTemplateVideoUrl(rawUrl) {
+  return TEMPLATE_VIDEO_URL_RE.test(String(rawUrl || "").trim());
+}
+
+function adminTemplateFileMediaType(file) {
+  if (!(file instanceof File)) {
+    return "";
+  }
+  const type = String(file.type || "").split(";", 1)[0].trim().toLowerCase();
+  if (type === "video/mp4" || String(file.name || "").trim().toLowerCase().endsWith(".mp4")) {
+    return "video";
+  }
+  if (["image/png", "image/jpeg", "image/webp"].includes(type)) {
+    return "image";
+  }
+  return "";
+}
+
+function adminTemplateFileSizeLimit(file) {
+  return adminTemplateFileMediaType(file) === "video"
+    ? ADMIN_TEMPLATE_MAX_MEDIA_BYTES
+    : MAX_SOURCE_IMAGE_BYTES;
+}
+
+function validateAdminTemplateFile(file) {
+  const mediaType = adminTemplateFileMediaType(file);
+  if (!mediaType) {
+    throw new Error("Для шаблона подходят PNG, JPG, WEBP или MP4.");
+  }
+  const maxBytes = adminTemplateFileSizeLimit(file);
+  if (Number(file.size || 0) > maxBytes) {
+    throw new Error(
+      mediaType === "video"
+        ? "MP4 слишком большой. Используй файл до 20 MB."
+        : "Изображение слишком большое. Используй файл до 10 MB.",
+    );
+  }
+  return mediaType;
+}
+
+function formatMegabytes(bytes) {
+  const value = Number(bytes || 0);
+  if (!Number.isFinite(value) || value <= 0) {
+    return "0 MB";
+  }
+  return `${(value / (1024 * 1024)).toFixed(value >= 1024 * 1024 ? 1 : 2)} MB`;
+}
+
+function renderTemplateMediaMarkup(
+  rawUrl,
+  alt,
+  {
+    className = "tool-media-image",
+    loading = "lazy",
+    priority = false,
+    autoplay = false,
+    controls = false,
+  } = {},
+) {
+  const url = normalizeImageUrl(rawUrl);
+  if (!url) {
+    return "";
+  }
+  const safeUrl = escapeHtml(url);
+  const safeAlt = escapeHtml(alt || "Шаблон");
+  const safeClass = escapeHtml(className);
+  if (isTemplateVideoUrl(url)) {
+    return `<video class="${safeClass}" src="${safeUrl}" muted loop playsinline preload="${autoplay ? "auto" : "metadata"}"${autoplay ? " autoplay" : ""}${controls ? " controls" : ""} aria-label="${safeAlt}"></video>`;
+  }
+  const imagePriority = priority ? ' fetchpriority="high"' : "";
+  return `<img class="${safeClass}" src="${safeUrl}" alt="${safeAlt}" loading="${escapeHtml(loading)}" decoding="async"${imagePriority} />`;
+}
+
+function mediaElementCurrentUrl(element) {
+  if (!element) {
+    return "";
+  }
+  if (typeof element.currentSrc === "string" && element.currentSrc) {
+    return element.currentSrc;
+  }
+  if (typeof element.src === "string" && element.src) {
+    return element.src;
+  }
+  return "";
+}
+
+function templateCardCurrentMediaUrl(card, fallbackUrl) {
+  return mediaElementCurrentUrl(card?.querySelector(".tool-media-image")) || fallbackUrl || "";
+}
+
 function extensionFromContentType(contentType) {
   if (!contentType) {
     return "";
@@ -3117,7 +3214,14 @@ function renderSelectedTemplateCard() {
     return;
   }
   const preview = String(state.selectedTemplate.preview_image_url || "").trim();
-  selectedTemplatePreview.src = preview || "https://picsum.photos/seed/kartivio-template/320/320";
+  selectedTemplatePreview.innerHTML = renderTemplateMediaMarkup(
+    preview || "https://picsum.photos/seed/kartivio-template/320/320",
+    state.selectedTemplate.title || "Выбранный шаблон",
+    {
+      className: "selected-template-preview-media",
+      autoplay: isTemplateVideoUrl(preview),
+    },
+  );
   selectedTemplateTitle.textContent = state.selectedTemplate.title || "Выбран шаблон";
   const category = String(state.selectedTemplate.category || "").trim();
   const status = selectedTemplatePromptStatus();
@@ -3738,6 +3842,7 @@ function releaseAdminTemplateLocalPreview() {
     URL.revokeObjectURL(current);
   }
   state.adminTemplateLocalPreviewUrl = "";
+  state.adminTemplateLocalPreviewMediaType = "";
 }
 
 function clearAdminTemplateFileSelection() {
@@ -3754,17 +3859,20 @@ function adminTemplateCurrentFile() {
     : null;
 }
 
-function setAdminTemplatePreview(url) {
-  if (!adminTemplatePreview || !adminTemplatePreviewImage) {
+function setAdminTemplatePreview(url, mediaType = "") {
+  if (!adminTemplatePreview) {
     return;
   }
   const normalized = normalizeImageUrl(url);
   if (!normalized) {
     adminTemplatePreview.classList.add("is-hidden");
-    adminTemplatePreviewImage.removeAttribute("src");
+    adminTemplatePreview.innerHTML = "";
     return;
   }
-  adminTemplatePreviewImage.src = normalized;
+  const isVideo = mediaType === "video" || isTemplateVideoUrl(normalized);
+  adminTemplatePreview.innerHTML = isVideo
+    ? `<video src="${escapeHtml(normalized)}" muted loop playsinline controls preload="metadata" aria-label="Превью шаблона"></video>`
+    : `<img src="${escapeHtml(normalized)}" alt="Превью шаблона" loading="lazy" />`;
   adminTemplatePreview.classList.remove("is-hidden");
 }
 
@@ -3862,7 +3970,7 @@ function renderAdminTemplateFormState() {
   if (selectedFile) {
     const localPreview = String(state.adminTemplateLocalPreviewUrl || "").trim();
     if (localPreview) {
-      setAdminTemplatePreview(localPreview);
+      setAdminTemplatePreview(localPreview, state.adminTemplateLocalPreviewMediaType);
     }
   } else if (selected) {
     setAdminTemplatePreview(selected.preview_image_url || selected.full_image_url || "");
@@ -4298,10 +4406,14 @@ function renderAdminTemplatesList() {
         ? '<span class="plan-badge">Активен</span>'
         : '<span class="plan-badge plan-badge-muted">Скрыт</span>';
       const previewUrl = normalizeImageUrl(item.preview_image_url || item.full_image_url || "");
+      const previewMarkup = renderTemplateMediaMarkup(previewUrl, item.title || "Шаблон", {
+        className: "admin-template-thumb-media",
+        autoplay: false,
+      });
       return `
         <article class="admin-record-card admin-template-card admin-template-card-static${isSelected ? " is-selected" : ""}" data-template-id="${escapeHtml(item.id)}">
           <div class="admin-template-thumb">
-            ${previewUrl ? `<img src="${escapeHtml(previewUrl)}" alt="${escapeHtml(item.title || "Шаблон")}" loading="lazy" />` : ""}
+            ${previewMarkup}
           </div>
           <div class="admin-template-body">
             <div class="admin-record-head">
@@ -4473,6 +4585,7 @@ async function createAdminTemplate() {
   if (!(file instanceof File)) {
     throw new Error("Сначала выбери файл шаблона.");
   }
+  validateAdminTemplateFile(file);
   const draft = adminTemplateDraftBody();
   const form = new FormData();
   form.append("file", file);
@@ -5451,6 +5564,9 @@ function preloadTemplateImage(url) {
   if (!normalizedUrl) {
     return Promise.resolve(false);
   }
+  if (isTemplateVideoUrl(normalizedUrl)) {
+    return Promise.resolve(false);
+  }
   if (templatePreloadedImageUrls.has(normalizedUrl)) {
     return Promise.resolve(true);
   }
@@ -5621,6 +5737,13 @@ function closeTemplateModal() {
     templateModalPromptScroll.scrollTop = 0;
   }
   templateModalImageLoadToken += 1;
+  if (templateModalMediaSlot) {
+    const video = templateModalMediaSlot.querySelector("video");
+    if (video) {
+      video.pause();
+    }
+    templateModalMediaSlot.innerHTML = "";
+  }
   if (templateModalCloseTimer) {
     window.clearTimeout(templateModalCloseTimer);
     templateModalCloseTimer = null;
@@ -5668,12 +5791,19 @@ function openTemplateModal(item, initialPreviewUrl = "") {
   templateModalImageLoadToken += 1;
   const displayUrl =
     fullUrl !== previewUrl && templatePreloadedImageUrls.has(fullUrl) ? fullUrl : previewUrl;
-  templateModalImage.classList.remove("is-loading");
-  templateModalImage.src = displayUrl;
-  if (fullUrl && fullUrl !== displayUrl) {
+  if (templateModalMediaSlot) {
+    templateModalMediaSlot.classList.remove("is-loading");
+    templateModalMediaSlot.innerHTML = renderTemplateMediaMarkup(displayUrl, modalItem.title || "Шаблон", {
+      className: "template-modal-image",
+      loading: "eager",
+      priority: true,
+      autoplay: isTemplateVideoUrl(displayUrl),
+      controls: isTemplateVideoUrl(displayUrl),
+    });
+  }
+  if (fullUrl && fullUrl !== displayUrl && !isTemplateVideoUrl(fullUrl)) {
     preloadTemplateImage(fullUrl);
   }
-  templateModalImage.alt = modalItem.title || "Шаблон";
   templateModalTitle.textContent = modalItem.title || "Шаблон";
   templateModalCategory.textContent = normalizeTemplateCategory(modalItem.category);
   renderTemplateModalStats(modalItem);
@@ -6369,12 +6499,17 @@ function createTemplateCard(item, { itemIndex = 0, totalItems = 0, layout = "gri
   const shouldEagerLoadImage =
     Boolean(eager) || (!isRailLayout && (itemIndex < 6 || itemIndex >= newestBatchStart));
   const imageLoading = shouldEagerLoadImage ? "eager" : "lazy";
-  const imagePriority = priority && shouldEagerLoadImage ? ' fetchpriority="high"' : "";
   const displayRatio = isRailLayout ? "4 / 5" : Number.isFinite(ratio) && ratio > 0 ? String(ratio) : "1";
   card.style.setProperty("--template-ratio", displayRatio);
+  const mediaMarkup = renderTemplateMediaMarkup(imageUrl, item.title, {
+    className: "tool-media-image",
+    loading: imageLoading,
+    priority: Boolean(priority && shouldEagerLoadImage),
+    autoplay: isTemplateVideoUrl(imageUrl) && shouldEagerLoadImage,
+  });
   card.innerHTML = `
     <div class="tool-media">
-      <img class="tool-media-image" src="${escapeHtml(imageUrl)}" alt="${escapeHtml(item.title)}" loading="${imageLoading}" decoding="async"${imagePriority} />
+      ${mediaMarkup}
     </div>
     <div class="tool-card-top-actions">
       <button class="template-like-btn tool-like-btn${templateLikedByMe(item) ? " is-liked" : ""}" data-action="toggle-like" type="button" aria-label="${templateLikedByMe(item) ? "Убрать лайк у шаблона" : "Лайкнуть шаблон"}" aria-pressed="${templateLikedByMe(item) ? "true" : "false"}">
@@ -6398,7 +6533,7 @@ function createTemplateCard(item, { itemIndex = 0, totalItems = 0, layout = "gri
     preloadTemplateDetail(item.id);
     preloadTemplateImage(templatePreviewUrl(item));
     const fullUrl = templateFullUrl(item);
-    if (fullUrl && fullUrl !== templatePreviewUrl(item)) {
+    if (fullUrl && fullUrl !== templatePreviewUrl(item) && !isTemplateVideoUrl(fullUrl)) {
       preloadTemplateImage(fullUrl);
     }
   };
@@ -6417,8 +6552,7 @@ function createTemplateCard(item, { itemIndex = 0, totalItems = 0, layout = "gri
   });
   card.addEventListener("click", () => {
     warmTemplateAssets();
-    const cardImage = card.querySelector(".tool-media-image");
-    const initialPreviewUrl = cardImage && typeof cardImage.currentSrc === "string" ? cardImage.currentSrc : imageUrl;
+    const initialPreviewUrl = templateCardCurrentMediaUrl(card, imageUrl);
     openTemplateModal(item, initialPreviewUrl);
   });
   if (!isTelegramMiniAppRuntime()) {
@@ -6430,8 +6564,7 @@ function createTemplateCard(item, { itemIndex = 0, totalItems = 0, layout = "gri
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
       warmTemplateAssets();
-      const cardImage = card.querySelector(".tool-media-image");
-      const initialPreviewUrl = cardImage && typeof cardImage.currentSrc === "string" ? cardImage.currentSrc : imageUrl;
+      const initialPreviewUrl = templateCardCurrentMediaUrl(card, imageUrl);
       openTemplateModal(item, initialPreviewUrl);
     }
   });
@@ -8294,8 +8427,18 @@ function bindEvents() {
         renderAdminTemplateFormState();
         return;
       }
+      let mediaType = "";
+      try {
+        mediaType = validateAdminTemplateFile(file);
+      } catch (error) {
+        clearAdminTemplateFileSelection();
+        setAdminTemplateFileStatus(error?.message || "Файл не подходит для шаблона.", true);
+        renderAdminTemplateFormState();
+        return;
+      }
       state.adminTemplateLocalPreviewUrl = URL.createObjectURL(file);
-      setAdminTemplateFileStatus(`Файл выбран: ${file.name}`);
+      state.adminTemplateLocalPreviewMediaType = mediaType;
+      setAdminTemplateFileStatus(`Файл выбран: ${file.name} · ${formatMegabytes(file.size)}`);
       renderAdminTemplateFormState();
     });
   }
