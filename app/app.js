@@ -46,9 +46,11 @@ const MODEL_COSTS = {
 const TOPUP_DISPLAY_TITLES = Object.freeze({
   mini: "Старт",
   small: "Базовый",
+  first_small_bonus: "Первый фотосет",
   medium: "Продвинутый",
   large: "Максимум",
 });
+const FIRST_PHOTOSET_TOPUP_CODE = "first_small_bonus";
 
 const IMAGE_MODEL_LABELS = {
   "gemini-3.1-flash-image-preview": "Nano Banana 2",
@@ -206,6 +208,7 @@ const API_ERROR_MESSAGES = Object.freeze({
   promo_offer_redemptions_unsupported: "Сейчас поддерживается только 1 использование на пользователя.",
   payment_not_found: "Платеж не найден.",
   unknown_package: "Пакет не найден. Выбери один из доступных.",
+  first_offer_not_eligible: "Это предложение сейчас недоступно.",
   unsupported_payment_kind: "Этот тип оплаты сейчас недоступен.",
   yookassa_not_configured: "Оплата временно недоступна.",
   yookassa_create_failed: "Не удалось создать платеж. Попробуй еще раз.",
@@ -338,7 +341,9 @@ const state = {
   activeTemplateModalId: "",
   activeTemplateModalItem: null,
   topups: [],
+  allTopups: [],
   selectedTopupCode: "",
+  walletBalanceCredits: 0,
   linkedProviders: new Set(),
   acquisitionTouch: null,
   telegramLinkToken: "",
@@ -375,6 +380,8 @@ const state = {
   adminTemplateLocalPreviewUrl: "",
   adminTemplateLocalPreviewMediaType: "",
   trackedResultJobIds: new Set(),
+  trackedSuccessfulGenerationJobIds: new Set(),
+  trackedFirstPhotosetOfferViews: new Set(),
 };
 
 let tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
@@ -2521,6 +2528,16 @@ async function openGenerationImage(job) {
   await openImage(targetUrl);
 }
 
+function openFirstPhotosetPaywall() {
+  switchScreen("tokens");
+  window.requestAnimationFrame(() => {
+    if (state.allTopups.length) {
+      renderPlans({ topups: state.allTopups });
+    }
+    selectTopup(FIRST_PHOTOSET_TOPUP_CODE);
+  });
+}
+
 function switchScreen(nextScreen) {
   const target = String(nextScreen || "").trim();
   if (!target) {
@@ -2536,6 +2553,7 @@ function switchScreen(nextScreen) {
     trackProductEvent("feed_viewed", { screen: "feed" });
   } else if (target === "tokens") {
     trackProductEvent("paywall_viewed", { screen: "tokens", source: "navigation" });
+    syncPlansAfterEligibilityChange();
   }
   appShell.classList.toggle("is-paywall-active", target === "tokens");
   for (const screen of screens) {
@@ -2657,6 +2675,72 @@ function referenceImageFormatLabel(file) {
 
 function hasSuccessfulPayment() {
   return Boolean(state.me && state.me.has_successful_payment);
+}
+
+function successfulGenerationCount() {
+  return Number(state.me?.successful_generation_count || 0);
+}
+
+function setSuccessfulGenerationCount(nextCount) {
+  const normalized = Math.max(0, Number(nextCount || 0));
+  if (!state.me) {
+    return;
+  }
+  state.me.successful_generation_count = Math.max(successfulGenerationCount(), normalized);
+}
+
+function noteSuccessfulGeneration(job) {
+  const status = String(job?.status || "").toLowerCase();
+  const jobId = String(job?.id || "").trim();
+  if (status !== "done" || !jobId || state.trackedSuccessfulGenerationJobIds.has(jobId)) {
+    return;
+  }
+  state.trackedSuccessfulGenerationJobIds.add(jobId);
+  setSuccessfulGenerationCount(successfulGenerationCount() + 1);
+}
+
+function syncSuccessfulGenerationCountFromJobs(items) {
+  if (!Array.isArray(items) || items.length === 0) {
+    return;
+  }
+  const doneIds = new Set(
+    items
+      .filter((item) => String(item?.status || "").toLowerCase() === "done")
+      .map((item) => String(item?.id || "").trim())
+      .filter(Boolean),
+  );
+  for (const id of doneIds) {
+    state.trackedSuccessfulGenerationJobIds.add(id);
+  }
+  setSuccessfulGenerationCount(doneIds.size);
+}
+
+function walletBalanceCredits() {
+  return Number(state.walletBalanceCredits || 0);
+}
+
+function firstPhotosetOfferEligible(source = "credits_screen") {
+  if (!hasActiveSession() || hasSuccessfulPayment()) {
+    return false;
+  }
+  if (walletBalanceCredits() !== 0) {
+    return false;
+  }
+  const minimumGenerations = source === "after_second_success" ? 2 : 1;
+  return successfulGenerationCount() >= minimumGenerations;
+}
+
+function trackFirstPhotosetOfferViewed(source) {
+  const normalizedSource = String(source || "credits_screen").trim() || "credits_screen";
+  const key = `${state.me?.id || "anonymous"}:${normalizedSource}`;
+  if (state.trackedFirstPhotosetOfferViews.has(key)) {
+    return;
+  }
+  state.trackedFirstPhotosetOfferViews.add(key);
+  trackProductEvent("first_photoset_offer_viewed", {
+    source: normalizedSource,
+    package_code: FIRST_PHOTOSET_TOPUP_CODE,
+  });
 }
 
 function hasReferencePromptAccess() {
@@ -5173,12 +5257,15 @@ function renderUser(me, wallet) {
   setReferencePromptNote(defaultReferencePromptNote());
   renderIdentityActions();
   renderAdminAccess();
+  syncPlansAfterEligibilityChange();
 }
 
 function renderWalletBalance(wallet) {
   const balance = Number(wallet?.balance_credits || 0);
+  state.walletBalanceCredits = balance;
   creditsValue.textContent = formatCredits(balance);
   creditsBadge.textContent = String(balance);
+  syncPlansAfterEligibilityChange();
 }
 
 function openCheckout(url, { popupHandle = null } = {}) {
@@ -5261,7 +5348,60 @@ async function buyPackage(code) {
   }
 }
 
-function selectTopup(code) {
+function topupDisplayTitle(item) {
+  const code = String(item?.code || "").trim();
+  return TOPUP_DISPLAY_TITLES[code] || String(item?.title || "");
+}
+
+function topupPhotoCount(item) {
+  const explicitCount = Number(item?.photo_count || 0);
+  if (explicitCount > 0) {
+    return explicitCount;
+  }
+  const credits = Number(item?.credits || 0);
+  return Math.floor(credits / (MODEL_COSTS["gemini-3.1-flash-image-preview"] || 10));
+}
+
+function topupResultLabel(item) {
+  const code = String(item?.code || "").trim();
+  const photoCount = topupPhotoCount(item);
+  if (code === FIRST_PHOTOSET_TOPUP_CODE) {
+    return `${photoCount} фото · бонус +5 фото`;
+  }
+  return `${photoCount} фото`;
+}
+
+function topupActionLabel(item) {
+  return `Получить ${topupPhotoCount(item)} фото за ${Number(item?.price_rub || 0)} ₽`;
+}
+
+function visibleTopupsForPaywall(allTopups) {
+  const source = Array.isArray(allTopups) ? allTopups : [];
+  const shouldShowFirstOffer = firstPhotosetOfferEligible("credits_screen");
+  const order = shouldShowFirstOffer
+    ? [FIRST_PHOTOSET_TOPUP_CODE, "mini", "medium", "large"]
+    : ["mini", "small", "medium", "large"];
+  const byCode = new Map(source.map((item) => [String(item?.code || "").trim(), item]));
+  const ordered = order.map((code) => byCode.get(code)).filter(Boolean);
+  const knownCodes = new Set(order);
+  for (const item of source) {
+    const code = String(item?.code || "").trim();
+    if (!code || knownCodes.has(code) || code === FIRST_PHOTOSET_TOPUP_CODE) {
+      continue;
+    }
+    ordered.push(item);
+  }
+  return ordered;
+}
+
+function syncPlansAfterEligibilityChange() {
+  if (!plansGrid || !Array.isArray(state.allTopups) || state.allTopups.length === 0) {
+    return;
+  }
+  renderPlans({ topups: state.allTopups });
+}
+
+function selectTopup(code, { updateNote = true } = {}) {
   state.selectedTopupCode = String(code || "").trim();
   const cards = plansGrid.querySelectorAll(".plan-card");
   for (const card of cards) {
@@ -5275,41 +5415,59 @@ function selectTopup(code) {
     plansActionButton.disabled = true;
     return;
   }
-  plansActionButton.textContent = `Получить ${formatCredits(selected.credits)} за ${selected.price_rub} ₽`;
+  plansActionButton.textContent = topupActionLabel(selected);
   plansActionButton.disabled = false;
+  if (updateNote && selected.code === FIRST_PHOTOSET_TOPUP_CODE) {
+    setPlansNote("Первый фотосет: 27 фото за цену базового пакета.");
+  }
 }
 
 function renderPlans(payload) {
-  const topups = Array.isArray(payload && payload.topups) ? payload.topups : [];
+  const sourceTopups = Array.isArray(payload && payload.topups) ? payload.topups : state.allTopups;
+  state.allTopups = sourceTopups;
+  const topups = visibleTopupsForPaywall(sourceTopups);
+  const showFirstOffer = topups.some((item) => String(item?.code || "").trim() === FIRST_PHOTOSET_TOPUP_CODE);
   state.topups = topups;
   plansGrid.innerHTML = "";
+  plansGrid.classList.toggle("has-first-offer", showFirstOffer);
   if (!topups.length) {
     plansGrid.innerHTML = '<article class="plan-card plan-card-unavailable">Пакеты временно недоступны.</article>';
     selectTopup("");
     return;
   }
 
+  if (showFirstOffer && state.currentScreen === "tokens") {
+    trackFirstPhotosetOfferViewed("credits_screen");
+  }
+
   for (const item of topups) {
     const credits = Number(item.credits || 0);
-    const nb2Count = Number(item.nb2_images || Math.floor(credits / (MODEL_COSTS["gemini-3.1-flash-image-preview"] || 1)));
-    const nbproCount = Number(item.nbpro_images || Math.floor(credits / (MODEL_COSTS["gemini-3-pro-image-preview"] || 1)));
-    const isPopular = Boolean(item.is_popular);
+    const code = String(item.code || "").trim();
+    const isFirstOffer = code === FIRST_PHOTOSET_TOPUP_CODE;
+    const isPopular = !showFirstOffer && Boolean(item.is_popular);
     const valueDiscountPercent = Number(item.value_discount_percent || 0);
-    const displayTitle = TOPUP_DISPLAY_TITLES[String(item.code || "").trim()] || String(item.title || "");
+    const displayTitle = topupDisplayTitle(item);
     const discountHtml =
-      valueDiscountPercent > 0
+      !isFirstOffer && valueDiscountPercent > 0
         ? `<span class="plan-saving">Выгода ${escapeHtml(valueDiscountPercent)}%</span>`
         : "";
-    const popularHtml = isPopular ? '<span class="plan-popular-badge">Популярный</span>' : "";
+    const bonusHtml = isFirstOffer ? '<span class="plan-saving plan-bonus">+5 фото</span>' : "";
+    const popularHtml = !isFirstOffer && isPopular ? '<span class="plan-popular-badge">Популярный</span>' : "";
     const card = document.createElement("button");
     card.type = "button";
     card.setAttribute("role", "radio");
     card.setAttribute("aria-checked", "false");
     card.className = "plan-card";
+    if (isFirstOffer) {
+      card.classList.add("is-first-offer");
+    }
+    if (showFirstOffer && code === "mini") {
+      card.classList.add("is-secondary-start");
+    }
     if (isPopular) {
       card.classList.add("is-popular");
     }
-    card.dataset.code = item.code;
+    card.dataset.code = code;
     card.innerHTML = `
       ${popularHtml}
       <span class="plan-radio" aria-hidden="true"></span>
@@ -5317,8 +5475,9 @@ function renderPlans(payload) {
         <span class="plan-name-row">
           <span class="plan-name">${escapeHtml(displayTitle)}</span>
           ${discountHtml}
+          ${bonusHtml}
         </span>
-        <span class="plan-result">${escapeHtml(nb2Count)} фото NB2 или ${escapeHtml(nbproCount)} Pro · ${escapeHtml(formatCredits(credits))}</span>
+        <span class="plan-result">${escapeHtml(topupResultLabel(item))}</span>
       </span>
       <span class="plan-price">
         <strong>${escapeHtml(item.price_rub)} ₽</strong>
@@ -5326,18 +5485,28 @@ function renderPlans(payload) {
       </span>
     `;
     card.addEventListener("click", () => {
-      selectTopup(item.code);
+      selectTopup(code);
       trackProductEvent("package_selected", {
-        package_code: item.code,
+        package_code: code,
         credits,
         price_rub: Number(item.price_rub || 0),
       });
-      setPlansNote("Безопасная оплата через ЮKassa");
+      if (code !== FIRST_PHOTOSET_TOPUP_CODE) {
+        setPlansNote("Безопасная оплата через ЮKassa");
+      }
     });
     plansGrid.appendChild(card);
   }
-  const defaultCode = topups.find((item) => item.is_popular)?.code || topups[0].code;
-  selectTopup(defaultCode);
+  const currentIsVisible = topups.some((item) => String(item.code || "").trim() === state.selectedTopupCode);
+  const defaultCode = showFirstOffer
+    ? FIRST_PHOTOSET_TOPUP_CODE
+    : topups.find((item) => item.is_popular)?.code || topups[0].code;
+  selectTopup(currentIsVisible ? state.selectedTopupCode : defaultCode, { updateNote: false });
+  if (showFirstOffer && (!currentIsVisible || state.selectedTopupCode === FIRST_PHOTOSET_TOPUP_CODE)) {
+    setPlansNote("Первый фотосет: 27 фото за цену базового пакета.");
+  } else if (!showFirstOffer) {
+    setPlansNote("Безопасная оплата через ЮKassa");
+  }
 }
 
 async function selectTemplate(item) {
@@ -7088,6 +7257,7 @@ async function renderActiveImage(job, renderToken) {
         repeatHistoryJob(job);
       });
     }
+    renderFirstPhotosetResultOffer();
   } catch (error) {
     if (renderToken !== state.activeImageRenderToken) {
       return;
@@ -7106,12 +7276,44 @@ async function renderActiveImage(job, renderToken) {
   }
 }
 
+function renderFirstPhotosetResultOffer() {
+  const previous = activeResult.querySelector(".first-photoset-result-offer");
+  if (previous) {
+    previous.remove();
+  }
+  activeResult.classList.remove("has-first-photoset-offer");
+  if (!firstPhotosetOfferEligible("after_second_success")) {
+    return;
+  }
+
+  const offer = document.createElement("article");
+  offer.className = "first-photoset-result-offer";
+  offer.innerHTML = `
+    <div class="first-photoset-result-copy">
+      <span class="first-photoset-kicker">Первый фотосет</span>
+      <strong>27 фото за 399 ₽</strong>
+      <p>Базовый пакет плюс 5 фото бонусом для первой покупки.</p>
+    </div>
+    <button class="primary-action first-photoset-result-cta" type="button">
+      Получить 27 фото
+    </button>
+  `;
+  const button = offer.querySelector("button");
+  if (button) {
+    button.addEventListener("click", openFirstPhotosetPaywall);
+  }
+  activeResult.appendChild(offer);
+  activeResult.classList.add("has-first-photoset-offer");
+  trackFirstPhotosetOfferViewed("after_second_success");
+}
+
 function renderActiveJob(job) {
   const status = jobStatusLabel(job.status);
   const normalizedStatus = String(job.status || "").toLowerCase();
   activeJobMeta.textContent = `${status} · ${activeJobDetailsLabel(job)}`;
 
   if (job.result_image_url) {
+    noteSuccessfulGeneration(job);
     const jobId = String(job.id || "").trim();
     if (jobId && !state.trackedResultJobIds.has(jobId)) {
       state.trackedResultJobIds.add(jobId);
@@ -7333,6 +7535,7 @@ async function loadHistory({ forceServerCheck = false, append = false } = {}) {
         state.historyNextOffset =
           nextOffset !== null ? nextOffset : Array.isArray(state.historyItems) ? state.historyItems.length : 0;
         state.historyLoadedAt = Date.now();
+        syncSuccessfulGenerationCountFromJobs(state.historyItems);
         renderHistory({ items: state.historyItems, hasMore: state.historyHasMore });
       }
     })
@@ -7627,6 +7830,9 @@ async function pollActiveJob(jobId) {
       return;
     }
     await refreshWalletBalance().catch(() => null);
+    if (String(job.status || "").toLowerCase() === "done" && job.result_image_url) {
+      renderFirstPhotosetResultOffer();
+    }
     if (state.currentScreen === "history") {
       await loadHistory({ forceServerCheck: true });
     } else {
