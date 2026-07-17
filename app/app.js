@@ -5236,6 +5236,7 @@ async function buyPackage(code) {
         credits: Number(selectedPackage?.credits || 0),
         price_rub: Number(selectedPackage?.price_rub || 0),
       });
+      flushProductEvents({ keepalive: true });
       openCheckout(result.checkout_url, { popupHandle });
       setPlansNote(`Пакет ${code} готов к оплате.`);
     } else {
