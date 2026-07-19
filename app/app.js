@@ -39,6 +39,7 @@ const TEMPLATE_MODAL_ANIMATION_MS = 260;
 
 const MODEL_COSTS = {
   "gemini-3.1-flash-image-preview": 10,
+  "gemini-3.1-flash-lite-image": 5,
   "gemini-3-pro-image-preview": 20,
   "gpt-image-2": 30,
 };
@@ -54,6 +55,7 @@ const FIRST_PHOTOSET_TOPUP_CODE = "first_small_bonus";
 
 const IMAGE_MODEL_LABELS = {
   "gemini-3.1-flash-image-preview": "Nano Banana 2",
+  "gemini-3.1-flash-lite-image": "Nano Banana 2 Lite",
   "gemini-3-pro-image-preview": "Nano Banana Pro",
   "gpt-image-2": "Архив",
 };
@@ -131,13 +133,23 @@ const GPT_OUTPUT_MATRIX = Object.freeze({
   }),
 });
 
+const GEMINI_LITE_OUTPUT_MATRIX = Object.freeze({
+  "1K": GEMINI_OUTPUT_MATRIX["1K"],
+});
+
 const MODEL_OUTPUT_MATRIX = {
   "gemini-3.1-flash-image-preview": GEMINI_OUTPUT_MATRIX,
+  "gemini-3.1-flash-lite-image": GEMINI_LITE_OUTPUT_MATRIX,
   "gemini-3-pro-image-preview": GEMINI_OUTPUT_MATRIX,
   "gpt-image-2": GPT_OUTPUT_MATRIX,
 };
 
 const MODEL_ORDER = ["gemini-3.1-flash-image-preview", "gemini-3-pro-image-preview"];
+const ADMIN_MODEL_ORDER = [
+  "gemini-3.1-flash-image-preview",
+  "gemini-3.1-flash-lite-image",
+  "gemini-3-pro-image-preview",
+];
 const DEFAULT_IMAGE_MODEL = "gemini-3.1-flash-image-preview";
 const DEFAULT_RESOLUTION = "2K";
 const DEFAULT_RATIO = "1:1";
@@ -264,6 +276,7 @@ const API_ERROR_MESSAGES = Object.freeze({
   openai_edit_failed: "Ошибка редактирования в модели. Попробуй снова.",
   openai_empty_result: "Не удалось получить результат от модели. Попробуй снова.",
   openai_missing_b64: "Не удалось получить изображение от модели. Попробуй снова.",
+  admin_model_required: "Эта модель доступна только администратору.",
   gemini_not_configured: "Модель Nano Banana временно недоступна.",
   gemini_invalid_api_key: "Модель Nano Banana временно недоступна.",
   gemini_rate_limited: "Сервис генерации перегружен. Попробуй чуть позже.",
@@ -1663,6 +1676,10 @@ function outputMatrixForModel(model) {
   return MODEL_OUTPUT_MATRIX[DEFAULT_IMAGE_MODEL];
 }
 
+function availableImageModelsForCurrentUser() {
+  return isAdminUser() ? ADMIN_MODEL_ORDER : MODEL_ORDER;
+}
+
 function imageModelLabel(model) {
   const key = String(model || "").trim().toLowerCase();
   return IMAGE_MODEL_LABELS[key] || key || "—";
@@ -1787,7 +1804,8 @@ function availableRatiosFor(model, resolution) {
 
 function ensureGenerationSelectionState() {
   const selectedModel = String(state.selectedImageModel || DEFAULT_IMAGE_MODEL).trim();
-  state.selectedImageModel = MODEL_ORDER.includes(selectedModel) ? selectedModel : DEFAULT_IMAGE_MODEL;
+  const availableModels = availableImageModelsForCurrentUser();
+  state.selectedImageModel = availableModels.includes(selectedModel) ? selectedModel : DEFAULT_IMAGE_MODEL;
 
   const availableResolutions = availableResolutionsForModel(state.selectedImageModel);
   if (!availableResolutions.length) {
@@ -1859,7 +1877,8 @@ function findAnyOutputSelectionBySize(outputSize) {
 
 function applyGenerationSettingsFromJob(job) {
   const rawModel = String(job?.provider_model || "").trim().toLowerCase();
-  const model = MODEL_ORDER.includes(rawModel) ? rawModel : DEFAULT_IMAGE_MODEL;
+  const availableModels = availableImageModelsForCurrentUser();
+  const model = availableModels.includes(rawModel) ? rawModel : DEFAULT_IMAGE_MODEL;
   const selection =
     findOutputSelectionBySize(model, job?.output_size) ||
     findOutputSelectionBySize(DEFAULT_IMAGE_MODEL, job?.output_size);
@@ -1937,7 +1956,7 @@ function createChoiceChip({
 
 function renderModelChips() {
   modelChips.innerHTML = "";
-  for (const model of MODEL_ORDER) {
+  for (const model of availableImageModelsForCurrentUser()) {
     const chip = createChoiceChip({
       label: imageModelLabel(model),
       selected: state.selectedImageModel === model,
@@ -5257,6 +5276,8 @@ function renderUser(me, wallet) {
   setReferencePromptNote(defaultReferencePromptNote());
   renderIdentityActions();
   renderAdminAccess();
+  renderGenerationChips();
+  refreshGenerationCostNote();
   syncPlansAfterEligibilityChange();
 }
 
@@ -7640,6 +7661,8 @@ async function loadPrivateData({ forceServerCheck = false } = {}) {
     setReferencePromptNote(defaultReferencePromptNote());
     renderIdentityActions();
     renderAdminAccess();
+    renderGenerationChips();
+    refreshGenerationCostNote();
     return;
   }
   const mePromise = authorizedGetWithRetry("/v1/me", 1);
