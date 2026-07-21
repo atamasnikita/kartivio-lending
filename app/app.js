@@ -38,8 +38,8 @@ const TEMPLATE_SKELETON_RATIOS = ["1 / 1", "4 / 5", "3 / 4", "5 / 4", "2 / 3", "
 const TEMPLATE_MODAL_ANIMATION_MS = 260;
 
 const MODEL_COSTS = {
+  "gemini-2.5-flash-image": 5,
   "gemini-3.1-flash-image-preview": 10,
-  "gemini-3.1-flash-lite-image": 5,
   "gemini-3-pro-image-preview": 20,
   "gpt-image-2": 30,
 };
@@ -54,8 +54,8 @@ const TOPUP_DISPLAY_TITLES = Object.freeze({
 const FIRST_PHOTOSET_TOPUP_CODE = "first_small_bonus";
 
 const IMAGE_MODEL_LABELS = {
+  "gemini-2.5-flash-image": "Nano Banana",
   "gemini-3.1-flash-image-preview": "Nano Banana 2",
-  "gemini-3.1-flash-lite-image": "Nano Banana 2 Lite",
   "gemini-3-pro-image-preview": "Nano Banana Pro",
   "gpt-image-2": "Архив",
 };
@@ -133,13 +133,24 @@ const GPT_OUTPUT_MATRIX = Object.freeze({
   }),
 });
 
-const GEMINI_LITE_OUTPUT_MATRIX = Object.freeze({
-  "1K": GEMINI_OUTPUT_MATRIX["1K"],
+const GEMINI_NANO_BANANA_OUTPUT_MATRIX = Object.freeze({
+  "1K": Object.freeze({
+    "1:1": "1024x1024",
+    "2:3": "832x1248",
+    "3:2": "1248x832",
+    "3:4": "864x1184",
+    "4:3": "1184x864",
+    "4:5": "896x1152",
+    "5:4": "1152x896",
+    "9:16": "768x1344",
+    "16:9": "1344x768",
+    "21:9": "1536x672",
+  }),
 });
 
 const MODEL_OUTPUT_MATRIX = {
+  "gemini-2.5-flash-image": GEMINI_NANO_BANANA_OUTPUT_MATRIX,
   "gemini-3.1-flash-image-preview": GEMINI_OUTPUT_MATRIX,
-  "gemini-3.1-flash-lite-image": GEMINI_LITE_OUTPUT_MATRIX,
   "gemini-3-pro-image-preview": GEMINI_OUTPUT_MATRIX,
   "gpt-image-2": GPT_OUTPUT_MATRIX,
 };
@@ -147,7 +158,7 @@ const MODEL_OUTPUT_MATRIX = {
 const MODEL_ORDER = ["gemini-3.1-flash-image-preview", "gemini-3-pro-image-preview"];
 const ADMIN_MODEL_ORDER = [
   "gemini-3.1-flash-image-preview",
-  "gemini-3.1-flash-lite-image",
+  "gemini-2.5-flash-image",
   "gemini-3-pro-image-preview",
 ];
 const DEFAULT_IMAGE_MODEL = "gemini-3.1-flash-image-preview";
