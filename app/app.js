@@ -790,6 +790,8 @@ let referencePromptBusyCaptionTimeoutId = 0;
 const jumpButtons = Array.from(document.querySelectorAll("[data-nav-target]"));
 const screens = Array.from(document.querySelectorAll("[data-screen]"));
 let yandexAuthPending = false;
+let refreshSessionPromise = null;
+let privateDataRetryTimer = null;
 let templateModalCloseTimer = null;
 let templateModalImageLoadToken = 0;
 let templateModalScrollTop = 0;
@@ -2491,8 +2493,11 @@ async function authorizedBlobFetch(path) {
     if (!isUnauthorizedError(error)) {
       throw error;
     }
-    const refreshed = await refreshSession();
-    if (!refreshed) {
+    const refreshResult = await refreshSession();
+    if (!refreshResult.ok) {
+      if (refreshResult.transient && refreshResult.error) {
+        throw refreshResult.error;
+      }
       setAuthGateVisible(true);
       throw error;
     }
@@ -4990,6 +4995,37 @@ function isUnauthorizedError(error) {
   return /401|unauthorized|token/i.test(message);
 }
 
+function isTransientNetworkError(error) {
+  const code = normalizeErrorCode(error && error.code);
+  if (code === "request_timeout" || code === "network_error") {
+    return true;
+  }
+  const status = Number(error && error.status);
+  if (status === 408 || status === 425 || status === 429 || status >= 500) {
+    return true;
+  }
+  const raw = String((error && (error.rawMessage || error.message)) || "").trim();
+  return /failed to fetch|networkerror|load failed|fetch failed|timeout|timed out/i.test(raw);
+}
+
+function clearAuthSessionState({ persist = true } = {}) {
+  state.accessToken = "";
+  state.refreshToken = "";
+  state.isCookieSession = false;
+  state.lastAuthProvider = "";
+  state.telegramWebLoginToken = "";
+  if (persist) {
+    saveState();
+  }
+}
+
+function preserveSessionAfterTransientAuthError() {
+  if (!state.accessToken && prefersCookieAuth() && hasSessionBootstrapHint()) {
+    state.isCookieSession = true;
+  }
+  saveState();
+}
+
 async function fetchWithTimeout(url, options = {}, timeoutMs = API_FETCH_TIMEOUT_MS) {
   const controller = new AbortController();
   const timeoutId = window.setTimeout(() => {
@@ -5193,8 +5229,18 @@ async function resolveApiBase() {
 
 async function refreshSession() {
   if (!state.refreshToken && !prefersCookieAuth()) {
-    return false;
+    return { ok: false, transient: false, error: null };
   }
+  if (refreshSessionPromise) {
+    return refreshSessionPromise;
+  }
+  refreshSessionPromise = refreshSessionInternal().finally(() => {
+    refreshSessionPromise = null;
+  });
+  return refreshSessionPromise;
+}
+
+async function refreshSessionInternal() {
   try {
     const body = state.refreshToken ? { refresh_token: state.refreshToken } : undefined;
     const payload = await apiFetch("/v1/auth/refresh", {
@@ -5211,15 +5257,14 @@ async function refreshSession() {
       state.isCookieSession = false;
     }
     saveState();
-    return true;
-  } catch (_e) {
-    state.accessToken = "";
-    state.refreshToken = "";
-    state.isCookieSession = false;
-    state.lastAuthProvider = "";
-    state.telegramWebLoginToken = "";
-    saveState();
-    return false;
+    return { ok: true, transient: false, error: null };
+  } catch (error) {
+    if (isTransientNetworkError(error)) {
+      preserveSessionAfterTransientAuthError();
+      return { ok: false, transient: true, error };
+    }
+    clearAuthSessionState();
+    return { ok: false, transient: false, error };
   }
 }
 
@@ -5230,8 +5275,11 @@ async function authorizedFetch(path, options = {}) {
     if (!isUnauthorizedError(error)) {
       throw error;
     }
-    const refreshed = await refreshSession();
-    if (!refreshed) {
+    const refreshResult = await refreshSession();
+    if (!refreshResult.ok) {
+      if (refreshResult.transient && refreshResult.error) {
+        throw refreshResult.error;
+      }
       setAuthGateVisible(true);
       throw error;
     }
@@ -5246,8 +5294,11 @@ async function authorizedMultipart(path, formData, options = {}) {
     if (!isUnauthorizedError(error)) {
       throw error;
     }
-    const refreshed = await refreshSession();
-    if (!refreshed) {
+    const refreshResult = await refreshSession();
+    if (!refreshResult.ok) {
+      if (refreshResult.transient && refreshResult.error) {
+        throw refreshResult.error;
+      }
       setAuthGateVisible(true);
       throw error;
     }
@@ -5262,7 +5313,7 @@ async function authorizedGetWithRetry(path, retries = 1) {
       return await authorizedFetch(path);
     } catch (error) {
       lastError = error;
-      if (attempt >= retries) {
+      if (attempt >= retries || (isUnauthorizedError(error) && !isTransientNetworkError(error))) {
         throw error;
       }
       await new Promise((resolve) => setTimeout(resolve, 250));
@@ -7678,11 +7729,64 @@ async function loadPrivateData({ forceServerCheck = false } = {}) {
   }
   const mePromise = authorizedGetWithRetry("/v1/me", 1);
   const walletPromise = authorizedGetWithRetry("/v1/wallet?limit=1", 1);
-  const identitiesPromise = loadIdentities();
+  let identitiesError = null;
+  const identitiesPromise = loadIdentities().catch((error) => {
+    identitiesError = error;
+    return null;
+  });
   const [me, wallet] = await Promise.all([mePromise, walletPromise]);
   await identitiesPromise;
+  if (identitiesError) {
+    if (isUnauthorizedError(identitiesError)) {
+      throw identitiesError;
+    }
+    console.warn("Account identities load failed", identitiesError);
+  }
   state.isCookieSession = Boolean(prefersCookieAuth() && !state.accessToken);
   renderUser(me, wallet);
+}
+
+function schedulePrivateDataRetry({ delayMs = 2500 } = {}) {
+  if (privateDataRetryTimer) {
+    return;
+  }
+  privateDataRetryTimer = window.setTimeout(() => {
+    privateDataRetryTimer = null;
+    if (!hasActiveSession() && !(prefersCookieAuth() && hasSessionBootstrapHint())) {
+      return;
+    }
+    loadPrivateData({ forceServerCheck: prefersCookieAuth() })
+      .then(() => {
+        if (hasActiveSession()) {
+          setAuthGateVisible(false);
+        }
+      })
+      .catch((error) => {
+        if (isUnauthorizedError(error) && !isTransientNetworkError(error)) {
+          clearAuthSessionState();
+          setAuthGateVisible(true);
+          setNote("Сессия устарела. Войди снова.", true);
+          return;
+        }
+        preserveSessionAfterTransientAuthError();
+        setNote(userFacingErrorMessage(error, "Не удалось загрузить данные аккаунта. Попробуй обновить страницу."), true);
+      });
+  }, delayMs);
+}
+
+async function loadPrivateDataAfterAuthSuccess() {
+  try {
+    await loadPrivateData({ forceServerCheck: prefersCookieAuth() });
+    return true;
+  } catch (error) {
+    if (isUnauthorizedError(error) && !isTransientNetworkError(error)) {
+      throw error;
+    }
+    preserveSessionAfterTransientAuthError();
+    schedulePrivateDataRetry();
+    setNote("Вход выполнен. Данные аккаунта еще загружаются, пробую еще раз.", true);
+    return false;
+  }
 }
 
 async function refreshWalletBalance() {
@@ -8077,7 +8181,7 @@ async function pollTelegramWebLoginStatus() {
       renderAuthGateActions();
       setAuthGateVisible(false);
       setNote(payload.message || "Вход через Telegram выполнен.");
-      await loadPrivateData();
+      await loadPrivateDataAfterAuthSuccess();
       markHistoryCacheStale();
       switchScreen("feed");
       return;
@@ -8253,13 +8357,17 @@ async function hydrateAuthorizedSession() {
     await loadPrivateData({ forceServerCheck: prefersCookieAuth() });
     state.isCookieSession = Boolean(prefersCookieAuth() && !state.accessToken);
     return true;
-  } catch (_error) {
-    state.accessToken = "";
-    state.refreshToken = "";
-    state.isCookieSession = false;
-    state.lastAuthProvider = "";
-    state.telegramWebLoginToken = "";
-    saveState();
+  } catch (error) {
+    if (isUnauthorizedError(error) && !isTransientNetworkError(error)) {
+      clearAuthSessionState();
+      return false;
+    }
+    preserveSessionAfterTransientAuthError();
+    schedulePrivateDataRetry();
+    setNote(userFacingErrorMessage(error, "Не удалось загрузить данные аккаунта. Попробуй обновить страницу."), true);
+    if (hasActiveSession()) {
+      return true;
+    }
     return false;
   }
 }
@@ -8286,7 +8394,7 @@ async function loginViaTelegram(options = {}) {
     if (!silent) {
       setNote("Авторизация успешна.");
     }
-    await loadPrivateData();
+    await loadPrivateDataAfterAuthSuccess();
     markHistoryCacheStale();
     switchScreen(targetScreen);
     return true;
@@ -8321,7 +8429,7 @@ async function loginViaYandexCode(code, codeVerifier) {
   ensurePublicDataLoaded().catch(() => {});
   setAuthGateVisible(false);
   setNote("Авторизация через Яндекс успешна.");
-  await loadPrivateData();
+  await loadPrivateDataAfterAuthSuccess();
   markHistoryCacheStale();
   switchScreen("feed");
 }
