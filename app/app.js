@@ -4553,11 +4553,10 @@ function renderCampaignPreviewStats(preview = null) {
   }
   campaignPreviewStats.classList.remove("is-hidden");
   campaignPreviewStats.innerHTML = `
-    <article class="admin-mini-stat"><span>Доступно</span><strong>${escapeHtml(String(data.sendable_count || 0))}</strong></article>
-    <article class="admin-mini-stat"><span>Reachable</span><strong>${escapeHtml(String(data.reachable_count || 0))}</strong></article>
+    <article class="admin-mini-stat"><span>Можно отправить</span><strong>${escapeHtml(String(data.sendable_count || 0))}</strong></article>
+    <article class="admin-mini-stat"><span>Всего в сегменте</span><strong>${escapeHtml(String(data.reachable_count || 0))}</strong></article>
     <article class="admin-mini-stat"><span>Muted</span><strong>${escapeHtml(String(data.muted_count || 0))}</strong></article>
     <article class="admin-mini-stat"><span>24ч лимит</span><strong>${escapeHtml(String(data.rate_limited_24h_count || 0))}</strong></article>
-    <article class="admin-mini-stat"><span>7д лимит</span><strong>${escapeHtml(String(data.rate_limited_7d_count || 0))}</strong></article>
   `;
 }
 
