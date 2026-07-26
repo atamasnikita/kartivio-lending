@@ -403,6 +403,7 @@ const state = {
   adminCampaignAudienceMode: "auto",
   adminTemplateLocalPreviewUrl: "",
   adminTemplateLocalPreviewMediaType: "",
+  checkoutPendingCode: "",
   trackedResultJobIds: new Set(),
   trackedSuccessfulGenerationJobIds: new Set(),
   trackedFirstPhotosetOfferViews: new Set(),
@@ -427,6 +428,7 @@ const PRODUCT_EVENT_FLUSH_DELAY_MS = 350;
 const PRODUCT_EVENT_BATCH_SIZE = 10;
 let productEventQueue = [];
 let productEventFlushTimer = null;
+let checkoutPendingUnlockTimer = null;
 
 function isProductAnalyticsDisabled() {
   if (state.me?.is_admin) {
@@ -487,6 +489,85 @@ function productEventPlatform() {
 
 function productEventErrorCode(error) {
   return String(error?.code || error?.name || error?.status || "request_failed").slice(0, 160);
+}
+
+function diagnosticHttpPath(path) {
+  const raw = String(path || "").trim();
+  if (!raw) {
+    return "";
+  }
+  try {
+    const url = raw.startsWith("http") ? new URL(raw) : new URL(raw, window.location.origin);
+    const queryKeys = Array.from(url.searchParams.keys()).slice(0, 5);
+    const safeQuery = queryKeys.length
+      ? `?${queryKeys.map((key) => `${encodeURIComponent(key)}=...`).join("&")}`
+      : "";
+    return `${url.pathname}${safeQuery}`.slice(0, 160);
+  } catch (_error) {
+    return raw.split("?")[0].slice(0, 160);
+  }
+}
+
+function diagnosticErrorStatus(error) {
+  const status = Number(error && error.status);
+  return Number.isFinite(status) && status > 0 ? status : 0;
+}
+
+function trackDiagnosticEvent(eventName, options = {}) {
+  const properties = {
+    screen: state.currentScreen || "unknown",
+    source: isTelegramMiniAppRuntime() ? "telegram" : "web",
+  };
+  if (options.stage) {
+    properties.stage = String(options.stage).slice(0, 160);
+  }
+  if (options.path) {
+    properties.http_path = diagnosticHttpPath(options.path);
+  }
+  if (options.requestKind) {
+    properties.request_kind = String(options.requestKind).slice(0, 160);
+  }
+  if (options.authProvider) {
+    properties.auth_provider = String(options.authProvider).slice(0, 160);
+  }
+  if (options.packageCode) {
+    properties.package_code = String(options.packageCode).slice(0, 160);
+  }
+  if (options.error) {
+    properties.error_code = productEventErrorCode(options.error);
+    const status = diagnosticErrorStatus(options.error);
+    if (status) {
+      properties.status = status;
+    }
+  }
+  trackProductEvent(eventName, properties);
+}
+
+function shouldTrackApiFetchFailure(path, error) {
+  const normalizedPath = String(path || "");
+  const status = diagnosticErrorStatus(error);
+  if (isTransientNetworkError(error) || status >= 500 || status === 408 || status === 425 || status === 429) {
+    return true;
+  }
+  if (normalizedPath === "/v1/payments/checkout") {
+    return true;
+  }
+  if (normalizedPath === "/v1/auth/yandex" || normalizedPath === "/v1/auth/telegram/miniapp") {
+    return true;
+  }
+  return false;
+}
+
+function trackApiFetchFailure(path, error, { requestKind = "json", auth = false } = {}) {
+  if (!shouldTrackApiFetchFailure(path, error)) {
+    return;
+  }
+  trackDiagnosticEvent("api_fetch_failed", {
+    error,
+    path,
+    requestKind,
+    stage: auth ? "authorized_request" : "request",
+  });
 }
 
 function productFileSizeBucket(files) {
@@ -1145,11 +1226,16 @@ function unlockTemplateModalScroll() {
 }
 
 function setAuthGateVisible(visible) {
+  let wasHidden = true;
   if (authGate) {
+    wasHidden = authGate.classList.contains("is-hidden");
     authGate.classList.toggle("is-hidden", !visible);
   }
   if (appShell) {
     appShell.classList.toggle("is-hidden", visible);
+  }
+  if (visible && wasHidden) {
+    trackDiagnosticEvent("auth_gate_shown", { stage: "set_visible" });
   }
   renderAuthGateActions();
 }
@@ -1547,12 +1633,22 @@ function consumeAuthBridgeResult() {
   stripAuthBridgeArtifact();
   const payload = decodeBase64UrlJson(rawBridge);
   if (!payload || typeof payload !== "object") {
+    trackDiagnosticEvent("auth_failed", {
+      authProvider: "external",
+      stage: "auth_bridge_decode",
+      error: { code: "auth_bridge_invalid_payload" },
+    });
     setNote("Не удалось завершить вход через внешний сервис. Повтори попытку.", true);
     return { consumed: true, success: false };
   }
 
   const provider = String(payload.provider || "").trim().toLowerCase() || "google";
   if (provider === "google") {
+    trackDiagnosticEvent("auth_failed", {
+      authProvider: "google",
+      stage: "auth_bridge_google_disabled",
+      error: { code: "google_auth_disabled" },
+    });
     state.accessToken = "";
     state.refreshToken = "";
     state.isCookieSession = false;
@@ -1564,6 +1660,11 @@ function consumeAuthBridgeResult() {
   const errorCode = String(payload.error_code || "").trim();
   const errorMessage = String(payload.error_message || "").trim();
   if (errorCode) {
+    trackDiagnosticEvent("auth_failed", {
+      authProvider: provider,
+      stage: "auth_bridge_error",
+      error: { code: errorCode, rawMessage: errorMessage },
+    });
     state.accessToken = "";
     state.refreshToken = "";
     state.isCookieSession = false;
@@ -1582,6 +1683,11 @@ function consumeAuthBridgeResult() {
   const accessToken = String(payload.access_token || "").trim();
   const refreshToken = String(payload.refresh_token || "").trim();
   if (!accessToken || !refreshToken) {
+    trackDiagnosticEvent("auth_failed", {
+      authProvider: provider,
+      stage: "auth_bridge_missing_tokens",
+      error: { code: "auth_bridge_missing_tokens" },
+    });
     setNote("Не удалось завершить вход через внешний сервис. Повтори попытку.", true);
     return { consumed: true, success: false };
   }
@@ -1639,6 +1745,11 @@ async function consumeYandexOauthCallback() {
   if (!returnedState || !expectedState || returnedState !== expectedState) {
     stripYandexCallbackArtifacts();
     clearYandexOauthSession();
+    trackDiagnosticEvent("auth_failed", {
+      authProvider: "yandex",
+      stage: "callback_state_mismatch",
+      error: { code: "oauth_state_mismatch" },
+    });
     setNote("Сессия входа через Яндекс устарела. Запусти вход заново.", true);
     return true;
   }
@@ -1648,10 +1759,20 @@ async function consumeYandexOauthCallback() {
 
   if (oauthError) {
     const description = oauthErrorDescription ? decodeURIComponent(oauthErrorDescription.replace(/\+/g, " ")) : "";
+    trackDiagnosticEvent("auth_failed", {
+      authProvider: "yandex",
+      stage: "callback_oauth_error",
+      error: { code: oauthError, rawMessage: description },
+    });
     setNote(description || "Не удалось завершить вход через Яндекс.", true);
     return true;
   }
   if (!returnedCode || !verifier) {
+    trackDiagnosticEvent("auth_failed", {
+      authProvider: "yandex",
+      stage: "callback_missing_code_or_verifier",
+      error: { code: "oauth_missing_code_or_verifier" },
+    });
     setNote("Яндекс не вернул данные для входа. Повтори попытку.", true);
     return true;
   }
@@ -5060,16 +5181,22 @@ async function apiFetch(path, { method = "GET", body, auth = false, idempotencyK
     headers["Idempotency-Key"] = idempotencyKey;
   }
 
-  const response = await fetchWithTimeout(
-    `${state.apiBase}${path}`,
-    {
-      method,
-      credentials: "include",
-      headers,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-    },
-    API_FETCH_TIMEOUT_MS
-  );
+  let response = null;
+  try {
+    response = await fetchWithTimeout(
+      `${state.apiBase}${path}`,
+      {
+        method,
+        credentials: "include",
+        headers,
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+      },
+      API_FETCH_TIMEOUT_MS
+    );
+  } catch (error) {
+    trackApiFetchFailure(path, error, { requestKind: "json", auth });
+    throw error;
+  }
   const payload = await parseJsonResponse(response);
   if (!response.ok) {
     const rawMessage = extractErrorMessage(payload, `HTTP ${response.status}`);
@@ -5085,6 +5212,7 @@ async function apiFetch(path, { method = "GET", body, auth = false, idempotencyK
     error.status = response.status;
     error.code = errorCode;
     error.rawMessage = rawMessage;
+    trackApiFetchFailure(path, error, { requestKind: "json", auth });
     throw error;
   }
   return payload;
@@ -5136,6 +5264,10 @@ async function apiMultipart(
 
   const requestTimeoutMs = multipartRequestTimeoutMs(formData, timeoutMs);
   return new Promise((resolve, reject) => {
+    const rejectWithDiagnostics = (error) => {
+      trackApiFetchFailure(path, error, { requestKind: "multipart", auth });
+      reject(error);
+    };
     const xhr = new XMLHttpRequest();
     xhr.open("POST", `${state.apiBase}${path}`, true);
     xhr.withCredentials = true;
@@ -5177,10 +5309,10 @@ async function apiMultipart(
         { code: errorCode, status: xhr.status, rawMessage },
         fallbackMessageByStatus(xhr.status),
       );
-      reject(multipartRequestError(message, errorCode, xhr.status, rawMessage));
+      rejectWithDiagnostics(multipartRequestError(message, errorCode, xhr.status, rawMessage));
     });
     xhr.addEventListener("error", () => {
-      reject(
+      rejectWithDiagnostics(
         multipartRequestError(
           "Нет соединения с сервером. Проверь интернет и попробуй снова.",
           "network_error",
@@ -5188,10 +5320,10 @@ async function apiMultipart(
       );
     });
     xhr.addEventListener("timeout", () => {
-      reject(multipartRequestError("Request timed out.", "request_timeout"));
+      rejectWithDiagnostics(multipartRequestError("Request timed out.", "request_timeout"));
     });
     xhr.addEventListener("abort", () => {
-      reject(multipartRequestError("Upload was aborted.", "request_aborted"));
+      rejectWithDiagnostics(multipartRequestError("Upload was aborted.", "request_aborted"));
     });
     xhr.send(formData);
   });
@@ -5351,16 +5483,52 @@ function renderWalletBalance(wallet) {
   syncPlansAfterEligibilityChange();
 }
 
+function selectedTopupForCode(code) {
+  return state.topups.find((item) => String(item?.code || "").trim() === String(code || "").trim()) || null;
+}
+
+function trackCheckoutPackageEvent(eventName, code, extra = {}) {
+  const selectedPackage = selectedTopupForCode(code);
+  trackProductEvent(eventName, {
+    package_code: code,
+    credits: Number(selectedPackage?.credits || 0),
+    price_rub: Number(selectedPackage?.price_rub || 0),
+    ...extra,
+  });
+}
+
+function restorePlansActionAfterCheckout() {
+  state.checkoutPendingCode = "";
+  if (checkoutPendingUnlockTimer) {
+    window.clearTimeout(checkoutPendingUnlockTimer);
+    checkoutPendingUnlockTimer = null;
+  }
+  if (state.selectedTopupCode) {
+    selectTopup(state.selectedTopupCode, { updateNote: false });
+  }
+}
+
+function scheduleCheckoutPendingUnlock(delayMs = 6000) {
+  if (checkoutPendingUnlockTimer) {
+    window.clearTimeout(checkoutPendingUnlockTimer);
+  }
+  checkoutPendingUnlockTimer = window.setTimeout(() => {
+    restorePlansActionAfterCheckout();
+  }, delayMs);
+}
+
 function openCheckout(url, { popupHandle = null } = {}) {
   if (!url) {
-    return;
+    return { ok: false, method: "missing_url", error: { code: "checkout_url_missing" } };
   }
+  let fallbackError = null;
   if (popupHandle && !popupHandle.closed) {
     try {
       popupHandle.location.replace(url);
       popupHandle.focus();
-      return;
-    } catch (_error) {
+      return { ok: true, method: "popup_replace" };
+    } catch (error) {
+      fallbackError = error;
       try {
         popupHandle.close();
       } catch (_closeError) {
@@ -5369,12 +5537,22 @@ function openCheckout(url, { popupHandle = null } = {}) {
     }
   }
   if (tg && typeof tg.openLink === "function") {
-    tg.openLink(url);
-    return;
+    try {
+      tg.openLink(url);
+      return { ok: true, method: "telegram_open_link" };
+    } catch (error) {
+      return { ok: false, method: "telegram_open_link", error };
+    }
   }
-  const opened = window.open(url, "_blank", "noopener,noreferrer");
-  if (!opened) {
-    window.location.assign(url);
+  try {
+    const opened = window.open(url, "_blank", "noopener,noreferrer");
+    if (!opened) {
+      window.location.assign(url);
+      return { ok: true, method: "location_assign" };
+    }
+    return { ok: true, method: "window_open" };
+  } catch (error) {
+    return { ok: false, method: "window_open", error: error || fallbackError };
   }
 }
 
@@ -5384,6 +5562,16 @@ async function buyPackage(code) {
     setAuthGateVisible(true);
     return;
   }
+  if (state.checkoutPendingCode) {
+    setPlansNote("Оплата уже открывается. Подожди пару секунд.", true);
+    return;
+  }
+  state.checkoutPendingCode = String(code || "").trim();
+  if (plansActionButton) {
+    plansActionButton.disabled = true;
+    plansActionButton.textContent = "Открываю оплату...";
+  }
+  trackCheckoutPackageEvent("checkout_started", code);
   const idem = `webapp_buy_${code}_${Date.now()}`;
   let popupHandle = null;
   if (!isTelegramMiniAppRuntime()) {
@@ -5400,15 +5588,21 @@ async function buyPackage(code) {
       idempotencyKey: idem,
     });
     if (result.checkout_url) {
-      const selectedPackage = state.topups.find((item) => item.code === code);
-      trackProductEvent("checkout_opened", {
-        package_code: code,
-        credits: Number(selectedPackage?.credits || 0),
-        price_rub: Number(selectedPackage?.price_rub || 0),
-      });
+      trackCheckoutPackageEvent("checkout_opened", code);
       flushProductEvents({ keepalive: true });
-      openCheckout(result.checkout_url, { popupHandle });
+      const checkoutOpenResult = openCheckout(result.checkout_url, { popupHandle });
+      if (!checkoutOpenResult.ok) {
+        trackDiagnosticEvent("checkout_redirect_failed", {
+          packageCode: code,
+          stage: checkoutOpenResult.method || "open_checkout",
+          error: checkoutOpenResult.error || { code: "checkout_redirect_failed" },
+        });
+        setPlansNote("Платеж создан, но окно оплаты не открылось. Нажми еще раз.", true);
+        restorePlansActionAfterCheckout();
+        return;
+      }
       setPlansNote(`Пакет ${code} готов к оплате.`);
+      scheduleCheckoutPendingUnlock();
     } else {
       if (popupHandle && !popupHandle.closed) {
         try {
@@ -5417,7 +5611,13 @@ async function buyPackage(code) {
           // noop
         }
       }
+      trackDiagnosticEvent("checkout_create_failed", {
+        packageCode: code,
+        stage: "missing_checkout_url",
+        error: { code: "checkout_url_missing" },
+      });
       setPlansNote("Платеж создан, но ссылка оплаты не пришла.", true);
+      restorePlansActionAfterCheckout();
     }
   } catch (error) {
     if (popupHandle && !popupHandle.closed) {
@@ -5427,7 +5627,13 @@ async function buyPackage(code) {
         // noop
       }
     }
+    trackDiagnosticEvent("checkout_create_failed", {
+      packageCode: code,
+      stage: "create_checkout_request",
+      error,
+    });
     setPlansNote(userFacingErrorMessage(error, "Не удалось создать платеж."), true);
+    restorePlansActionAfterCheckout();
   }
 }
 
@@ -5495,6 +5701,11 @@ function selectTopup(code, { updateNote = true } = {}) {
   const selected = state.topups.find((item) => item.code === state.selectedTopupCode);
   if (!selected) {
     plansActionButton.textContent = "Выбери пакет";
+    plansActionButton.disabled = true;
+    return;
+  }
+  if (state.checkoutPendingCode) {
+    plansActionButton.textContent = "Открываю оплату...";
     plansActionButton.disabled = true;
     return;
   }
@@ -8362,6 +8573,10 @@ async function hydrateAuthorizedSession() {
       clearAuthSessionState();
       return false;
     }
+    trackDiagnosticEvent("boot_failed", {
+      stage: "hydrate_authorized_session",
+      error,
+    });
     preserveSessionAfterTransientAuthError();
     schedulePrivateDataRetry();
     setNote(userFacingErrorMessage(error, "Не удалось загрузить данные аккаунта. Попробуй обновить страницу."), true);
@@ -8399,6 +8614,11 @@ async function loginViaTelegram(options = {}) {
     switchScreen(targetScreen);
     return true;
   } catch (error) {
+    trackDiagnosticEvent("auth_failed", {
+      authProvider: "telegram",
+      stage: tg && tg.initData ? "telegram_miniapp_login" : "telegram_web_login",
+      error,
+    });
     if (!silent) {
       setNote(userFacingErrorMessage(error, "Не удалось выполнить вход."), true);
     }
@@ -8443,10 +8663,20 @@ async function loginViaYandex() {
   }
   const clientId = yandexClientIdFromMeta();
   if (!clientId) {
+    trackDiagnosticEvent("auth_failed", {
+      authProvider: "yandex",
+      stage: "launch_missing_client_id",
+      error: { code: "yandex_client_id_missing" },
+    });
     setNote("Yandex Client ID не задан в мета-теге kartivio-yandex-client-id.", true);
     return;
   }
   if (!(window.crypto && window.crypto.subtle)) {
+    trackDiagnosticEvent("auth_failed", {
+      authProvider: "yandex",
+      stage: "launch_crypto_unavailable",
+      error: { code: "crypto_subtle_unavailable" },
+    });
     setNote("Этот браузер не поддерживает безопасный вход через Яндекс.", true);
     return;
   }
@@ -8466,6 +8696,11 @@ async function loginViaYandex() {
   const url = await yandexOauthAuthorizeUrl();
   if (!url) {
     setYandexAuthButtonIdle();
+    trackDiagnosticEvent("auth_failed", {
+      authProvider: "yandex",
+      stage: "launch_url_missing",
+      error: { code: "yandex_authorize_url_missing" },
+    });
     setNote("Yandex login недоступен для этого окружения.", true);
     return;
   }
@@ -8506,6 +8741,11 @@ function bindEvents() {
       trackProductEvent("auth_started", { auth_provider: "yandex" });
       loginViaYandex().catch((error) => {
         setYandexAuthButtonIdle();
+        trackDiagnosticEvent("auth_failed", {
+          authProvider: "yandex",
+          stage: "launch_click_handler",
+          error,
+        });
         setNote(userFacingErrorMessage(error, "Не удалось выполнить вход через Яндекс."), true);
       });
     });
@@ -9102,8 +9342,16 @@ function bindEvents() {
     revokeSourceImagePreview();
   });
   window.addEventListener("focus", () => {
+    if (state.checkoutPendingCode) {
+      restorePlansActionAfterCheckout();
+    }
     unlockTemplateModalScroll();
     resumePendingTelegramWebLogin();
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && state.checkoutPendingCode) {
+      restorePlansActionAfterCheckout();
+    }
   });
   if (appMain) {
     appMain.addEventListener("scroll", maybeAutoLoadMoreTemplates, { passive: true });
@@ -9153,6 +9401,10 @@ async function bootstrap() {
       syncAcquisitionTouch().catch(() => {});
       refreshAuthButtons();
     } catch (error) {
+      trackDiagnosticEvent("boot_failed", {
+        stage: "resolve_api_base",
+        error,
+      });
       setNote(userFacingErrorMessage(error, "Не удалось загрузить данные приложения."), true);
     }
   })();
@@ -9190,6 +9442,11 @@ async function bootstrap() {
   try {
     authBridgeResult = consumeAuthBridgeResult();
   } catch (error) {
+    trackDiagnosticEvent("auth_failed", {
+      authProvider: "external",
+      stage: "auth_bridge_exception",
+      error,
+    });
     state.accessToken = "";
     state.refreshToken = "";
     state.isCookieSession = false;
@@ -9228,6 +9485,11 @@ async function bootstrap() {
       return;
     }
   } catch (error) {
+    trackDiagnosticEvent("auth_failed", {
+      authProvider: "yandex",
+      stage: "callback_exchange",
+      error,
+    });
     state.accessToken = "";
     state.refreshToken = "";
     state.isCookieSession = false;
