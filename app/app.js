@@ -155,10 +155,14 @@ const MODEL_OUTPUT_MATRIX = {
   "gpt-image-2": GPT_OUTPUT_MATRIX,
 };
 
-const MODEL_ORDER = ["gemini-3.1-flash-image-preview", "gemini-3-pro-image-preview"];
-const ADMIN_MODEL_ORDER = [
-  "gemini-3.1-flash-image-preview",
+const MODEL_ORDER = [
   "gemini-2.5-flash-image",
+  "gemini-3.1-flash-image-preview",
+  "gemini-3-pro-image-preview",
+];
+const ADMIN_MODEL_ORDER = [
+  "gemini-2.5-flash-image",
+  "gemini-3.1-flash-image-preview",
   "gemini-3-pro-image-preview",
 ];
 const DEFAULT_IMAGE_MODEL = "gemini-3.1-flash-image-preview";
