@@ -675,7 +675,6 @@ const profileReferenceCard = document.getElementById("profileReferenceCard");
 const profileReferenceBadge = document.getElementById("profileReferenceBadge");
 const profileReferenceText = document.getElementById("profileReferenceText");
 const profileReferenceAction = document.getElementById("profileReferenceAction");
-const profilePhotoTipsButton = document.getElementById("profilePhotoTipsButton");
 const profileSyncText = document.getElementById("profileSyncText");
 const profileSyncBadge = document.getElementById("profileSyncBadge");
 const identityYandexCard = document.getElementById("identityYandexCard");
@@ -2983,7 +2982,7 @@ function renderProfileSummary() {
     profileAvatarLarge.textContent = avatarLetter;
   }
   if (profileUserSubline) {
-    profileUserSubline.textContent = isAdminUser() ? "Админ-доступ активен." : profileConnectedProviderLabel();
+    profileUserSubline.textContent = profileConnectedProviderLabel();
   }
   if (profilePhotoEstimate) {
     profilePhotoEstimate.textContent = balance > 0
@@ -3067,14 +3066,6 @@ function openProfileReferencePrompt() {
   }
   switchScreen("studio");
   setReferencePromptExpanded(true);
-}
-
-function openProfilePhotoTips() {
-  switchScreen("studio");
-  toggleSourceTips(true);
-  if (sourceTipsPanel && typeof sourceTipsPanel.scrollIntoView === "function") {
-    sourceTipsPanel.scrollIntoView({ block: "center", behavior: "smooth" });
-  }
 }
 
 function hasReferencePromptAccess() {
@@ -9222,9 +9213,6 @@ function bindEvents() {
       }
       openProfileReferencePrompt();
     });
-  }
-  if (profilePhotoTipsButton) {
-    profilePhotoTipsButton.addEventListener("click", openProfilePhotoTips);
   }
   if (marketingBackButton) {
     marketingBackButton.addEventListener("click", () => switchScreen("profile"));
