@@ -661,6 +661,25 @@ const userTgId = document.getElementById("userTgId");
 const creditsValue = document.getElementById("creditsValue");
 const creditsBadge = document.getElementById("creditsBadge");
 const profileAvatar = document.getElementById("profileAvatar");
+const profileAvatarLarge = document.getElementById("profileAvatarLarge");
+const profileUserSubline = document.getElementById("profileUserSubline");
+const profilePhotoEstimate = document.getElementById("profilePhotoEstimate");
+const profilePrimaryAction = document.getElementById("profilePrimaryAction");
+const profilePrimaryNote = document.getElementById("profilePrimaryNote");
+const profileGeneratedCount = document.getElementById("profileGeneratedCount");
+const profileFavoritesCount = document.getElementById("profileFavoritesCount");
+const profileActivityNote = document.getElementById("profileActivityNote");
+const profileHistoryButton = document.getElementById("profileHistoryButton");
+const profileFavoritesButton = document.getElementById("profileFavoritesButton");
+const profileReferenceCard = document.getElementById("profileReferenceCard");
+const profileReferenceBadge = document.getElementById("profileReferenceBadge");
+const profileReferenceText = document.getElementById("profileReferenceText");
+const profileReferenceAction = document.getElementById("profileReferenceAction");
+const profilePhotoTipsButton = document.getElementById("profilePhotoTipsButton");
+const profileSyncText = document.getElementById("profileSyncText");
+const profileSyncBadge = document.getElementById("profileSyncBadge");
+const identityYandexCard = document.getElementById("identityYandexCard");
+const identityTelegramCard = document.getElementById("identityTelegramCard");
 const identityYandex = document.getElementById("identityYandex");
 const identityTelegram = document.getElementById("identityTelegram");
 const linkTelegramButton = document.getElementById("linkTelegramButton");
@@ -2061,6 +2080,7 @@ function refreshGenerationCostNote() {
     generationSettingsSummary.textContent = `${model} · ${resolutionLabel(resolution)} · ${ratioLabel(ratio)} · ${formatCredits(cost)}`;
   }
   setCreateButtonIdleLabel();
+  renderProfileSummary();
 }
 
 function createChoiceChip({
@@ -2847,6 +2867,7 @@ function setSuccessfulGenerationCount(nextCount) {
     return;
   }
   state.me.successful_generation_count = Math.max(successfulGenerationCount(), normalized);
+  renderProfileSummary();
 }
 
 function noteSuccessfulGeneration(job) {
@@ -2901,6 +2922,159 @@ function trackFirstPhotosetOfferViewed(source) {
     source: normalizedSource,
     package_code: FIRST_PHOTOSET_TOPUP_CODE,
   });
+}
+
+function formatPhotoCount(count) {
+  const value = Math.max(0, Math.floor(Number(count || 0)));
+  return `${value} фото`;
+}
+
+function profilePhotoEstimateCount() {
+  const cost = Math.max(1, Number(selectedGenerationCost() || MODEL_COSTS[DEFAULT_IMAGE_MODEL] || 10));
+  return Math.floor(walletBalanceCredits() / cost);
+}
+
+function profileFavoriteTemplateCount() {
+  return Array.isArray(state.templates)
+    ? state.templates.filter((item) => templateLikedByMe(item)).length
+    : 0;
+}
+
+function profileConnectedProviderLabel() {
+  const providers = [];
+  if (state.linkedProviders.has("yandex")) {
+    providers.push("веб");
+  }
+  if (state.linkedProviders.has("telegram")) {
+    providers.push("Telegram");
+  }
+  if (!providers.length) {
+    return "История и кредиты сохраняются после входа.";
+  }
+  return `Один профиль для ${providers.join(" и ")}.`;
+}
+
+function profilePrimaryActionKind() {
+  if (!hasActiveSession()) {
+    return "auth";
+  }
+  if (walletBalanceCredits() > 0) {
+    return "create";
+  }
+  if (firstPhotosetOfferEligible("credits_screen")) {
+    return "first_photoset";
+  }
+  return "topup";
+}
+
+function renderProfileSummary() {
+  const display = state.me
+    ? String(state.me.display_name || state.me.telegram_user_id || "—")
+    : "—";
+  const avatarLetter = display === "—" ? "K" : display[0].toUpperCase();
+  const balance = walletBalanceCredits();
+  const estimate = profilePhotoEstimateCount();
+  const actionKind = profilePrimaryActionKind();
+  const successfulCount = successfulGenerationCount();
+  const favoritesCount = profileFavoriteTemplateCount();
+  const hasReferenceAccess = hasReferencePromptAccess();
+
+  if (profileAvatarLarge) {
+    profileAvatarLarge.textContent = avatarLetter;
+  }
+  if (profileUserSubline) {
+    profileUserSubline.textContent = isAdminUser() ? "Админ-доступ активен." : profileConnectedProviderLabel();
+  }
+  if (profilePhotoEstimate) {
+    profilePhotoEstimate.textContent = balance > 0
+      ? `примерно ${formatPhotoCount(estimate)} в текущих настройках`
+      : "кредиты закончились";
+  }
+  if (profilePrimaryAction) {
+    profilePrimaryAction.textContent =
+      actionKind === "create"
+        ? "Создать фото"
+        : actionKind === "first_photoset"
+          ? "Собрать первый фотосет"
+          : actionKind === "auth"
+            ? "Войти"
+            : "Пополнить кредиты";
+  }
+  if (profilePrimaryNote) {
+    profilePrimaryNote.textContent =
+      actionKind === "create"
+        ? "Кредиты не сгорают."
+        : actionKind === "first_photoset"
+          ? "Первый фотосет: 27 фото за 399 ₽."
+          : "Разовая покупка без подписки и автосписаний.";
+  }
+  if (profileGeneratedCount) {
+    profileGeneratedCount.textContent = String(successfulCount);
+  }
+  if (profileFavoritesCount) {
+    profileFavoritesCount.textContent = String(favoritesCount);
+  }
+  if (profileActivityNote) {
+    profileActivityNote.textContent =
+      successfulCount || favoritesCount
+        ? `${formatPhotoCount(successfulCount)} · ${favoritesCount} избранных`
+        : "История и избранное";
+  }
+  if (profileReferenceCard) {
+    profileReferenceCard.classList.toggle("is-available", hasReferenceAccess);
+  }
+  if (profileReferenceBadge) {
+    profileReferenceBadge.textContent = hasReferenceAccess ? "Доступно" : "После оплаты";
+  }
+  if (profileReferenceText) {
+    profileReferenceText.textContent = hasReferenceAccess
+      ? "Фича уже открыта: загрузи референс и получи готовый промпт без списания кредитов."
+      : "Загрузи референс, а Kartivio соберет промпт по сцене, свету, позе и одежде.";
+  }
+  if (profileReferenceAction) {
+    profileReferenceAction.textContent = hasReferenceAccess ? "Создать промпт" : "Посмотреть пакеты";
+  }
+}
+
+function handleProfilePrimaryAction() {
+  const actionKind = profilePrimaryActionKind();
+  if (actionKind === "auth") {
+    setAuthGateVisible(true);
+    return;
+  }
+  if (actionKind === "create") {
+    switchScreen("studio");
+    return;
+  }
+  if (actionKind === "first_photoset") {
+    openFirstPhotosetPaywall();
+    return;
+  }
+  switchScreen("tokens");
+}
+
+function openProfileFavorites() {
+  switchScreen("feed");
+  window.requestAnimationFrame(() => {
+    showTemplateCollection("favorites");
+  });
+}
+
+function openProfileReferencePrompt() {
+  if (!hasReferencePromptAccess()) {
+    openReferencePromptPaywall();
+    return;
+  }
+  switchScreen("studio");
+  setReferencePromptExpanded(true);
+}
+
+function openProfilePhotoTips() {
+  switchScreen("studio");
+  toggleSourceTips(true);
+  if (sourceTipsPanel && typeof sourceTipsPanel.scrollIntoView === "function") {
+    sourceTipsPanel.scrollIntoView({ block: "center", behavior: "smooth" });
+  }
 }
 
 function hasReferencePromptAccess() {
@@ -3815,26 +3989,65 @@ async function logoutSession() {
 }
 
 function renderIdentityActions() {
+  const linkedYandex = state.linkedProviders.has("yandex");
   const linkedTelegram = state.linkedProviders.has("telegram");
+  const hasSession = hasActiveSession();
+
+  if (profileSyncText) {
+    profileSyncText.textContent = !hasSession
+      ? "Войди, чтобы сохранить историю, кредиты и покупки."
+      : linkedYandex && linkedTelegram
+        ? "Кредиты, история и покупки доступны в вебе и Telegram."
+        : linkedTelegram
+          ? "Аккаунт работает в Telegram. История и кредиты сохраняются автоматически."
+          : linkedYandex
+            ? "Веб-аккаунт сохранен. Привяжи Telegram, чтобы продолжить в боте с тем же балансом."
+            : "История, кредиты и покупки сохраняются в одном аккаунте.";
+  }
+  if (profileSyncBadge) {
+    profileSyncBadge.textContent = !hasSession
+      ? "Нужно войти"
+      : linkedYandex && linkedTelegram
+        ? "Все связано"
+        : linkedTelegram
+          ? "Telegram готов"
+          : linkedYandex
+            ? "Веб готов"
+            : "Аккаунт";
+  }
+  if (identityYandexCard) {
+    identityYandexCard.classList.toggle("is-connected", linkedYandex);
+    identityYandexCard.classList.toggle("is-missing", !linkedYandex);
+  }
+  if (identityTelegramCard) {
+    identityTelegramCard.classList.toggle("is-connected", linkedTelegram);
+    identityTelegramCard.classList.toggle("is-missing", !linkedTelegram);
+  }
   if (identityTelegram) {
-    identityTelegram.textContent = linkedTelegram ? "Подключен" : "Не подключен";
+    identityTelegram.textContent = linkedTelegram ? "Telegram подключен" : "Не привязан";
   }
   if (identityYandex) {
-    identityYandex.textContent = state.linkedProviders.has("yandex") ? "Подключен" : "Не подключен";
+    identityYandex.textContent = linkedYandex ? "Яндекс подключен" : "Не подключен";
   }
 
+  const telegramIdNote = userTgId ? userTgId.closest(".identity-note") : null;
+  if (telegramIdNote) {
+    telegramIdNote.hidden = !linkedTelegram || !state.me?.telegram_user_id;
+  }
   if (linkTelegramButton) {
-    linkTelegramButton.disabled = linkedTelegram || !hasActiveSession();
-    linkTelegramButton.textContent = linkedTelegram ? "Telegram привязан" : "Привязать Telegram";
+    linkTelegramButton.hidden = linkedTelegram;
+    linkTelegramButton.disabled = !hasSession;
+    linkTelegramButton.textContent = "Привязать";
   }
 
   if (linkedTelegram) {
     clearTelegramLinkPolling();
     state.telegramLinkToken = "";
-    setTelegramLinkNote("Связка активна.");
+    setTelegramLinkNote("Можно открывать миниаппу из бота.");
   } else {
-    setTelegramLinkNote("Привяжи Telegram, чтобы синхронизировать вход в боте и вебе.");
+    setTelegramLinkNote("Привяжи бота, чтобы история и баланс были рядом.");
   }
+  renderProfileSummary();
 }
 
 function isAdminUser() {
@@ -5476,6 +5689,7 @@ function renderUser(me, wallet) {
   renderGenerationChips();
   refreshGenerationCostNote();
   syncPlansAfterEligibilityChange();
+  renderProfileSummary();
 }
 
 function renderWalletBalance(wallet) {
@@ -5484,6 +5698,7 @@ function renderWalletBalance(wallet) {
   creditsValue.textContent = formatCredits(balance);
   creditsBadge.textContent = String(balance);
   syncPlansAfterEligibilityChange();
+  renderProfileSummary();
 }
 
 function selectedTopupForCode(code) {
@@ -7344,6 +7559,7 @@ function renderTemplates(payload) {
     preview_ratio: templatePreviewRatio(item),
     created_at_ts: Date.parse(item.created_at || "") || 0,
   }));
+  renderProfileSummary();
   if (state.selectedTemplateId) {
     const selected = state.templates.find((item) => item.id === state.selectedTemplateId);
     if (selected) {
@@ -7387,6 +7603,7 @@ async function toggleTemplateLike(templateId, shouldLike) {
   updateTemplateInState(templateId, patch);
   renderTemplateFilters();
   renderTemplateCards();
+  renderProfileSummary();
   const currentItem = currentTemplateModalItem();
   if (currentItem && currentItem.id === templateId) {
     renderTemplateModalStats({ ...currentItem, ...patch });
@@ -7928,6 +8145,7 @@ async function loadPrivateData({ forceServerCheck = false } = {}) {
     state.isCookieSession = false;
     state.linkedProviders = new Set();
     state.me = null;
+    state.walletBalanceCredits = 0;
     userName.textContent = "—";
     userTgId.textContent = "—";
     creditsValue.textContent = "—";
@@ -7939,6 +8157,7 @@ async function loadPrivateData({ forceServerCheck = false } = {}) {
     renderAdminAccess();
     renderGenerationChips();
     refreshGenerationCostNote();
+    renderProfileSummary();
     return;
   }
   const mePromise = authorizedGetWithRetry("/v1/me", 1);
@@ -8982,6 +9201,30 @@ function bindEvents() {
   }
   if (openMarketingAdminButton) {
     openMarketingAdminButton.addEventListener("click", () => switchScreen("marketing"));
+  }
+  if (profilePrimaryAction) {
+    profilePrimaryAction.addEventListener("click", handleProfilePrimaryAction);
+  }
+  if (profileHistoryButton) {
+    profileHistoryButton.addEventListener("click", () => switchScreen("history"));
+  }
+  if (profileFavoritesButton) {
+    profileFavoritesButton.addEventListener("click", openProfileFavorites);
+  }
+  if (profileReferenceAction) {
+    profileReferenceAction.addEventListener("click", openProfileReferencePrompt);
+  }
+  if (profileReferenceCard) {
+    profileReferenceCard.addEventListener("click", (event) => {
+      const target = event.target instanceof Element ? event.target.closest("button") : null;
+      if (target) {
+        return;
+      }
+      openProfileReferencePrompt();
+    });
+  }
+  if (profilePhotoTipsButton) {
+    profilePhotoTipsButton.addEventListener("click", openProfilePhotoTips);
   }
   if (marketingBackButton) {
     marketingBackButton.addEventListener("click", () => switchScreen("profile"));

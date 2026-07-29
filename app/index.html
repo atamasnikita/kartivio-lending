@@ -11,7 +11,7 @@
     />
     <meta name="kartivio-yandex-metrika-id" content="109102691" />
     <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=20260717-first-photoset-offer-1" />
+    <link rel="stylesheet" href="./styles.css?v=20260729-profile-v1" />
     <script src="./vendor/lucide.min.js?v=1.18.0" defer></script>
   </head>
   <body>
@@ -398,38 +398,90 @@
           </footer>
         </section>
 
-        <section class="screen" data-screen="profile">
-          <section class="panel-card profile-card">
-            <article class="stat">
-              <span>Пользователь</span>
-              <strong id="userName">—</strong>
-            </article>
-            <article class="stat">
-              <span>Telegram ID</span>
-              <strong id="userTgId">—</strong>
-            </article>
-            <article class="stat">
+        <section class="screen profile-screen" data-screen="profile">
+          <section class="panel-card profile-hero-card">
+            <div class="profile-identity-row">
+              <span id="profileAvatarLarge" class="profile-avatar-large">K</span>
+              <div class="profile-title-stack">
+                <span class="profile-kicker">Профиль Kartivio</span>
+                <h2 id="userName">—</h2>
+                <p id="profileUserSubline">Аккаунт готов к генерациям.</p>
+              </div>
+            </div>
+            <div class="profile-balance-panel">
               <span>Баланс</span>
               <strong id="creditsValue">—</strong>
-            </article>
+              <small id="profilePhotoEstimate">—</small>
+            </div>
+            <button id="profilePrimaryAction" class="primary-action profile-primary-action" type="button">
+              Создать фото
+            </button>
+            <p id="profilePrimaryNote" class="profile-primary-note">Кредиты не сгорают.</p>
           </section>
 
-          <section class="panel-card">
-            <div class="section-row section-row-tight">
-              <h3>Способы входа</h3>
+          <section class="panel-card profile-section-card">
+            <div class="section-row section-row-tight profile-section-head">
+              <h3>Твои кадры</h3>
+              <span id="profileActivityNote">Быстрый доступ</span>
             </div>
-            <div class="identity-grid">
-              <article class="identity-item">
-                <span>Яндекс</span>
-                <strong id="identityYandex">—</strong>
+            <div class="profile-stats-grid">
+              <button id="profileHistoryButton" class="profile-stat-action" type="button">
+                <span class="profile-stat-icon"><i data-lucide="images"></i></span>
+                <span>Создано</span>
+                <strong id="profileGeneratedCount">0</strong>
+                <small>Открыть историю</small>
+              </button>
+              <button id="profileFavoritesButton" class="profile-stat-action" type="button">
+                <span class="profile-stat-icon"><i data-lucide="heart"></i></span>
+                <span>Избранное</span>
+                <strong id="profileFavoritesCount">0</strong>
+                <small>Шаблоны из ленты</small>
+              </button>
+            </div>
+          </section>
+
+          <section id="profileReferenceCard" class="panel-card profile-feature-card">
+            <span class="profile-feature-icon"><i data-lucide="image-plus"></i></span>
+            <div class="profile-feature-copy">
+              <div class="profile-feature-head">
+                <h3>Промпт по референсу</h3>
+                <span id="profileReferenceBadge" class="profile-feature-badge">После оплаты</span>
+              </div>
+              <p id="profileReferenceText">Загрузи референс, а Kartivio соберет промпт по сцене, свету, позе и одежде.</p>
+            </div>
+            <button id="profileReferenceAction" class="soft-btn profile-feature-action" type="button">
+              Открыть
+            </button>
+          </section>
+
+          <section class="panel-card profile-connect-card">
+            <div class="profile-connect-head">
+              <div class="profile-connect-title">
+                <span class="profile-kicker">Аккаунт</span>
+                <h3>Продолжать где удобно</h3>
+                <p id="profileSyncText">История, кредиты и покупки сохраняются в одном аккаунте.</p>
+              </div>
+              <span id="profileSyncBadge" class="profile-sync-badge">—</span>
+            </div>
+            <div class="profile-sync-list">
+              <article id="identityYandexCard" class="profile-sync-item">
+                <span class="profile-sync-icon"><i data-lucide="shield-check"></i></span>
+                <div>
+                  <span>Веб-вход</span>
+                  <strong id="identityYandex">—</strong>
+                </div>
               </article>
-              <article class="identity-item">
-                <span>Telegram</span>
-                <strong id="identityTelegram">—</strong>
+              <article id="identityTelegramCard" class="profile-sync-item">
+                <span class="profile-sync-icon"><i data-lucide="send"></i></span>
+                <div>
+                  <span>Telegram</span>
+                  <strong id="identityTelegram">—</strong>
+                  <small class="identity-note">ID: <span id="userTgId">—</span></small>
+                  <small id="telegramLinkNote" class="identity-note">—</small>
+                </div>
                 <button id="linkTelegramButton" class="soft-btn btn-compact identity-action" type="button">
-                  Привязать Telegram
+                  Привязать
                 </button>
-                <small id="telegramLinkNote" class="identity-note">—</small>
               </article>
             </div>
           </section>
@@ -443,11 +495,17 @@
             <button id="openMarketingAdminButton" class="soft-btn" type="button">Открыть рассылки</button>
           </section>
 
-          <a class="bot-link" href="https://t.me/kartivio_ai_bot" target="_blank" rel="noreferrer">
-            <i data-lucide="message-circle"></i>
-            <span>Открыть бота</span>
-          </a>
-          <button id="logoutButton" class="soft-btn" type="button">Выйти</button>
+          <section class="profile-actions-row">
+            <a class="bot-link" href="https://t.me/kartivio_ai_bot" target="_blank" rel="noreferrer">
+              <i data-lucide="message-circle"></i>
+              <span>Открыть бота</span>
+            </a>
+            <button id="profilePhotoTipsButton" class="soft-btn profile-help-btn" type="button">
+              <i data-lucide="circle-help"></i>
+              <span>Какие фото подходят</span>
+            </button>
+          </section>
+          <button id="logoutButton" class="soft-btn profile-logout-btn" type="button">Выйти</button>
         </section>
 
         <section class="screen" data-screen="marketing">
@@ -783,6 +841,6 @@
       </article>
     </div>
 
-    <script src="./app.js?v=20260721-nano-banana-admin-1" defer></script>
+    <script src="./app.js?v=20260729-profile-v1" defer></script>
   </body>
 </html>
