@@ -1156,6 +1156,28 @@ function getPrimaryScrollTop() {
   return Number(appMain?.scrollTop || 0);
 }
 
+function restorePrimaryScrollTop(scrollTop) {
+  const nextTop = Number(scrollTop || 0);
+  if (!Number.isFinite(nextTop)) {
+    return;
+  }
+  if (!isTelegramMiniAppRuntime() && isMobileBrowser()) {
+    window.scrollTo(0, nextTop);
+    return;
+  }
+  if (appMain) {
+    appMain.scrollTop = nextTop;
+  }
+}
+
+function preservePrimaryScrollTop(scrollTop) {
+  restorePrimaryScrollTop(scrollTop);
+  window.requestAnimationFrame(() => restorePrimaryScrollTop(scrollTop));
+  for (const delay of [80, 240, 700]) {
+    window.setTimeout(() => restorePrimaryScrollTop(scrollTop), delay);
+  }
+}
+
 function handleBottomNavAutoHide() {
   if (isTelegramShellRuntime() || !isMobileBrowser()) {
     setBottomNavHidden(false);
@@ -2654,15 +2676,20 @@ function triggerGenerationDownload(url, filename = "") {
   if (!normalizedUrl) {
     return false;
   }
+  const scrollTop = getPrimaryScrollTop();
   const link = document.createElement("a");
   link.href = normalizedUrl;
   if (filename) {
     link.download = filename;
   }
   link.rel = "noopener";
+  link.style.display = "none";
+  link.setAttribute("aria-hidden", "true");
+  link.tabIndex = -1;
   document.body.appendChild(link);
   link.click();
   link.remove();
+  preservePrimaryScrollTop(scrollTop);
   return true;
 }
 
@@ -2672,17 +2699,21 @@ async function downloadGenerationImage(job, fallbackBase = "kartivio-image") {
     throw new Error("Идентификатор генерации не найден.");
   }
 
-  const directUrl = normalizeImageUrl(job?.result_image_download_url || "");
-  if (directUrl && triggerGenerationDownload(directUrl)) {
-    return;
-  }
-
   const { blob, contentType } = await authorizedBlobFetch(`/v1/generations/${normalizedJobId}/download`);
   const objectUrl = URL.createObjectURL(blob);
   const ext = extensionFromContentType(contentType || blob.type) || "png";
   const filename = `${fallbackBase}-${Date.now()}.${ext}`;
   triggerGenerationDownload(objectUrl, filename);
   window.setTimeout(() => URL.revokeObjectURL(objectUrl), 2500);
+}
+
+function setDownloadButtonPending(button, pending) {
+  if (!button) {
+    return;
+  }
+  const isPending = Boolean(pending);
+  button.disabled = isPending;
+  button.setAttribute("aria-busy", isPending ? "true" : "false");
 }
 
 function generationViewImageUrl(job) {
@@ -7750,10 +7781,22 @@ async function renderActiveImage(job, renderToken) {
     });
     const downloadBtn = activeResult.querySelector('[data-action="download"]');
     if (downloadBtn) {
-      downloadBtn.addEventListener("click", () => {
-        downloadGenerationImage(job, `kartivio-${job.id}`).catch((error) => {
-          setCreateNote(userFacingErrorMessage(error, "Не удалось скачать изображение."), true);
-        });
+      downloadBtn.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (downloadBtn.disabled) {
+          return;
+        }
+        const scrollTop = getPrimaryScrollTop();
+        setDownloadButtonPending(downloadBtn, true);
+        downloadGenerationImage(job, `kartivio-${job.id}`)
+          .catch((error) => {
+            setCreateNote(userFacingErrorMessage(error, "Не удалось скачать изображение."), true);
+          })
+          .finally(() => {
+            setDownloadButtonPending(downloadBtn, false);
+            preservePrimaryScrollTop(scrollTop);
+          });
       });
     }
     const repeatBtn = activeResult.querySelector('[data-action="repeat"]');
@@ -7946,13 +7989,22 @@ function renderHistory(payload) {
     }
     const downloadButton = item.querySelector('[data-action="download-image"]');
     if (downloadButton) {
-      downloadButton.addEventListener("click", () => {
-        if (!job.result_image_url) {
+      downloadButton.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (downloadButton.disabled || !job.result_image_url) {
           return;
         }
-        downloadGenerationImage(job, `kartivio-${job.id}`).catch((error) => {
-          setCreateNote(userFacingErrorMessage(error, "Не удалось скачать изображение."), true);
-        });
+        const scrollTop = getPrimaryScrollTop();
+        setDownloadButtonPending(downloadButton, true);
+        downloadGenerationImage(job, `kartivio-${job.id}`)
+          .catch((error) => {
+            setCreateNote(userFacingErrorMessage(error, "Не удалось скачать изображение."), true);
+          })
+          .finally(() => {
+            setDownloadButtonPending(downloadButton, false);
+            preservePrimaryScrollTop(scrollTop);
+          });
       });
     }
     historyList.appendChild(item);
