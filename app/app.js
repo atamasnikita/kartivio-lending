@@ -7940,11 +7940,21 @@ function renderHistory(payload) {
   const items = Array.isArray(payload && payload.items) ? payload.items : [];
   const hasMore = Boolean(payload && payload.hasMore);
   const loadingMore = Boolean(payload && payload.loadingMore);
+  const append = Boolean(payload && payload.append);
+  const itemCount = Number.isInteger(payload && payload.itemCount)
+    ? payload.itemCount
+    : append
+      ? historyList.querySelectorAll(".history-item").length + items.length
+      : items.length;
   const canDownload = !isTelegramMiniAppRuntime();
-  historyList.innerHTML = "";
+  if (!append) {
+    historyList.innerHTML = "";
+  }
   if (!items.length) {
-    historyList.innerHTML = '<article class="history-item history-empty"><div class="history-body">История пока пустая.</div></article>';
-    renderHistoryPagination({ hasMore: false, loadingMore: false, itemCount: 0 });
+    if (!append) {
+      historyList.innerHTML = '<article class="history-item history-empty"><div class="history-body">История пока пустая.</div></article>';
+    }
+    renderHistoryPagination({ hasMore, loadingMore, itemCount });
     return;
   }
   for (const job of items) {
@@ -8030,7 +8040,7 @@ function renderHistory(payload) {
         .catch(() => {});
     }
   }
-  renderHistoryPagination({ hasMore, loadingMore, itemCount: items.length });
+  renderHistoryPagination({ hasMore, loadingMore, itemCount });
   refreshIcons();
 }
 
@@ -8075,11 +8085,16 @@ async function loadHistory({ forceServerCheck = false, append = false } = {}) {
   }
 
   if (append && Array.isArray(state.historyItems)) {
-    renderHistory({ items: state.historyItems, hasMore: state.historyHasMore, loadingMore: true });
+    renderHistoryPagination({
+      hasMore: state.historyHasMore,
+      loadingMore: true,
+      itemCount: state.historyItems.length,
+    });
   }
 
   const requestToken = ++state.historyRequestToken;
   const requestOffset = append ? state.historyNextOffset : 0;
+  const appendScrollTop = append ? getPrimaryScrollTop() : 0;
   const requestPromise = authorizedGetWithRetry(`/v1/generations?limit=${HISTORY_PAGE_SIZE}&offset=${requestOffset}`, 1)
     .then((payload) => {
       const incomingItems = Array.isArray(payload && payload.items) ? payload.items : [];
@@ -8087,13 +8102,29 @@ async function loadHistory({ forceServerCheck = false, append = false } = {}) {
         payload && Number.isInteger(payload.next_offset) ? payload.next_offset : null;
       const hasMore = Boolean(payload && payload.has_more);
       if (requestToken === state.historyRequestToken) {
+        const previousItems = Array.isArray(state.historyItems) ? state.historyItems : [];
+        const previousIds = new Set(previousItems.map((item) => String(item && item.id ? item.id : "")));
+        const appendedItems = append
+          ? incomingItems.filter((item) => {
+              const id = String(item && item.id ? item.id : "");
+              return id && !previousIds.has(id);
+            })
+          : incomingItems;
         state.historyItems = append ? mergeHistoryItems(state.historyItems, incomingItems) : incomingItems;
         state.historyHasMore = hasMore;
         state.historyNextOffset =
           nextOffset !== null ? nextOffset : Array.isArray(state.historyItems) ? state.historyItems.length : 0;
         state.historyLoadedAt = Date.now();
         syncSuccessfulGenerationCountFromJobs(state.historyItems);
-        renderHistory({ items: state.historyItems, hasMore: state.historyHasMore });
+        renderHistory({
+          items: append ? appendedItems : state.historyItems,
+          hasMore: state.historyHasMore,
+          append,
+          itemCount: state.historyItems.length,
+        });
+        if (append) {
+          preservePrimaryScrollTop(appendScrollTop);
+        }
       }
     })
     .finally(() => {

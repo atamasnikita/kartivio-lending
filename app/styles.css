@@ -2960,10 +2960,6 @@ body.is-web-runtime.is-mobile-browser .app-main {
     transform 0.16s cubic-bezier(0.23, 1, 0.32, 1);
 }
 
-.history-thumb-ready:active {
-  transform: scale(0.985);
-}
-
 .history-open-indicator {
   position: absolute;
   right: 7px;
