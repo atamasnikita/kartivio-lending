@@ -12,9 +12,7 @@ const STORAGE_KEYS = {
 
 const DEFAULT_PROD_API_BASE = "https://api.kartivio-ai.ru";
 const DEFAULT_LOCAL_API_BASE = "http://127.0.0.1:8093";
-const YANDEX_CLIENT_ID_META_NAME = "kartivio-yandex-client-id";
 const YANDEX_METRIKA_ID_META_NAME = "kartivio-yandex-metrika-id";
-const YANDEX_OAUTH_AUTHORIZE_URL = "https://oauth.yandex.com/authorize";
 const TELEGRAM_WEB_APP_SDK_SRC = "./vendor/telegram-web-app.js?v=62";
 const AUTH_BRIDGE_HASH_KEY = "auth_bridge";
 const API_HEALTHCHECK_TIMEOUT_MS = 2500;
@@ -188,6 +186,13 @@ const API_ERROR_MESSAGES = Object.freeze({
   missing_refresh_token: "Сессия завершена. Войди снова.",
   invalid_token_payload: "Ошибка сессии. Войди снова.",
   auth_rate_limit_exceeded: "Слишком много попыток входа. Подожди немного и попробуй снова.",
+  yandex_auth_not_configured: "Вход через Яндекс временно недоступен.",
+  yandex_redirect_uri_invalid: "Не удалось подготовить вход через Яндекс. Попробуй обновить страницу.",
+  yandex_redirect_uri_forbidden: "Не удалось подготовить вход через Яндекс. Попробуй обновить страницу.",
+  yandex_oauth_state_required: "Сессия входа через Яндекс устарела. Запусти вход заново.",
+  yandex_oauth_state_invalid: "Сессия входа через Яндекс устарела. Запусти вход заново.",
+  yandex_oauth_state_expired: "Сессия входа через Яндекс устарела. Запусти вход заново.",
+  yandex_oauth_state_used: "Сессия входа через Яндекс уже была использована. Запусти вход заново.",
   rate_limit_unavailable: "Сервис временно недоступен. Попробуй еще раз.",
   request_timeout: "Сервис не ответил вовремя. Попробуй еще раз.",
   hour_limit_exceeded: "Лимит генераций на этот час исчерпан.",
@@ -556,7 +561,12 @@ function shouldTrackApiFetchFailure(path, error) {
   if (normalizedPath === "/v1/payments/checkout") {
     return true;
   }
-  if (normalizedPath === "/v1/auth/yandex" || normalizedPath === "/v1/auth/telegram/miniapp") {
+  if (
+    normalizedPath === "/v1/auth/yandex" ||
+    normalizedPath === "/v1/auth/yandex/start" ||
+    normalizedPath === "/v1/auth/yandex/callback" ||
+    normalizedPath === "/v1/auth/telegram/miniapp"
+  ) {
     return true;
   }
   return false;
@@ -1330,6 +1340,10 @@ function yandexAuthLaunchUrl() {
 function currentReturnToUrl() {
   const url = new URL(window.location.href);
   url.searchParams.delete("yandex_auto");
+  url.searchParams.delete("code");
+  url.searchParams.delete("state");
+  url.searchParams.delete("error");
+  url.searchParams.delete("error_description");
   url.hash = "";
   return url.toString();
 }
@@ -1599,50 +1613,15 @@ function decodeJwtPayload(token) {
   }
 }
 
-function yandexClientIdFromMeta() {
-  const queryClientId = String(new URLSearchParams(window.location.search).get("yandex_client_id") || "").trim();
-  if (queryClientId && canOverrideApiBase()) {
-    return queryClientId;
-  }
-  const tag = document.querySelector(`meta[name="${YANDEX_CLIENT_ID_META_NAME}"]`);
-  if (!tag) {
-    return "";
-  }
-  return String(tag.getAttribute("content") || "").trim();
-}
-
-async function sha256Base64Url(value) {
-  const digest = await window.crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(value || "")));
-  const bytes = new Uint8Array(digest);
-  let binary = "";
-  for (const byte of bytes) {
-    binary += String.fromCharCode(byte);
-  }
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-}
-
 async function yandexOauthAuthorizeUrl() {
-  const clientId = yandexClientIdFromMeta();
-  if (!clientId) {
-    return "";
-  }
-  const stateToken = randomBase64Url(24);
-  const verifier = randomBase64Url(48);
-  const challenge = await sha256Base64Url(verifier);
-  writeTransientValue(YANDEX_OAUTH_STORAGE_KEYS.state, stateToken);
-  writeTransientValue(YANDEX_OAUTH_STORAGE_KEYS.verifier, verifier);
-  writeTransientValue(YANDEX_OAUTH_STORAGE_KEYS.returnTo, currentReturnToUrl());
-
-  const url = new URL(YANDEX_OAUTH_AUTHORIZE_URL);
-  url.searchParams.set("response_type", "code");
-  url.searchParams.set("client_id", clientId);
-  url.searchParams.set("redirect_uri", oauthRedirectUri());
-  url.searchParams.set("state", stateToken);
-  url.searchParams.set("scope", "login:info login:email");
-  url.searchParams.set("code_challenge", challenge);
-  url.searchParams.set("code_challenge_method", "S256");
-  url.searchParams.set("force_confirm", "yes");
-  return url.toString();
+  const payload = await apiFetch("/v1/auth/yandex/start", {
+    method: "POST",
+    body: {
+      redirect_uri: oauthRedirectUri(),
+      return_to: currentReturnToUrl(),
+    },
+  });
+  return String(payload.authorize_url || "").trim();
 }
 
 function stripGoogleCallbackArtifacts() {
@@ -1782,22 +1761,6 @@ async function consumeYandexOauthCallback() {
     return false;
   }
 
-  const expectedState = readTransientValue(YANDEX_OAUTH_STORAGE_KEYS.state);
-  const verifier = readTransientValue(YANDEX_OAUTH_STORAGE_KEYS.verifier);
-  const returnTo = readTransientValue(YANDEX_OAUTH_STORAGE_KEYS.returnTo) || currentReturnToUrl();
-
-  if (!returnedState || !expectedState || returnedState !== expectedState) {
-    stripYandexCallbackArtifacts();
-    clearYandexOauthSession();
-    trackDiagnosticEvent("auth_failed", {
-      authProvider: "yandex",
-      stage: "callback_state_mismatch",
-      error: { code: "oauth_state_mismatch" },
-    });
-    setNote("Сессия входа через Яндекс устарела. Запусти вход заново.", true);
-    return true;
-  }
-
   stripYandexCallbackArtifacts();
   clearYandexOauthSession();
 
@@ -1811,21 +1774,17 @@ async function consumeYandexOauthCallback() {
     setNote(description || "Не удалось завершить вход через Яндекс.", true);
     return true;
   }
-  if (!returnedCode || !verifier) {
+  if (!returnedCode || !returnedState) {
     trackDiagnosticEvent("auth_failed", {
       authProvider: "yandex",
-      stage: "callback_missing_code_or_verifier",
-      error: { code: "oauth_missing_code_or_verifier" },
+      stage: "callback_missing_code_or_state",
+      error: { code: "oauth_missing_code_or_state" },
     });
     setNote("Яндекс не вернул данные для входа. Повтори попытку.", true);
     return true;
   }
 
-  await loginViaYandexCode(returnedCode, verifier);
-  const url = new URL(returnTo);
-  url.hash = "";
-  url.searchParams.delete("yandex_auto");
-  window.history.replaceState({}, document.title, url.toString());
+  await loginViaYandexCallback(returnedCode, returnedState);
   return true;
 }
 
@@ -3944,7 +3903,7 @@ function attachTelegramImmersiveListeners() {
 function refreshAuthButtons() {
   if (yandexAuthButton) {
     yandexAuthButton.textContent = "Войти через Яндекс";
-    yandexAuthButton.classList.toggle("is-hidden", !yandexClientIdFromMeta());
+    yandexAuthButton.classList.remove("is-hidden");
   }
 }
 
@@ -8950,30 +8909,26 @@ async function loginViaYandexCode(code, codeVerifier) {
   switchScreen("feed");
 }
 
+async function loginViaYandexCallback(code, stateToken) {
+  const payload = await apiFetch("/v1/auth/yandex/callback", {
+    method: "POST",
+    body: { code, state: stateToken },
+  });
+  await finalizeAuthSession(payload, "yandex");
+  syncAcquisitionTouch({ auth: true }).catch(() => {});
+  ensurePublicDataLoaded().catch(() => {});
+  setAuthGateVisible(false);
+  setNote("Авторизация через Яндекс успешна.");
+  await loadPrivateDataAfterAuthSuccess();
+  markHistoryCacheStale();
+  switchScreen("feed");
+}
+
 async function loginViaYandex() {
   if (!yandexAuthButton) {
     return;
   }
   if (yandexAuthPending) {
-    return;
-  }
-  const clientId = yandexClientIdFromMeta();
-  if (!clientId) {
-    trackDiagnosticEvent("auth_failed", {
-      authProvider: "yandex",
-      stage: "launch_missing_client_id",
-      error: { code: "yandex_client_id_missing" },
-    });
-    setNote("Yandex Client ID не задан в мета-теге kartivio-yandex-client-id.", true);
-    return;
-  }
-  if (!(window.crypto && window.crypto.subtle)) {
-    trackDiagnosticEvent("auth_failed", {
-      authProvider: "yandex",
-      stage: "launch_crypto_unavailable",
-      error: { code: "crypto_subtle_unavailable" },
-    });
-    setNote("Этот браузер не поддерживает безопасный вход через Яндекс.", true);
     return;
   }
   if (isTelegramMiniAppRuntime()) {
