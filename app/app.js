@@ -2164,19 +2164,18 @@ function renderGenerationChips() {
   renderRatioChips();
 }
 
+function clearLegacyAuthTokenStorage() {
+  localStorage.removeItem(STORAGE_KEYS.accessToken);
+  localStorage.removeItem(STORAGE_KEYS.refreshToken);
+}
+
 function saveState() {
   if (canOverrideApiBase()) {
     localStorage.setItem(STORAGE_KEYS.apiBase, state.apiBase);
   } else {
     localStorage.removeItem(STORAGE_KEYS.apiBase);
   }
-  if (!state.isCookieSession && state.accessToken && state.refreshToken) {
-    localStorage.setItem(STORAGE_KEYS.accessToken, state.accessToken);
-    localStorage.setItem(STORAGE_KEYS.refreshToken, state.refreshToken);
-  } else {
-    localStorage.removeItem(STORAGE_KEYS.accessToken);
-    localStorage.removeItem(STORAGE_KEYS.refreshToken);
-  }
+  clearLegacyAuthTokenStorage();
   localStorage.setItem(STORAGE_KEYS.lastAuthProvider, state.lastAuthProvider);
   if (state.telegramWebLoginToken && !hasActiveSession()) {
     localStorage.setItem(STORAGE_KEYS.telegramWebLoginToken, state.telegramWebLoginToken);
@@ -2194,8 +2193,9 @@ function loadState() {
   if (!canOverrideApiBase()) {
     localStorage.removeItem(STORAGE_KEYS.apiBase);
   }
-  state.accessToken = localStorage.getItem(STORAGE_KEYS.accessToken) || "";
-  state.refreshToken = localStorage.getItem(STORAGE_KEYS.refreshToken) || "";
+  clearLegacyAuthTokenStorage();
+  state.accessToken = "";
+  state.refreshToken = "";
   state.isCookieSession = false;
   state.lastAuthProvider = String(localStorage.getItem(STORAGE_KEYS.lastAuthProvider) || "").trim().toLowerCase();
   state.telegramWebLoginToken = String(localStorage.getItem(STORAGE_KEYS.telegramWebLoginToken) || "").trim();
