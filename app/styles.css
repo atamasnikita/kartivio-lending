@@ -1197,7 +1197,6 @@ body.is-web-runtime.is-mobile-browser .app-main {
   background-size: 100% 100%, 240% 240%;
   box-shadow: 0 14px 34px rgba(5, 10, 20, 0.24);
   transition:
-    padding 0.28s cubic-bezier(0.23, 1, 0.32, 1),
     box-shadow 0.22s ease,
     background-position 0.22s ease,
     background-size 0.22s ease;
@@ -1205,7 +1204,6 @@ body.is-web-runtime.is-mobile-browser .app-main {
 
 .reference-prompt-card.is-collapsed {
   gap: 0;
-  padding: 10px;
   background:
     linear-gradient(180deg, rgba(10, 16, 26, 0.98), rgba(9, 13, 22, 0.98)) padding-box,
     linear-gradient(120deg, rgba(126, 229, 216, 0.58), rgba(65, 78, 120, 0.5), rgba(126, 229, 216, 0.58)) border-box;
@@ -1267,11 +1265,12 @@ body.is-web-runtime.is-mobile-browser .app-main {
   overflow: hidden;
   opacity: 1;
   transform: translateY(0);
+  will-change: max-height, margin-top, opacity, transform;
   transition:
-    max-height 0.36s cubic-bezier(0.23, 1, 0.32, 1),
-    margin-top 0.36s cubic-bezier(0.23, 1, 0.32, 1),
-    opacity 0.2s ease,
-    transform 0.28s cubic-bezier(0.23, 1, 0.32, 1);
+    max-height 0.32s cubic-bezier(0.23, 1, 0.32, 1),
+    margin-top 0.32s cubic-bezier(0.23, 1, 0.32, 1),
+    opacity 0.22s ease,
+    transform 0.32s cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 .reference-prompt-card.is-collapsed .reference-prompt-expanded-content {
@@ -2335,10 +2334,10 @@ body.is-web-runtime.is-mobile-browser .app-main {
   opacity: 0;
   transform: translateY(-6px);
   transition:
-    max-height 0.34s cubic-bezier(0.23, 1, 0.32, 1),
-    padding-bottom 0.34s cubic-bezier(0.23, 1, 0.32, 1),
-    opacity 0.18s ease,
-    transform 0.28s cubic-bezier(0.23, 1, 0.32, 1);
+    max-height 0.36s cubic-bezier(0.4, 0, 0.2, 1),
+    padding-bottom 0.36s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.24s ease,
+    transform 0.36s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .settings-panel[open] .settings-body {
@@ -5871,10 +5870,6 @@ body.is-web-runtime.is-mobile-browser.nav-hidden .bottom-nav {
 
   .reference-prompt-expanded-content {
     --reference-expanded-max-height: 980px;
-  }
-
-  .reference-prompt-card.is-collapsed {
-    padding: 8px;
   }
 
   .reference-prompt-summary {

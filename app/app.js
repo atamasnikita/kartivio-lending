@@ -905,6 +905,7 @@ let referencePromptBusyStepIndex = 0;
 let referencePromptBusyIntervalId = 0;
 let referencePromptBusyCaptionTimeoutId = 0;
 let referencePromptHeightFrameId = 0;
+let settingsPanelHeightFrameId = 0;
 const jumpButtons = Array.from(document.querySelectorAll("[data-nav-target]"));
 const screens = Array.from(document.querySelectorAll("[data-screen]"));
 let yandexAuthPending = false;
@@ -3091,19 +3092,23 @@ function setReferencePromptExpanded(expanded) {
   syncReferencePromptControls();
 }
 
-function syncReferencePromptExpandedHeight() {
+function applyReferencePromptExpandedHeight() {
   if (!referencePromptExpandedContent) {
     return;
   }
+  const height = Math.ceil(Math.max(referencePromptExpandedContent.scrollHeight, 0));
+  if (height > 0) {
+    referencePromptExpandedContent.style.setProperty("--reference-expanded-max-height", `${height + 8}px`);
+  }
+}
+
+function syncReferencePromptExpandedHeight() {
   if (referencePromptHeightFrameId) {
     window.cancelAnimationFrame(referencePromptHeightFrameId);
   }
   referencePromptHeightFrameId = window.requestAnimationFrame(() => {
     referencePromptHeightFrameId = 0;
-    const height = Math.max(referencePromptExpandedContent.scrollHeight, 0);
-    if (height > 0) {
-      referencePromptExpandedContent.style.setProperty("--reference-expanded-max-height", `${height + 2}px`);
-    }
+    applyReferencePromptExpandedHeight();
   });
 }
 
@@ -3196,6 +3201,7 @@ function syncReferencePromptAccessState() {
   const busy = Boolean(state.referencePromptBusy);
   const expanded = referencePromptShouldBeExpanded();
 
+  applyReferencePromptExpandedHeight();
   if (referencePromptCard) {
     referencePromptCard.classList.toggle("is-locked", locked);
     referencePromptCard.classList.toggle("is-busy", busy);
@@ -8993,6 +8999,30 @@ async function loginViaYandex() {
   window.location.assign(url);
 }
 
+function applySettingsPanelBodyHeight(details = generationSettingsDetails) {
+  if (!details) {
+    return;
+  }
+  const body = details.querySelector(".settings-body");
+  if (!body) {
+    return;
+  }
+  const height = Math.ceil(Math.max(body.scrollHeight, 0));
+  if (height > 0) {
+    body.style.setProperty("--settings-body-max-height", `${height + 20}px`);
+  }
+}
+
+function syncSettingsPanelBodyHeight(details = generationSettingsDetails) {
+  if (settingsPanelHeightFrameId) {
+    window.cancelAnimationFrame(settingsPanelHeightFrameId);
+  }
+  settingsPanelHeightFrameId = window.requestAnimationFrame(() => {
+    settingsPanelHeightFrameId = 0;
+    applySettingsPanelBodyHeight(details);
+  });
+}
+
 function toggleSettingsPanel(details) {
   if (!details) {
     return;
@@ -9032,9 +9062,11 @@ function toggleSettingsPanel(details) {
       details.classList.remove("is-settings-closing");
     }
     finish();
-  }, 420);
+  }, 520);
 
   if (details.open && !details.classList.contains("is-settings-closing")) {
+    applySettingsPanelBodyHeight(details);
+    void body.offsetHeight;
     details.classList.add("is-settings-closing");
     return;
   }
@@ -9042,9 +9074,11 @@ function toggleSettingsPanel(details) {
   details.open = true;
   details.classList.add("is-settings-opening");
   renderGenerationChips();
+  applySettingsPanelBodyHeight(details);
   void body.offsetHeight;
   window.requestAnimationFrame(() => {
     details.classList.remove("is-settings-opening");
+    syncSettingsPanelBodyHeight(details);
   });
 }
 
@@ -9279,6 +9313,9 @@ function bindEvents() {
   if (referenceImageInput) {
     referenceImageInput.addEventListener("change", handleReferenceImageChange);
   }
+  if (referenceImagePreview) {
+    referenceImagePreview.addEventListener("load", syncReferencePromptExpandedHeight);
+  }
   if (clearReferenceImageButton) {
     clearReferenceImageButton.addEventListener("click", (event) => {
       event.preventDefault();
@@ -9333,6 +9370,7 @@ function bindEvents() {
     generationSettingsDetails.addEventListener("toggle", () => {
       if (generationSettingsDetails.open) {
         renderGenerationChips();
+        syncSettingsPanelBodyHeight(generationSettingsDetails);
       }
     });
   }
@@ -9749,6 +9787,14 @@ function bindEvents() {
   window.addEventListener("scroll", maybeAutoLoadMoreTemplates, { passive: true });
   window.addEventListener("resize", maybeAutoLoadMoreTemplates, { passive: true });
   window.addEventListener("resize", handleTemplateGridLayoutChange, { passive: true });
+  window.addEventListener(
+    "resize",
+    () => {
+      syncReferencePromptExpandedHeight();
+      syncSettingsPanelBodyHeight();
+    },
+    { passive: true },
+  );
   window.addEventListener("pageshow", () => {
     unlockTemplateModalScroll();
     resumePendingTelegramWebLogin();
