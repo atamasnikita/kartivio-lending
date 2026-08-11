@@ -685,6 +685,7 @@ const profileReferenceCard = document.getElementById("profileReferenceCard");
 const profileReferenceBadge = document.getElementById("profileReferenceBadge");
 const profileReferenceText = document.getElementById("profileReferenceText");
 const profileReferenceAction = document.getElementById("profileReferenceAction");
+const profileTopupAction = document.getElementById("profileTopupAction");
 const profileSyncText = document.getElementById("profileSyncText");
 const profileSyncBadge = document.getElementById("profileSyncBadge");
 const identityYandexCard = document.getElementById("identityYandexCard");
@@ -791,6 +792,7 @@ const modelChips = document.getElementById("modelChips");
 const resolutionChips = document.getElementById("resolutionChips");
 const ratioChips = document.getElementById("ratioChips");
 const generationSettingsSummary = document.getElementById("generationSettingsSummary");
+const generationSettingsDetails = document.querySelector(".settings-panel");
 const studioSceneBlock = document.getElementById("studioSceneBlock");
 const studioSceneTitle = document.getElementById("studioSceneTitle");
 const chooseTemplateButton = document.getElementById("chooseTemplateButton");
@@ -798,6 +800,8 @@ const referencePromptToggleButton = document.getElementById("referencePromptTogg
 const referencePromptCollapseButton = document.getElementById("referencePromptCollapseButton");
 const referenceImageInput = document.getElementById("referenceImageInput");
 const referencePromptCard = document.getElementById("referencePromptCard");
+const referencePromptSummaryButton = document.getElementById("referencePromptSummaryButton");
+const referencePromptExpandedContent = document.getElementById("referencePromptExpandedContent");
 const referencePromptSubtitle = document.getElementById("referencePromptSubtitle");
 const referencePromptBadge = document.getElementById("referencePromptBadge");
 const referenceImageDropzone = document.getElementById("referenceImageDropzone");
@@ -3017,11 +3021,16 @@ function renderProfileSummary() {
   }
   if (profileReferenceText) {
     profileReferenceText.textContent = hasReferenceAccess
-      ? "Фича уже открыта: загрузи референс и получи готовый промпт без списания кредитов."
-      : "Загрузи референс, а Kartivio соберет промпт по сцене, свету, позе и одежде.";
+      ? "Загрузи референс — получи готовый промпт без списания кредитов."
+      : "Загрузи референс — получи готовый промпт для генерации.";
   }
   if (profileReferenceAction) {
-    profileReferenceAction.textContent = hasReferenceAccess ? "Создать промпт" : "Посмотреть пакеты";
+    const label = profileReferenceAction.querySelector("span");
+    if (label) {
+      label.textContent = hasReferenceAccess ? "Попробовать" : "Посмотреть пакеты";
+    } else {
+      profileReferenceAction.textContent = hasReferenceAccess ? "Попробовать" : "Посмотреть пакеты";
+    }
   }
 }
 
@@ -3091,9 +3100,7 @@ function renderStudioSceneState() {
   if (studioSceneTitle) {
     studioSceneTitle.textContent = hasTemplate
       ? "Шаблон выбран"
-      : referenceOpen
-        ? "Промпт по референсу"
-        : "Выбери основу кадра";
+      : "Создай промпт по референсу";
   }
   if (referencePromptToggleButton) {
     referencePromptToggleButton.classList.toggle(
@@ -3170,11 +3177,20 @@ function startReferencePromptBusyLoop() {
 function syncReferencePromptAccessState() {
   const locked = referencePromptLocked();
   const busy = Boolean(state.referencePromptBusy);
+  const expanded = referencePromptShouldBeExpanded();
 
   if (referencePromptCard) {
     referencePromptCard.classList.toggle("is-locked", locked);
     referencePromptCard.classList.toggle("is-busy", busy);
-    referencePromptCard.classList.toggle("is-collapsed", !referencePromptShouldBeExpanded());
+    referencePromptCard.classList.toggle("is-collapsed", !expanded);
+    referencePromptCard.classList.toggle("is-expanded", expanded);
+  }
+  if (referencePromptSummaryButton) {
+    referencePromptSummaryButton.setAttribute("aria-expanded", expanded ? "true" : "false");
+  }
+  if (referencePromptExpandedContent) {
+    referencePromptExpandedContent.setAttribute("aria-hidden", expanded ? "false" : "true");
+    referencePromptExpandedContent.inert = !expanded;
   }
   if (referenceImageDropzone) {
     referenceImageDropzone.classList.toggle("is-locked", locked);
@@ -3182,7 +3198,7 @@ function syncReferencePromptAccessState() {
   if (referencePromptSubtitle) {
     referencePromptSubtitle.textContent = locked
       ? "Платная фича для генерации по кадру"
-      : "Создадим новый промпт по референсу";
+      : "Разберем сцену, свет, позу и соберем готовый промпт.";
   }
   if (referencePromptBadge) {
     referencePromptBadge.classList.toggle("is-hidden", !locked);
@@ -8959,6 +8975,61 @@ async function loginViaYandex() {
   window.location.assign(url);
 }
 
+function toggleSettingsPanel(details) {
+  if (!details) {
+    return;
+  }
+  const body = details.querySelector(".settings-body");
+  if (!body) {
+    details.open = !details.open;
+    return;
+  }
+  if (details.dataset.animating === "true") {
+    return;
+  }
+
+  const finish = () => {
+    details.dataset.animating = "false";
+    body.removeEventListener("transitionend", onTransitionEnd);
+  };
+  const onTransitionEnd = (event) => {
+    if (event.target !== body || event.propertyName !== "max-height") {
+      return;
+    }
+    if (details.classList.contains("is-settings-closing")) {
+      details.open = false;
+      details.classList.remove("is-settings-closing");
+    }
+    finish();
+  };
+
+  details.dataset.animating = "true";
+  body.addEventListener("transitionend", onTransitionEnd);
+  window.setTimeout(() => {
+    if (details.dataset.animating !== "true") {
+      return;
+    }
+    if (details.classList.contains("is-settings-closing")) {
+      details.open = false;
+      details.classList.remove("is-settings-closing");
+    }
+    finish();
+  }, 420);
+
+  if (details.open && !details.classList.contains("is-settings-closing")) {
+    details.classList.add("is-settings-closing");
+    return;
+  }
+
+  details.open = true;
+  details.classList.add("is-settings-opening");
+  renderSettingsChips();
+  void body.offsetHeight;
+  window.requestAnimationFrame(() => {
+    details.classList.remove("is-settings-opening");
+  });
+}
+
 function bindEvents() {
   if (apiBaseInput) {
     apiBaseInput.addEventListener("change", () => {
@@ -9141,6 +9212,18 @@ function bindEvents() {
       setReferencePromptExpanded(true);
     });
   }
+  if (referencePromptSummaryButton) {
+    referencePromptSummaryButton.addEventListener("click", () => {
+      if (referencePromptLocked()) {
+        openReferencePromptPaywall();
+        return;
+      }
+      if (state.referencePromptBusy) {
+        return;
+      }
+      setReferencePromptExpanded(!referencePromptShouldBeExpanded());
+    });
+  }
   if (referencePromptCollapseButton) {
     referencePromptCollapseButton.addEventListener("click", () => {
       if (state.referencePromptBusy) {
@@ -9221,6 +9304,20 @@ function bindEvents() {
       toggleSourceTips(null);
     });
   }
+  if (generationSettingsDetails) {
+    const settingsSummary = generationSettingsDetails.querySelector("summary");
+    if (settingsSummary) {
+      settingsSummary.addEventListener("click", (event) => {
+        event.preventDefault();
+        toggleSettingsPanel(generationSettingsDetails);
+      });
+    }
+    generationSettingsDetails.addEventListener("toggle", () => {
+      if (generationSettingsDetails.open) {
+        renderSettingsChips();
+      }
+    });
+  }
 
   for (const button of navButtons) {
     button.addEventListener("click", () => switchScreen(button.dataset.nav));
@@ -9233,6 +9330,9 @@ function bindEvents() {
   }
   if (profilePrimaryAction) {
     profilePrimaryAction.addEventListener("click", handleProfilePrimaryAction);
+  }
+  if (profileTopupAction) {
+    profileTopupAction.addEventListener("click", () => switchScreen("tokens"));
   }
   if (profileHistoryButton) {
     profileHistoryButton.addEventListener("click", () => switchScreen("history"));

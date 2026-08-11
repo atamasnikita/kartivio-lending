@@ -11,7 +11,7 @@
     />
     <meta name="kartivio-yandex-metrika-id" content="109102691" />
     <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=20260803-bottom-nav-v1" />
+    <link rel="stylesheet" href="./styles.css?v=20260810-profile-reference-v1" />
     <script src="./vendor/lucide.min.js?v=1.18.0" defer></script>
   </head>
   <body>
@@ -100,31 +100,8 @@
             <div class="studio-scene-head">
               <div class="studio-scene-title">
                 <span>Сцена</span>
-                <strong id="studioSceneTitle">Выбери основу кадра</strong>
+                <strong id="studioSceneTitle">Создай промпт по референсу</strong>
               </div>
-            </div>
-
-            <div id="studioSceneActions" class="studio-scene-actions">
-              <button id="chooseTemplateButton" class="studio-scene-option" type="button">
-                <span class="studio-scene-option-icon"><i data-lucide="layout-grid"></i></span>
-                <span>
-                  <strong>Выбрать шаблон</strong>
-                  <small>Готовая идея из ленты</small>
-                </span>
-              </button>
-              <button
-                id="referencePromptToggleButton"
-                class="studio-scene-option"
-                type="button"
-                aria-controls="referencePromptCard"
-                aria-expanded="false"
-              >
-                <span class="studio-scene-option-icon"><i data-lucide="image-plus"></i></span>
-                <span>
-                  <strong>Промпт по референсу</strong>
-                  <small>Создадим промпт по загруженному кадру</small>
-                </span>
-              </button>
             </div>
 
             <section id="selectedTemplateCard" class="selected-template is-hidden">
@@ -139,95 +116,106 @@
             </section>
 
             <section id="referencePromptCard" class="reference-prompt-card is-collapsed">
-              <div class="reference-prompt-header">
-                <div class="reference-prompt-copy">
-                  <strong>Промпт по референсу</strong>
-                  <span id="referencePromptSubtitle">Создадим новый промпт по референсу</span>
-                </div>
-                <div class="reference-prompt-header-actions">
+              <button
+                id="referencePromptSummaryButton"
+                class="reference-prompt-summary"
+                type="button"
+                aria-expanded="false"
+                aria-controls="referencePromptExpandedContent"
+              >
+                <figure class="reference-summary-media" aria-hidden="true">
+                  <img src="./assets/reference/reference-prompt-roses.jpg" width="88" height="88" alt="" loading="lazy" decoding="async" />
+                  <figcaption>реф</figcaption>
+                </figure>
+                <span class="reference-summary-arrow" aria-hidden="true"><i data-lucide="arrow-right"></i></span>
+                <span class="reference-summary-copy">
+                  <strong>Кадр в готовый промпт</strong>
+                  <span>Сцена, свет, поза и детали без ручного описания.</span>
+                </span>
+                <span class="reference-summary-toggle" aria-hidden="true"><i data-lucide="chevron-down"></i></span>
+              </button>
+
+              <div id="referencePromptExpandedContent" class="reference-prompt-expanded-content" aria-hidden="true" inert>
+                <div class="reference-prompt-header">
+                  <div class="reference-prompt-copy">
+                    <strong>Загрузи кадр, который нравится</strong>
+                    <span id="referencePromptSubtitle">Разберем сцену, свет, позу и соберем готовый промпт.</span>
+                  </div>
                   <span id="referencePromptBadge" class="reference-prompt-badge">После первой оплаты</span>
+                </div>
+
+                <div
+                  id="referenceImageDropzone"
+                  class="reference-dropzone"
+                  role="button"
+                  tabindex="0"
+                  aria-label="Добавить фото-референс для сборки промпта"
+                >
+                  <span
+                    class="reference-dropzone-hitbox"
+                    aria-hidden="true"
+                  ></span>
+                  <div class="reference-preview-frame" aria-hidden="true">
+                    <span id="referenceDropzoneEmptyState" class="reference-preview-empty">
+                      <span class="dropzone-icon"><i data-lucide="image-plus"></i></span>
+                    </span>
+                    <img id="referenceImagePreview" class="reference-preview-image is-hidden" alt="" loading="lazy" />
+                  </div>
+                  <div class="reference-dropzone-copy">
+                    <strong id="referenceDropzoneTitle">Добавь фото-референс</strong>
+                    <span id="referenceDropzoneSubtitle">Сцена, свет, одежда и композиция</span>
+                    <div class="reference-dropzone-meta">
+                      <span>PNG, JPG, WEBP · до 10 MB</span>
+                      <span id="referenceDropzoneBadge" class="reference-dropzone-file-meta is-hidden">JPG · 1.4 MB</span>
+                    </div>
+                  </div>
                   <button
-                    id="referencePromptCollapseButton"
-                    class="icon-btn reference-collapse-btn"
+                    id="clearReferenceImageButton"
+                    class="dropzone-clear-btn is-hidden"
                     type="button"
-                    aria-label="Свернуть промпт по референсу"
+                    aria-label="Убрать фото-референс"
                   >
-                    <i data-lucide="chevron-up"></i>
+                    <i data-lucide="x"></i>
                   </button>
                 </div>
-              </div>
 
-              <div
-                id="referenceImageDropzone"
-                class="reference-dropzone"
-                role="button"
-                tabindex="0"
-                aria-label="Добавить фото-референс для сборки промпта"
-              >
-                <span
-                  class="reference-dropzone-hitbox"
-                  aria-hidden="true"
-                ></span>
-                <div class="reference-preview-frame" aria-hidden="true">
-                  <span id="referenceDropzoneEmptyState" class="reference-preview-empty">
-                    <span class="dropzone-icon"><i data-lucide="image-plus"></i></span>
-                  </span>
-                  <img id="referenceImagePreview" class="reference-preview-image is-hidden" alt="" loading="lazy" />
-                </div>
-                <div class="reference-dropzone-copy">
-                  <strong id="referenceDropzoneTitle">Добавь фото-референс</strong>
-                  <span id="referenceDropzoneSubtitle">Сцена, свет, одежда и композиция</span>
-                  <div class="reference-dropzone-meta">
-                    <span>PNG, JPG, WEBP · до 10 MB</span>
-                    <span id="referenceDropzoneBadge" class="reference-dropzone-file-meta is-hidden">JPG · 1.4 MB</span>
+                <div class="reference-prompt-busy-panel" aria-hidden="true">
+                  <div class="reference-prompt-busy-head">
+                    <span class="reference-prompt-busy-icon"><i data-lucide="sparkles"></i></span>
+                    <strong>Собираем промпт</strong>
+                  </div>
+                  <div class="reference-prompt-busy-body">
+                    <div class="reference-prompt-busy-steps" aria-hidden="true">
+                      <span class="reference-prompt-busy-step is-active" data-reference-prompt-step="scene">сцена</span>
+                      <span class="reference-prompt-busy-step" data-reference-prompt-step="light">свет</span>
+                      <span class="reference-prompt-busy-step" data-reference-prompt-step="wardrobe">одежда</span>
+                      <span class="reference-prompt-busy-step" data-reference-prompt-step="pose">поза</span>
+                      <span class="reference-prompt-busy-step" data-reference-prompt-step="details">детали</span>
+                      <span class="reference-prompt-busy-step" data-reference-prompt-step="composition">композиция</span>
+                    </div>
+                    <p id="referencePromptBusyCaption" class="reference-prompt-busy-caption">
+                      <strong id="referencePromptBusyCaptionTitle">Определяем сцену.</strong>
+                      <span id="referencePromptBusyCaptionBody">Понимаем, что именно должно происходить в кадре.</span>
+                    </p>
                   </div>
                 </div>
-                <button
-                  id="clearReferenceImageButton"
-                  class="dropzone-clear-btn is-hidden"
-                  type="button"
-                  aria-label="Убрать фото-референс"
-                >
-                  <i data-lucide="x"></i>
-                </button>
-              </div>
 
-              <div class="reference-prompt-busy-panel" aria-hidden="true">
-                <div class="reference-prompt-busy-head">
-                  <span class="reference-prompt-busy-icon"><i data-lucide="sparkles"></i></span>
-                  <strong>Собираем промпт</strong>
+                <div class="reference-prompt-actions">
+                  <button id="referencePromptBuildButton" class="soft-btn soft-btn-icon reference-primary-btn" type="button">
+                    <i id="referencePromptActionIcon" data-lucide="image-plus"></i>
+                    <span id="referencePromptActionLabel">Выбрать изображение</span>
+                  </button>
+                  <button id="referencePromptRestoreButton" class="reference-inline-btn is-hidden" type="button">Вернуть прошлый текст</button>
                 </div>
-                <div class="reference-prompt-busy-body">
-                  <div class="reference-prompt-busy-steps" aria-hidden="true">
-                    <span class="reference-prompt-busy-step is-active" data-reference-prompt-step="scene">сцена</span>
-                    <span class="reference-prompt-busy-step" data-reference-prompt-step="light">свет</span>
-                    <span class="reference-prompt-busy-step" data-reference-prompt-step="wardrobe">одежда</span>
-                    <span class="reference-prompt-busy-step" data-reference-prompt-step="pose">поза</span>
-                    <span class="reference-prompt-busy-step" data-reference-prompt-step="details">детали</span>
-                    <span class="reference-prompt-busy-step" data-reference-prompt-step="composition">композиция</span>
-                  </div>
-                  <p id="referencePromptBusyCaption" class="reference-prompt-busy-caption">
-                    <strong id="referencePromptBusyCaptionTitle">Определяем сцену.</strong>
-                    <span id="referencePromptBusyCaptionBody">Понимаем, что именно должно происходить в кадре.</span>
-                  </p>
-                </div>
-              </div>
 
-              <div class="reference-prompt-actions">
-                <button id="referencePromptBuildButton" class="soft-btn soft-btn-icon reference-primary-btn" type="button">
-                  <i id="referencePromptActionIcon" data-lucide="image-plus"></i>
-                  <span>Выбрать изображение</span>
-                </button>
-                <button id="referencePromptRestoreButton" class="reference-inline-btn is-hidden" type="button">Вернуть прошлый текст</button>
+                <p id="referencePromptNote" class="note reference-prompt-note">Потом его можно отредактировать перед генерацией.</p>
+                <input
+                  id="referenceImageInput"
+                  class="visually-hidden-input"
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                />
               </div>
-
-              <p id="referencePromptNote" class="note reference-prompt-note">Потом его можно отредактировать перед генерацией.</p>
-              <input
-                id="referenceImageInput"
-                class="visually-hidden-input"
-                type="file"
-                accept="image/png,image/jpeg,image/webp"
-              />
             </section>
           </section>
 
@@ -399,91 +387,91 @@
         </section>
 
         <section class="screen profile-screen" data-screen="profile">
-          <section class="panel-card profile-hero-card">
-            <div class="profile-identity-row">
-              <span id="profileAvatarLarge" class="profile-avatar-large">K</span>
-              <div class="profile-title-stack">
-                <span class="profile-kicker">Профиль Kartivio</span>
-                <h2 id="userName">—</h2>
-                <p id="profileUserSubline">Аккаунт готов к генерациям.</p>
-              </div>
+          <section class="profile-greeting-block">
+            <span id="profileAvatarLarge" class="profile-avatar-large">K</span>
+            <div class="profile-greeting-copy">
+              <span class="profile-kicker">Профиль Kartivio</span>
+              <h2 id="userName">—</h2>
+              <p id="profileUserSubline">Аккаунт готов к генерациям.</p>
             </div>
-            <div class="profile-balance-panel">
-              <span>Баланс</span>
-              <strong id="creditsValue">—</strong>
-              <small id="profilePhotoEstimate">—</small>
-            </div>
-            <button id="profilePrimaryAction" class="primary-action profile-primary-action" type="button">
-              Создать фото
-            </button>
-            <p id="profilePrimaryNote" class="profile-primary-note">Кредиты не сгорают.</p>
           </section>
 
-          <section class="panel-card profile-section-card">
-            <div class="section-row section-row-tight profile-section-head">
-              <h3>Твои кадры</h3>
-              <span id="profileActivityNote">Быстрый доступ</span>
+          <section class="panel-card profile-balance-home-card">
+            <div class="profile-balance-main">
+              <div class="profile-balance-copy">
+                <span>Баланс</span>
+                <strong><span id="creditsValue">—</span> кредитов</strong>
+                <small id="profilePhotoEstimate">—</small>
+              </div>
+              <div class="profile-balance-actions">
+                <button id="profilePrimaryAction" class="primary-action profile-primary-action" type="button">
+                  Создать фото
+                </button>
+                <button id="profileTopupAction" class="soft-btn profile-topup-action" type="button">
+                  Пополнить
+                </button>
+              </div>
             </div>
-            <div class="profile-stats-grid">
-              <button id="profileHistoryButton" class="profile-stat-action" type="button">
-                <span class="profile-stat-icon"><i data-lucide="images"></i></span>
-                <span>Создано</span>
+            <p id="profilePrimaryNote" class="profile-primary-note">Кредиты не сгорают.</p>
+            <div class="profile-quick-stats" aria-label="Твои кадры">
+              <button id="profileHistoryButton" class="profile-quick-stat" type="button">
+                <i data-lucide="images"></i>
+                <span>История</span>
                 <strong id="profileGeneratedCount">0</strong>
-                <small>Открыть историю</small>
               </button>
-              <button id="profileFavoritesButton" class="profile-stat-action" type="button">
-                <span class="profile-stat-icon"><i data-lucide="heart"></i></span>
+              <button id="profileFavoritesButton" class="profile-quick-stat" type="button">
+                <i data-lucide="heart"></i>
                 <span>Избранное</span>
                 <strong id="profileFavoritesCount">0</strong>
-                <small>Шаблоны из ленты</small>
               </button>
             </div>
           </section>
 
-          <section id="profileReferenceCard" class="panel-card profile-feature-card">
-            <span class="profile-feature-icon"><i data-lucide="image-plus"></i></span>
-            <div class="profile-feature-copy">
-              <div class="profile-feature-head">
-                <h3>Промпт по референсу</h3>
-                <span id="profileReferenceBadge" class="profile-feature-badge">После оплаты</span>
-              </div>
-              <p id="profileReferenceText">Загрузи референс, а Kartivio соберет промпт по сцене, свету, позе и одежде.</p>
+          <section id="profileReferenceCard" class="panel-card profile-reference-showcase">
+            <div class="profile-reference-copy">
+              <h3>Промпт по референсу</h3>
+              <p id="profileReferenceText">Загрузи референс — получи готовый промпт для генерации.</p>
+              <button id="profileReferenceAction" class="profile-link-action" type="button">
+                <span>Попробовать</span>
+                <i data-lucide="arrow-right"></i>
+              </button>
             </div>
-            <button id="profileReferenceAction" class="soft-btn profile-feature-action" type="button">
-              Открыть
-            </button>
+            <div class="profile-reference-visual" aria-hidden="true">
+              <img src="./assets/reference/reference-prompt-roses.jpg" width="104" height="104" alt="" loading="lazy" decoding="async" />
+              <i data-lucide="arrow-right"></i>
+              <div class="profile-reference-prompt">
+                <i data-lucide="sparkles"></i>
+                <span>Не изменяй внешность девушки с фото. Максимально точно сохрани лицо, возраст, пропорции, оттенок кожи, волосы и естественные черты. Создай фотореалистичный fashion-портрет среди красных роз.</span>
+              </div>
+            </div>
           </section>
 
-          <section class="panel-card profile-connect-card">
-            <div class="profile-connect-head">
-              <div class="profile-connect-title">
-                <span class="profile-kicker">Аккаунт</span>
-                <h3>Продолжать где удобно</h3>
-                <p id="profileSyncText">История, кредиты и покупки сохраняются в одном аккаунте.</p>
-              </div>
-              <span id="profileSyncBadge" class="profile-sync-badge">—</span>
-            </div>
+          <section id="profileSyncCard" class="panel-card profile-account-card">
+            <h3>Аккаунт</h3>
+            <p id="profileSyncText" class="profile-sync-text">История, кредиты и покупки сохраняются в одном аккаунте.</p>
+            <span id="profileSyncBadge" class="profile-sync-badge">—</span>
             <div class="profile-sync-list">
-              <article id="identityYandexCard" class="profile-sync-item">
-                <span class="profile-sync-icon"><i data-lucide="shield-check"></i></span>
-                <div>
-                  <span>Веб-вход</span>
-                  <strong id="identityYandex">—</strong>
-                </div>
-              </article>
               <article id="identityTelegramCard" class="profile-sync-item">
                 <span class="profile-sync-icon"><i data-lucide="send"></i></span>
                 <div>
-                  <span>Telegram</span>
                   <strong id="identityTelegram">—</strong>
-                  <small class="identity-note">ID: <span id="userTgId">—</span></small>
+                  <small>ID: <span id="userTgId">—</span></small>
                   <small id="telegramLinkNote" class="identity-note">—</small>
                 </div>
-                <button id="linkTelegramButton" class="soft-btn btn-compact identity-action" type="button">
-                  Привязать
-                </button>
+                <i data-lucide="chevron-right"></i>
+              </article>
+              <article id="identityYandexCard" class="profile-sync-item">
+                <span class="profile-sync-icon"><i data-lucide="shield-check"></i></span>
+                <div>
+                  <strong id="identityYandex">—</strong>
+                  <small>Вход через Яндекс</small>
+                </div>
+                <i data-lucide="chevron-right"></i>
               </article>
             </div>
+            <button id="linkTelegramButton" class="soft-btn btn-compact identity-action" type="button">
+              Привязать Telegram
+            </button>
           </section>
 
           <section id="adminAccessCard" class="panel-card admin-access-card is-hidden">
@@ -837,6 +825,6 @@
       </article>
     </div>
 
-    <script src="./app.js?v=20260809-security-auth-v1" defer></script>
+    <script src="./app.js?v=20260810-profile-reference-v1" defer></script>
   </body>
 </html>
