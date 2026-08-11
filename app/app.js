@@ -904,6 +904,7 @@ const REFERENCE_PROMPT_BUSY_STEPS = Object.freeze([
 let referencePromptBusyStepIndex = 0;
 let referencePromptBusyIntervalId = 0;
 let referencePromptBusyCaptionTimeoutId = 0;
+let referencePromptHeightFrameId = 0;
 const jumpButtons = Array.from(document.querySelectorAll("[data-nav-target]"));
 const screens = Array.from(document.querySelectorAll("[data-screen]"));
 let yandexAuthPending = false;
@@ -3090,6 +3091,22 @@ function setReferencePromptExpanded(expanded) {
   syncReferencePromptControls();
 }
 
+function syncReferencePromptExpandedHeight() {
+  if (!referencePromptExpandedContent) {
+    return;
+  }
+  if (referencePromptHeightFrameId) {
+    window.cancelAnimationFrame(referencePromptHeightFrameId);
+  }
+  referencePromptHeightFrameId = window.requestAnimationFrame(() => {
+    referencePromptHeightFrameId = 0;
+    const height = Math.max(referencePromptExpandedContent.scrollHeight, 0);
+    if (height > 0) {
+      referencePromptExpandedContent.style.setProperty("--reference-expanded-max-height", `${height + 2}px`);
+    }
+  });
+}
+
 function renderStudioSceneState() {
   const hasTemplate = Boolean(state.selectedTemplate);
   const referenceOpen = referencePromptShouldBeExpanded();
@@ -3209,6 +3226,7 @@ function syncReferencePromptAccessState() {
     stopReferencePromptBusyLoop({ reset: true });
   }
   renderStudioSceneState();
+  syncReferencePromptExpandedHeight();
 }
 
 function syncReferencePromptControls() {
@@ -9023,7 +9041,7 @@ function toggleSettingsPanel(details) {
 
   details.open = true;
   details.classList.add("is-settings-opening");
-  renderSettingsChips();
+  renderGenerationChips();
   void body.offsetHeight;
   window.requestAnimationFrame(() => {
     details.classList.remove("is-settings-opening");
@@ -9314,7 +9332,7 @@ function bindEvents() {
     }
     generationSettingsDetails.addEventListener("toggle", () => {
       if (generationSettingsDetails.open) {
-        renderSettingsChips();
+        renderGenerationChips();
       }
     });
   }
