@@ -186,6 +186,25 @@ const API_ERROR_MESSAGES = Object.freeze({
   missing_refresh_token: "Сессия завершена. Войди снова.",
   invalid_token_payload: "Ошибка сессии. Войди снова.",
   auth_rate_limit_exceeded: "Слишком много попыток входа. Подожди немного и попробуй снова.",
+  max_auth_disabled: "Вход через MAX временно недоступен.",
+  max_auth_not_configured: "Вход через MAX временно недоступен.",
+  max_init_data_required: "Открой мини-приложение из MAX еще раз.",
+  max_init_data_missing: "Открой мини-приложение из MAX еще раз.",
+  max_init_data_invalid: "Не удалось подтвердить вход через MAX. Открой мини-приложение из MAX еще раз.",
+  max_init_data_missing_web_app_data: "Открой мини-приложение из MAX еще раз.",
+  max_init_data_invalid_key: "Не удалось подтвердить вход через MAX. Открой мини-приложение из MAX еще раз.",
+  max_init_data_duplicate_key: "Не удалось подтвердить вход через MAX. Открой мини-приложение из MAX еще раз.",
+  max_init_data_missing_hash: "Не удалось подтвердить вход через MAX. Открой мини-приложение из MAX еще раз.",
+  max_init_data_bad_hash: "Не удалось подтвердить вход через MAX. Открой мини-приложение из MAX еще раз.",
+  max_init_data_missing_auth_date: "Сессия MAX устарела. Открой мини-приложение заново.",
+  max_init_data_invalid_auth_date: "Сессия MAX устарела. Открой мини-приложение заново.",
+  max_init_data_expired: "Сессия MAX устарела. Открой мини-приложение заново.",
+  max_init_data_missing_user: "Не удалось определить пользователя MAX. Открой мини-приложение заново.",
+  max_init_data_invalid_user: "Не удалось определить пользователя MAX. Открой мини-приложение заново.",
+  max_init_data_missing_user_id: "Не удалось определить пользователя MAX. Открой мини-приложение заново.",
+  max_init_data_invalid_user_id: "Не удалось определить пользователя MAX. Открой мини-приложение заново.",
+  max_init_data_hash_invalid: "Не удалось подтвердить вход через MAX. Открой мини-приложение из MAX еще раз.",
+  max_init_data_signature_invalid: "Не удалось подтвердить вход через MAX. Открой мини-приложение из MAX еще раз.",
   yandex_auth_not_configured: "Вход через Яндекс временно недоступен.",
   yandex_redirect_uri_invalid: "Не удалось подготовить вход через Яндекс. Попробуй обновить страницу.",
   yandex_redirect_uri_forbidden: "Не удалось подготовить вход через Яндекс. Попробуй обновить страницу.",
@@ -419,6 +438,7 @@ const state = {
 };
 
 let tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+let maxWebApp = window.WebApp || null;
 const TELEGRAM_BOT_URL = "https://t.me/kartivio_ai_bot";
 const HISTORY_CACHE_TTL_MS = 15_000;
 const HISTORY_PAGE_SIZE = 12;
@@ -493,6 +513,9 @@ function productEventPlatform() {
   if (isTelegramMiniAppRuntime()) {
     return "telegram-miniapp";
   }
+  if (isMaxMiniAppRuntime()) {
+    return "max-miniapp";
+  }
   return window.matchMedia("(max-width: 760px)").matches ? "web-mobile" : "web-desktop";
 }
 
@@ -525,7 +548,7 @@ function diagnosticErrorStatus(error) {
 function trackDiagnosticEvent(eventName, options = {}) {
   const properties = {
     screen: state.currentScreen || "unknown",
-    source: isTelegramMiniAppRuntime() ? "telegram" : "web",
+    source: runtimeSource(),
   };
   if (options.stage) {
     properties.stage = String(options.stage).slice(0, 160);
@@ -538,6 +561,9 @@ function trackDiagnosticEvent(eventName, options = {}) {
   }
   if (options.authProvider) {
     properties.auth_provider = String(options.authProvider).slice(0, 160);
+  }
+  if (options.platform) {
+    properties.platform = String(options.platform).slice(0, 80);
   }
   if (options.packageCode) {
     properties.package_code = String(options.packageCode).slice(0, 160);
@@ -1069,6 +1095,98 @@ function refreshTelegramWebAppHandle() {
   return tg;
 }
 
+function refreshMaxWebAppHandle() {
+  const candidate = window.WebApp;
+  maxWebApp = candidate && typeof candidate === "object" ? candidate : null;
+  return maxWebApp;
+}
+
+function readMaxLaunchParam(name) {
+  const hash = String(window.location.hash || "");
+  if (!hash) {
+    return "";
+  }
+  try {
+    const params = new URLSearchParams(hash.startsWith("#") ? hash.slice(1) : hash);
+    return String(params.get(name) || "").trim();
+  } catch (_error) {
+    return "";
+  }
+}
+
+function getMaxInitData() {
+  const webApp = refreshMaxWebAppHandle();
+  const initData = String(webApp?.initData || "").trim();
+  if (initData) {
+    return initData;
+  }
+  if (readMaxLaunchParam("WebAppData")) {
+    return window.location.href;
+  }
+  return "";
+}
+
+function isMaxContextHint() {
+  return Boolean(
+    getMaxInitData() ||
+      String(refreshMaxWebAppHandle()?.platform || "").trim() ||
+      readMaxLaunchParam("WebAppData") ||
+      readMaxLaunchParam("WebAppPlatform") ||
+      readMaxLaunchParam("WebAppVersion")
+  );
+}
+
+function isMaxMiniAppRuntime() {
+  return Boolean(getMaxInitData());
+}
+
+function getMaxRuntimePlatform() {
+  const webApp = refreshMaxWebAppHandle();
+  const platform = String(webApp?.platform || readMaxLaunchParam("WebAppPlatform") || "").trim().toLowerCase();
+  return platform || "unknown";
+}
+
+function runtimeSource() {
+  if (isTelegramMiniAppRuntime()) {
+    return "telegram";
+  }
+  if (isMaxMiniAppRuntime()) {
+    return "max";
+  }
+  return "web";
+}
+
+function isEmbeddedMiniAppRuntime() {
+  return Boolean(isTelegramMiniAppRuntime() || isMaxMiniAppRuntime());
+}
+
+function openRuntimeLink(url) {
+  const targetUrl = String(url || "").trim();
+  if (!targetUrl) {
+    return false;
+  }
+  if (isTelegramMiniAppRuntime() && tg && typeof tg.openLink === "function") {
+    try {
+      tg.openLink(targetUrl);
+      return true;
+    } catch (_error) {
+      return false;
+    }
+  }
+  const webApp = refreshMaxWebAppHandle();
+  for (const methodName of ["openLink", "openExternalLink"]) {
+    if (webApp && typeof webApp[methodName] === "function") {
+      try {
+        webApp[methodName](targetUrl);
+        return true;
+      } catch (_error) {
+        continue;
+      }
+    }
+  }
+  return false;
+}
+
 function isTelegramContextHint() {
   const search = window.location.search || "";
   const hash = window.location.hash || "";
@@ -1150,11 +1268,17 @@ function isMobileBrowser() {
 
 function syncRuntimeClasses() {
   const telegramRuntime = isTelegramMiniAppRuntime();
+  const maxRuntime = isMaxMiniAppRuntime();
+  const embeddedRuntime = telegramRuntime || maxRuntime;
   const mobileBrowser = isMobileBrowser();
   document.documentElement.classList.toggle("is-telegram-runtime", telegramRuntime);
   document.body.classList.toggle("is-telegram-runtime", telegramRuntime);
-  document.documentElement.classList.toggle("is-web-runtime", !telegramRuntime);
-  document.body.classList.toggle("is-web-runtime", !telegramRuntime);
+  document.documentElement.classList.toggle("is-max-runtime", maxRuntime);
+  document.body.classList.toggle("is-max-runtime", maxRuntime);
+  document.documentElement.classList.toggle("is-embedded-runtime", embeddedRuntime);
+  document.body.classList.toggle("is-embedded-runtime", embeddedRuntime);
+  document.documentElement.classList.toggle("is-web-runtime", !embeddedRuntime);
+  document.body.classList.toggle("is-web-runtime", !embeddedRuntime);
   document.documentElement.classList.toggle("is-mobile-browser", mobileBrowser);
   document.body.classList.toggle("is-mobile-browser", mobileBrowser);
 }
@@ -1166,7 +1290,7 @@ function setBottomNavHidden(hidden) {
 }
 
 function getPrimaryScrollTop() {
-  if (!isTelegramMiniAppRuntime() && isMobileBrowser()) {
+  if (!isEmbeddedMiniAppRuntime() && isMobileBrowser()) {
     return Number(window.scrollY || window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop || 0);
   }
   return Number(appMain?.scrollTop || 0);
@@ -1177,7 +1301,7 @@ function restorePrimaryScrollTop(scrollTop) {
   if (!Number.isFinite(nextTop)) {
     return;
   }
-  if (!isTelegramMiniAppRuntime() && isMobileBrowser()) {
+  if (!isEmbeddedMiniAppRuntime() && isMobileBrowser()) {
     window.scrollTo(0, nextTop);
     return;
   }
@@ -1195,7 +1319,7 @@ function preservePrimaryScrollTop(scrollTop) {
 }
 
 function handleBottomNavAutoHide() {
-  if (isTelegramShellRuntime() || !isMobileBrowser()) {
+  if (isTelegramShellRuntime() || isMaxContextHint() || !isMobileBrowser()) {
     setBottomNavHidden(false);
     lastAppMainScrollTop = getPrimaryScrollTop();
     return;
@@ -1233,7 +1357,7 @@ function initMobileWebBottomNavBehavior() {
 }
 
 function prefersCookieAuth() {
-  return !isTelegramMiniAppRuntime();
+  return !isEmbeddedMiniAppRuntime();
 }
 
 function hasActiveSession() {
@@ -2574,8 +2698,7 @@ async function openImage(rawUrl) {
   if (!targetUrl) {
     throw new Error("Ссылка на изображение не найдена.");
   }
-  if (tg && typeof tg.openLink === "function") {
-    tg.openLink(targetUrl);
+  if (openRuntimeLink(targetUrl)) {
     return;
   }
   window.open(targetUrl, "_blank", "noopener,noreferrer");
@@ -3722,11 +3845,15 @@ function setEnvHint() {
   if (!envHint) {
     return;
   }
-  if (!tg) {
-    envHint.textContent = "Открыто в обычном браузере.";
+  if (isTelegramMiniAppRuntime()) {
+    envHint.textContent = "Открыто в Telegram Mini App.";
     return;
   }
-  envHint.textContent = "Открыто в Telegram Mini App.";
+  if (isMaxMiniAppRuntime()) {
+    envHint.textContent = "Открыто в MAX Mini App.";
+    return;
+  }
+  envHint.textContent = "Открыто в обычном браузере.";
 }
 
 function readTelegramCssInset(name) {
@@ -5775,12 +5902,13 @@ function openCheckout(url, { popupHandle = null } = {}) {
       }
     }
   }
-  if (tg && typeof tg.openLink === "function") {
+  if (isEmbeddedMiniAppRuntime()) {
     try {
-      tg.openLink(url);
-      return { ok: true, method: "telegram_open_link" };
+      if (openRuntimeLink(url)) {
+        return { ok: true, method: `${runtimeSource()}_open_link` };
+      }
     } catch (error) {
-      return { ok: false, method: "telegram_open_link", error };
+      return { ok: false, method: `${runtimeSource()}_open_link`, error };
     }
   }
   try {
@@ -5813,7 +5941,7 @@ async function buyPackage(code) {
   trackCheckoutPackageEvent("checkout_started", code);
   const idem = `webapp_buy_${code}_${Date.now()}`;
   let popupHandle = null;
-  if (!isTelegramMiniAppRuntime()) {
+  if (!isEmbeddedMiniAppRuntime()) {
     try {
       popupHandle = window.open("about:blank", "_blank");
     } catch (_error) {
@@ -7096,7 +7224,7 @@ function scheduleTemplateFeedPreload(items, visibleItems) {
 }
 
 function getPrimaryScrollMetrics() {
-  if (!isTelegramMiniAppRuntime() && isMobileBrowser()) {
+  if (!isEmbeddedMiniAppRuntime() && isMobileBrowser()) {
     const root = document.documentElement;
     const body = document.body;
     return {
@@ -7174,7 +7302,7 @@ function renderTemplateSkeleton(count = 6) {
 }
 
 function scrollTemplateFeedTop() {
-  if (!isTelegramMiniAppRuntime() && isMobileBrowser()) {
+  if (!isEmbeddedMiniAppRuntime() && isMobileBrowser()) {
     window.scrollTo({ top: 0, behavior: "smooth" });
     return;
   }
@@ -8926,6 +9054,45 @@ async function loginViaTelegram(options = {}) {
   }
 }
 
+async function loginViaMax(options = {}) {
+  const { silent = false, targetScreen = "feed" } = options;
+  const initData = getMaxInitData();
+  if (!initData) {
+    if (!silent) {
+      setNote("Открой мини-приложение из MAX еще раз.", true);
+    }
+    return false;
+  }
+  try {
+    const payload = await apiFetch("/v1/auth/max/miniapp", {
+      method: "POST",
+      body: { init_data: initData },
+    });
+    await finalizeAuthSession(payload, "max");
+    syncAcquisitionTouch({ auth: true }).catch(() => {});
+    ensurePublicDataLoaded().catch(() => {});
+    setAuthGateVisible(false);
+    if (!silent) {
+      setNote("Авторизация через MAX успешна.");
+    }
+    await loadPrivateDataAfterAuthSuccess();
+    markHistoryCacheStale();
+    switchScreen(targetScreen);
+    return true;
+  } catch (error) {
+    trackDiagnosticEvent("auth_failed", {
+      authProvider: "max",
+      stage: "max_miniapp_login",
+      platform: getMaxRuntimePlatform(),
+      error,
+    });
+    if (!silent) {
+      setNote(userFacingErrorMessage(error, "Не удалось выполнить вход через MAX."), true);
+    }
+    return false;
+  }
+}
+
 function setYandexAuthButtonIdle() {
   yandexAuthPending = false;
   if (yandexAuthButton) {
@@ -8971,11 +9138,10 @@ async function loginViaYandex() {
   if (yandexAuthPending) {
     return;
   }
-  if (isTelegramMiniAppRuntime()) {
+  if (isEmbeddedMiniAppRuntime()) {
     const url = yandexAuthLaunchUrl();
     setNote("Открываю внешний браузер для входа через Яндекс.");
-    if (tg && typeof tg.openLink === "function") {
-      tg.openLink(url);
+    if (openRuntimeLink(url)) {
       return;
     }
     window.open(url, "_blank", "noopener,noreferrer");
@@ -9099,7 +9265,7 @@ function bindEvents() {
     authButton.addEventListener("click", () => {
       trackProductEvent("auth_started", { auth_provider: "telegram" });
       let popupHandle = null;
-      if (!isTelegramMiniAppRuntime()) {
+      if (!isEmbeddedMiniAppRuntime()) {
         popupHandle = window.open("about:blank", "_blank");
       }
       loginViaTelegram({ silent: false, targetScreen: "feed", popupHandle });
@@ -9904,7 +10070,7 @@ async function bootstrap() {
 
   await apiBasePromise;
   trackProductEvent("app_opened", {
-    source: isTelegramMiniAppRuntime() ? "telegram" : "web",
+    source: runtimeSource(),
   });
 
   try {
@@ -9964,6 +10130,14 @@ async function bootstrap() {
     }
   }
 
+  if (!authorized && isMaxMiniAppRuntime()) {
+    setNote("Выполняю вход через MAX...");
+    authorized = await loginViaMax({ silent: true, targetScreen: "feed" });
+    if (!authorized) {
+      setNote("Не удалось автоматически войти через MAX.", true);
+    }
+  }
+
   if (authorized) {
     syncAcquisitionTouch({ auth: true }).catch(() => {});
     setAuthGateVisible(false);
@@ -9981,7 +10155,7 @@ async function bootstrap() {
   }
 
   const autoGoogle = new URLSearchParams(window.location.search).get("google_auto");
-  if (autoGoogle === "1" && !isTelegramMiniAppRuntime() && !hasActiveSession()) {
+  if (autoGoogle === "1" && !isEmbeddedMiniAppRuntime() && !hasActiveSession()) {
     setAuthGateVisible(true);
     setBootPending(false);
     setNote("Вход через Google больше не поддерживается. Используйте Яндекс или Telegram.", true);
@@ -9989,7 +10163,7 @@ async function bootstrap() {
   }
 
   const autoYandex = new URLSearchParams(window.location.search).get("yandex_auto");
-  if (autoYandex === "1" && !isTelegramMiniAppRuntime() && !hasActiveSession()) {
+  if (autoYandex === "1" && !isEmbeddedMiniAppRuntime() && !hasActiveSession()) {
     setAuthGateVisible(true);
     setBootPending(false);
     window.setTimeout(() => {
@@ -10002,7 +10176,11 @@ async function bootstrap() {
     switchScreen("feed");
   } else {
     setAuthGateVisible(true);
-    setNote("Войди через Яндекс или Telegram, чтобы начать.");
+    if (isMaxContextHint()) {
+      setNote("Открой мини-приложение из MAX еще раз.", true);
+    } else {
+      setNote("Войди через Яндекс или Telegram, чтобы начать.");
+    }
     switchScreen("feed");
   }
   setBootPending(false);
