@@ -936,6 +936,7 @@ let referencePromptBusyStepIndex = 0;
 let referencePromptBusyIntervalId = 0;
 let referencePromptBusyCaptionTimeoutId = 0;
 let referencePromptHeightFrameId = 0;
+let referencePromptHeightTimeoutId = 0;
 let settingsPanelHeightFrameId = 0;
 const jumpButtons = Array.from(document.querySelectorAll("[data-nav-target]"));
 const screens = Array.from(document.querySelectorAll("[data-screen]"));
@@ -3230,20 +3231,35 @@ function applyReferencePromptExpandedHeight() {
   if (!referencePromptExpandedContent) {
     return;
   }
+  if (!referencePromptShouldBeExpanded()) {
+    return;
+  }
   const height = Math.ceil(Math.max(referencePromptExpandedContent.scrollHeight, 0));
   if (height > 0) {
-    referencePromptExpandedContent.style.setProperty("--reference-expanded-max-height", `${height + 8}px`);
+    referencePromptExpandedContent.style.setProperty("--reference-expanded-max-height", `${height + 16}px`);
   }
 }
 
-function syncReferencePromptExpandedHeight() {
+function syncReferencePromptExpandedHeight(options = {}) {
+  const { delayed = true } = options;
   if (referencePromptHeightFrameId) {
     window.cancelAnimationFrame(referencePromptHeightFrameId);
   }
   referencePromptHeightFrameId = window.requestAnimationFrame(() => {
     referencePromptHeightFrameId = 0;
     applyReferencePromptExpandedHeight();
+    window.requestAnimationFrame(applyReferencePromptExpandedHeight);
   });
+  if (!delayed) {
+    return;
+  }
+  if (referencePromptHeightTimeoutId) {
+    window.clearTimeout(referencePromptHeightTimeoutId);
+  }
+  referencePromptHeightTimeoutId = window.setTimeout(() => {
+    referencePromptHeightTimeoutId = 0;
+    applyReferencePromptExpandedHeight();
+  }, 340);
 }
 
 function renderStudioSceneState() {
@@ -3287,6 +3303,7 @@ function renderReferencePromptBusyStep(options = {}) {
     referencePromptBusyCaptionTitle.textContent = step.title;
     referencePromptBusyCaptionBody.textContent = step.body;
     referencePromptBusyCaption.classList.remove("is-changing");
+    syncReferencePromptExpandedHeight({ delayed: false });
     return;
   }
   referencePromptBusyCaption.classList.add("is-changing");
@@ -3295,6 +3312,7 @@ function renderReferencePromptBusyStep(options = {}) {
     referencePromptBusyCaptionBody.textContent = step.body;
     window.requestAnimationFrame(() => {
       referencePromptBusyCaption.classList.remove("is-changing");
+      syncReferencePromptExpandedHeight({ delayed: false });
     });
     referencePromptBusyCaptionTimeoutId = 0;
   }, 220);
@@ -3335,7 +3353,6 @@ function syncReferencePromptAccessState() {
   const busy = Boolean(state.referencePromptBusy);
   const expanded = referencePromptShouldBeExpanded();
 
-  applyReferencePromptExpandedHeight();
   if (referencePromptCard) {
     referencePromptCard.classList.toggle("is-locked", locked);
     referencePromptCard.classList.toggle("is-busy", busy);
@@ -3366,7 +3383,7 @@ function syncReferencePromptAccessState() {
     stopReferencePromptBusyLoop({ reset: true });
   }
   renderStudioSceneState();
-  syncReferencePromptExpandedHeight();
+  syncReferencePromptExpandedHeight({ delayed: expanded || busy });
 }
 
 function syncReferencePromptControls() {

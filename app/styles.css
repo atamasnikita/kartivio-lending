@@ -457,8 +457,6 @@ body.is-web-runtime.is-mobile-browser .app-main {
   display: grid;
   gap: 10px;
   min-width: 0;
-  content-visibility: auto;
-  contain-intrinsic-size: auto 310px;
 }
 
 .template-section-header,
@@ -1254,7 +1252,7 @@ body.is-web-runtime.is-mobile-browser .app-main {
 }
 
 .reference-prompt-expanded-content {
-  --reference-expanded-max-height: 720px;
+  --reference-expanded-max-height: 860px;
   position: relative;
   z-index: 1;
   display: grid;
@@ -1439,7 +1437,7 @@ body.is-web-runtime.is-mobile-browser .app-main {
 }
 
 .reference-prompt-card.is-busy .reference-prompt-busy-panel {
-  max-height: 300px;
+  max-height: 380px;
   opacity: 1;
   pointer-events: none;
   padding: 20px;
