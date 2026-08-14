@@ -8521,7 +8521,11 @@ function ensureAuthorizedForCreate() {
 }
 
 function buildClientRequestId() {
-  return `webapp_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+  const suffix = `${Date.now()}_${Math.random().toString(16).slice(2)}`;
+  if (isMaxMiniAppRuntime()) {
+    return `max:webapp_${suffix}`;
+  }
+  return `webapp_${suffix}`;
 }
 
 async function createTextGeneration(prompt, imageModel, outputSize, clientRequestId) {
