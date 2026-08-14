@@ -1279,6 +1279,15 @@ body.is-web-runtime.is-mobile-browser .app-main {
   transform: translateY(-6px);
 }
 
+.reference-prompt-card.is-busy .reference-prompt-expanded-content {
+  max-height: none;
+  overflow: visible;
+  transition:
+    margin-top 0.18s ease,
+    opacity 0.18s ease,
+    transform 0.18s ease;
+}
+
 .reference-prompt-summary {
   position: relative;
   z-index: 1;
@@ -1429,20 +1438,21 @@ body.is-web-runtime.is-mobile-browser .app-main {
   padding: 0 20px;
   transform: translateY(-8px) scale(0.985);
   transition:
-    max-height 0.28s ease,
     opacity 0.22s ease,
-    transform 0.22s ease,
-    padding 0.22s ease,
-    border-width 0.22s ease;
+    transform 0.22s ease;
 }
 
 .reference-prompt-card.is-busy .reference-prompt-busy-panel {
-  max-height: 380px;
+  max-height: none;
+  overflow: visible;
   opacity: 1;
   pointer-events: none;
   padding: 20px;
   border-width: 1px;
   transform: translateY(0) scale(1);
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s ease;
   box-shadow:
     inset 0 0 0 1px rgba(255, 255, 255, 0.015),
     0 16px 28px rgba(5, 9, 18, 0.22);
@@ -5643,7 +5653,8 @@ body.is-web-runtime.is-mobile-browser.nav-hidden .bottom-nav {
   }
 
   .reference-prompt-card.is-busy .reference-prompt-busy-panel {
-    max-height: 380px;
+    max-height: none;
+    overflow: visible;
     padding: 18px 16px;
   }
 
