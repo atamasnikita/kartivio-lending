@@ -205,6 +205,7 @@ const API_ERROR_MESSAGES = Object.freeze({
   max_init_data_invalid_user_id: "Не удалось определить пользователя MAX. Открой мини-приложение заново.",
   max_init_data_hash_invalid: "Не удалось подтвердить вход через MAX. Открой мини-приложение из MAX еще раз.",
   max_init_data_signature_invalid: "Не удалось подтвердить вход через MAX. Открой мини-приложение из MAX еще раз.",
+  identity_conflict: "Этот аккаунт уже привязан к другому профилю.",
   yandex_auth_not_configured: "Вход через Яндекс временно недоступен.",
   yandex_redirect_uri_invalid: "Не удалось подготовить вход через Яндекс. Попробуй обновить страницу.",
   yandex_redirect_uri_forbidden: "Не удалось подготовить вход через Яндекс. Попробуй обновить страницу.",
@@ -591,7 +592,8 @@ function shouldTrackApiFetchFailure(path, error) {
     normalizedPath === "/v1/auth/yandex" ||
     normalizedPath === "/v1/auth/yandex/start" ||
     normalizedPath === "/v1/auth/yandex/callback" ||
-    normalizedPath === "/v1/auth/telegram/miniapp"
+    normalizedPath === "/v1/auth/telegram/miniapp" ||
+    normalizedPath === "/v1/auth/max/miniapp"
   ) {
     return true;
   }
@@ -690,6 +692,7 @@ const apiBaseInput = document.getElementById("apiBaseInput");
 const authButton = document.getElementById("authButton");
 const authCheckButton = document.getElementById("authCheckButton");
 const yandexAuthButton = document.getElementById("yandexAuthButton");
+const authGateCopy = document.getElementById("authGateCopy");
 const envHint = document.getElementById("envHint");
 const authNote = document.getElementById("authNote");
 const userName = document.getElementById("userName");
@@ -716,8 +719,10 @@ const profileSyncText = document.getElementById("profileSyncText");
 const profileSyncBadge = document.getElementById("profileSyncBadge");
 const identityYandexCard = document.getElementById("identityYandexCard");
 const identityTelegramCard = document.getElementById("identityTelegramCard");
+const identityMaxCard = document.getElementById("identityMaxCard");
 const identityYandex = document.getElementById("identityYandex");
 const identityTelegram = document.getElementById("identityTelegram");
+const identityMax = document.getElementById("identityMax");
 const linkTelegramButton = document.getElementById("linkTelegramButton");
 const telegramLinkNote = document.getElementById("telegramLinkNote");
 const adminAccessCard = document.getElementById("adminAccessCard");
@@ -1269,12 +1274,15 @@ function isMobileBrowser() {
 function syncRuntimeClasses() {
   const telegramRuntime = isTelegramMiniAppRuntime();
   const maxRuntime = isMaxMiniAppRuntime();
+  const maxContext = isMaxContextHint();
   const embeddedRuntime = telegramRuntime || maxRuntime;
   const mobileBrowser = isMobileBrowser();
   document.documentElement.classList.toggle("is-telegram-runtime", telegramRuntime);
   document.body.classList.toggle("is-telegram-runtime", telegramRuntime);
   document.documentElement.classList.toggle("is-max-runtime", maxRuntime);
   document.body.classList.toggle("is-max-runtime", maxRuntime);
+  document.documentElement.classList.toggle("is-max-context", maxContext);
+  document.body.classList.toggle("is-max-context", maxContext);
   document.documentElement.classList.toggle("is-embedded-runtime", embeddedRuntime);
   document.body.classList.toggle("is-embedded-runtime", embeddedRuntime);
   document.documentElement.classList.toggle("is-web-runtime", !embeddedRuntime);
@@ -1442,7 +1450,7 @@ function renderAuthGateActions() {
   if (!authCheckButton) {
     return;
   }
-  const pending = hasPendingTelegramWebLogin();
+  const pending = hasPendingTelegramWebLogin() && !isMaxContextHint();
   authCheckButton.classList.toggle("is-hidden", !pending);
   authCheckButton.disabled = !pending;
 }
@@ -3066,6 +3074,9 @@ function profileConnectedProviderLabel() {
   if (state.linkedProviders.has("telegram")) {
     providers.push("Telegram");
   }
+  if (state.linkedProviders.has("max")) {
+    providers.push("MAX");
+  }
   if (!providers.length) {
     return "История и кредиты сохраняются после входа.";
   }
@@ -4068,9 +4079,24 @@ function attachTelegramImmersiveListeners() {
 }
 
 function refreshAuthButtons() {
+  const maxRuntime = isMaxMiniAppRuntime();
+  const maxContext = isMaxContextHint();
+  if (authGateCopy) {
+    authGateCopy.textContent = maxContext
+      ? "Подключаем сессию MAX, чтобы сохранить историю, кредиты и покупки."
+      : "Войди через Яндекс или Telegram, чтобы генерировать и редактировать изображения.";
+  }
+  if (authButton) {
+    authButton.classList.toggle("is-hidden", maxContext);
+    authButton.disabled = maxRuntime;
+  }
   if (yandexAuthButton) {
     yandexAuthButton.textContent = "Войти через Яндекс";
-    yandexAuthButton.classList.remove("is-hidden");
+    yandexAuthButton.classList.toggle("is-hidden", maxContext);
+    yandexAuthButton.disabled = maxRuntime;
+  }
+  if (authCheckButton && maxContext) {
+    authCheckButton.classList.add("is-hidden");
   }
 }
 
@@ -4139,37 +4165,54 @@ async function logoutSession() {
 function renderIdentityActions() {
   const linkedYandex = state.linkedProviders.has("yandex");
   const linkedTelegram = state.linkedProviders.has("telegram");
+  const linkedMax = state.linkedProviders.has("max");
+  const maxRuntime = isMaxMiniAppRuntime();
   const hasSession = hasActiveSession();
 
   if (profileSyncText) {
     profileSyncText.textContent = !hasSession
       ? "Войди, чтобы сохранить историю, кредиты и покупки."
-      : linkedYandex && linkedTelegram
-        ? "Кредиты, история и покупки доступны в вебе и Telegram."
-        : linkedTelegram
-          ? "Аккаунт работает в Telegram. История и кредиты сохраняются автоматически."
-          : linkedYandex
-            ? "Веб-аккаунт сохранен. Привяжи Telegram, чтобы продолжить в боте с тем же балансом."
-            : "История, кредиты и покупки сохраняются в одном аккаунте.";
+      : linkedYandex && linkedTelegram && linkedMax
+        ? "Кредиты, история и покупки доступны в вебе, Telegram и MAX."
+        : linkedMax && (linkedYandex || linkedTelegram)
+          ? "MAX подключен к этому профилю. Баланс и история сохраняются автоматически."
+          : linkedYandex && linkedTelegram
+            ? "Кредиты, история и покупки доступны в вебе и Telegram."
+            : linkedMax
+              ? "Аккаунт работает в MAX. История и кредиты сохраняются автоматически."
+              : linkedTelegram
+                ? "Аккаунт работает в Telegram. История и кредиты сохраняются автоматически."
+                : linkedYandex
+                  ? "Веб-аккаунт сохранен. Привяжи Telegram, чтобы продолжить в боте с тем же балансом."
+                  : "История, кредиты и покупки сохраняются в одном аккаунте.";
   }
   if (profileSyncBadge) {
     profileSyncBadge.textContent = !hasSession
       ? "Нужно войти"
-      : linkedYandex && linkedTelegram
+      : linkedYandex && linkedTelegram && linkedMax
         ? "Все связано"
-        : linkedTelegram
-          ? "Telegram готов"
-          : linkedYandex
-            ? "Веб готов"
-            : "Аккаунт";
+        : linkedMax
+          ? "MAX готов"
+          : linkedTelegram
+            ? "Telegram готов"
+            : linkedYandex
+              ? "Веб готов"
+              : "Аккаунт";
   }
   if (identityYandexCard) {
     identityYandexCard.classList.toggle("is-connected", linkedYandex);
     identityYandexCard.classList.toggle("is-missing", !linkedYandex);
+    identityYandexCard.hidden = maxRuntime && !linkedYandex;
   }
   if (identityTelegramCard) {
     identityTelegramCard.classList.toggle("is-connected", linkedTelegram);
     identityTelegramCard.classList.toggle("is-missing", !linkedTelegram);
+    identityTelegramCard.hidden = maxRuntime && !linkedTelegram;
+  }
+  if (identityMaxCard) {
+    identityMaxCard.classList.toggle("is-connected", linkedMax);
+    identityMaxCard.classList.toggle("is-missing", !linkedMax);
+    identityMaxCard.hidden = !linkedMax && !maxRuntime;
   }
   if (identityTelegram) {
     identityTelegram.textContent = linkedTelegram ? "Telegram подключен" : "Не привязан";
@@ -4177,14 +4220,17 @@ function renderIdentityActions() {
   if (identityYandex) {
     identityYandex.textContent = linkedYandex ? "Яндекс подключен" : "Не подключен";
   }
+  if (identityMax) {
+    identityMax.textContent = linkedMax ? "MAX подключен" : maxRuntime ? "Подключаем MAX" : "Не подключен";
+  }
 
   const telegramIdNote = userTgId ? userTgId.closest(".identity-note") : null;
   if (telegramIdNote) {
     telegramIdNote.hidden = !linkedTelegram || !state.me?.telegram_user_id;
   }
   if (linkTelegramButton) {
-    linkTelegramButton.hidden = linkedTelegram;
-    linkTelegramButton.disabled = !hasSession;
+    linkTelegramButton.hidden = linkedTelegram || maxRuntime;
+    linkTelegramButton.disabled = !hasSession || maxRuntime;
     linkTelegramButton.textContent = "Привязать";
   }
 
@@ -4192,9 +4238,12 @@ function renderIdentityActions() {
     clearTelegramLinkPolling();
     state.telegramLinkToken = "";
     setTelegramLinkNote("Можно открывать миниаппу из бота.");
+  } else if (maxRuntime) {
+    setTelegramLinkNote("");
   } else {
     setTelegramLinkNote("Привяжи бота, чтобы история и баланс были рядом.");
   }
+  refreshAuthButtons();
   renderProfileSummary();
 }
 
@@ -8333,6 +8382,9 @@ async function loadIdentities() {
   if (payload.linked_yandex && !state.linkedProviders.has("yandex")) {
     state.linkedProviders.add("yandex");
   }
+  if (payload.linked_max && !state.linkedProviders.has("max")) {
+    state.linkedProviders.add("max");
+  }
   if (!state.linkedProviders.has("telegram") && payload.telegram_user_id) {
     state.linkedProviders.add("telegram");
   }
@@ -9066,6 +9118,7 @@ async function loginViaMax(options = {}) {
   try {
     const payload = await apiFetch("/v1/auth/max/miniapp", {
       method: "POST",
+      auth: hasActiveSession(),
       body: { init_data: initData },
     });
     await finalizeAuthSession(payload, "max");
@@ -9091,6 +9144,21 @@ async function loginViaMax(options = {}) {
     }
     return false;
   }
+}
+
+async function ensureMaxLinkedForAuthorizedSession() {
+  if (!hasActiveSession() || !isMaxMiniAppRuntime() || state.linkedProviders.has("max")) {
+    return true;
+  }
+  const linked = await loginViaMax({ silent: true, targetScreen: state.currentScreen || "feed" });
+  if (!linked) {
+    trackDiagnosticEvent("auth_failed", {
+      authProvider: "max",
+      stage: "max_link_after_existing_session",
+      platform: getMaxRuntimePlatform(),
+    });
+  }
+  return linked;
 }
 
 function setYandexAuthButtonIdle() {
@@ -10139,6 +10207,9 @@ async function bootstrap() {
   }
 
   if (authorized) {
+    if (isMaxMiniAppRuntime() && !state.linkedProviders.has("max")) {
+      await ensureMaxLinkedForAuthorizedSession();
+    }
     syncAcquisitionTouch({ auth: true }).catch(() => {});
     setAuthGateVisible(false);
     ensurePublicDataLoaded({ notifyOnError: true }).catch(() => {});

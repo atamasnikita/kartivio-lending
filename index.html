@@ -6,11 +6,11 @@
     <title>Kartivio AI | ИИ-фотосессии и генерация изображений</title>
     <meta
       name="description"
-      content="Kartivio AI — ИИ-фотосессии по вашим фото, генерация и редактирование изображений. Доступно в Telegram и web-приложении, без VPN."
+      content="Kartivio AI — ИИ-фотосессии по вашим фото, генерация и редактирование изображений. Запускается в MAX, Telegram и web-приложении без VPN."
     />
     <meta name="theme-color" content="#050507" />
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=20260704-paywall-4" />
+    <link rel="stylesheet" href="./styles.css?v=20260813-max-simple-1" />
   </head>
   <body>
     <!-- Yandex.Metrika counter -->
@@ -70,7 +70,7 @@
           <a href="#faq">Вопросы</a>
         </nav>
         <div class="topbar-auth-slot">
-          <a id="topbarOpenAppCta" class="btn btn-primary btn-sm" href="/app/">Открыть приложение</a>
+          <a id="topbarOpenAppCta" class="btn btn-primary btn-sm" href="/app/" data-landing-cta="web">Открыть приложение</a>
           <a id="topbarProfileLink" class="topbar-profile is-hidden" href="/app/" aria-label="Открыть профиль">
             <span id="topbarProfileAvatar" class="topbar-profile-avatar">K</span>
             <span id="topbarProfileName" class="topbar-profile-name">Профиль</span>
@@ -86,15 +86,12 @@
           <h1>ИИ-фотосессии по вашим фото за минуты</h1>
           <p class="lead">
             Загружай фото, выбирай шаблон или референс, а Kartivio соберет промпт и готовые кадры.
-            Работает в Telegram и web-приложении без VPN.
+            Работает в MAX, Telegram и web-приложении без VPN.
           </p>
           <div class="hero-actions">
-            <a class="btn btn-primary" href="/app/"
-              >Открыть web-приложение</a
-            >
-            <a class="btn btn-ghost" href="https://t.me/kartivio_ai_bot" target="_blank" rel="noreferrer"
-              >Запустить в Telegram</a
-            >
+            <a class="btn btn-primary" href="/app/" data-landing-cta="web">Открыть web-приложение</a>
+            <a class="btn btn-ghost" href="https://t.me/kartivio_ai_bot" target="_blank" rel="noreferrer" data-landing-cta="telegram">Запустить в Telegram</a>
+            <a class="btn btn-ghost" href="https://max.ru/se13926200_bot" target="_blank" rel="noreferrer" data-landing-cta="max">Открыть в MAX</a>
           </div>
           <p class="hero-free">Две генерации бесплатно</p>
         </div>
@@ -214,7 +211,7 @@
                 </span>
                 <div class="tone-body">
                   <h3>Доступно без VPN</h3>
-                  <p>Kartivio работает в Telegram и web-приложении без VPN.</p>
+                  <p>Kartivio работает в MAX, Telegram и web-приложении без VPN.</p>
                 </div>
               </div>
             </article>
@@ -229,7 +226,7 @@
               <h2>Что можно получить</h2>
               <p>Реальные сцены из ленты Kartivio: женские, мужские и семейные подборки без мокапов и абстрактных примеров.</p>
             </div>
-            <a class="btn btn-ghost btn-sm showcase-cta" href="/app/">Открыть все шаблоны</a>
+            <a class="btn btn-ghost btn-sm showcase-cta" href="/app/" data-landing-cta="web">Открыть все шаблоны</a>
           </div>
 
           <div id="showcaseTabs" class="showcase-tabs" role="tablist" aria-label="Подборки кадров"></div>
@@ -259,7 +256,7 @@
               На выходе получишь готовый промпт для генерации.
             </p>
             <div class="reference-actions">
-              <a class="btn btn-primary" href="/app/">Попробовать в приложении</a>
+              <a class="btn btn-primary" href="/app/" data-landing-cta="web">Попробовать в приложении</a>
               <span class="reference-access">Доступно после первой оплаты</span>
               <span class="reference-credit-note">Без списания кредитов</span>
             </div>
@@ -433,7 +430,7 @@
                     <span class="how-ready-badge">Готово</span>
                     <span class="how-result-note">Из одного фото можно собрать несколько разных сцен.</span>
                   </div>
-                  <a class="how-open-btn" href="/app/">Открыть приложение</a>
+                  <a class="how-open-btn" href="/app/" data-landing-cta="web">Открыть приложение</a>
                 </div>
               </section>
             </article>
@@ -455,7 +452,7 @@
               <div class="landing-paywall-panel">
                 <h3>Выбери пакет</h3>
                 <div class="landing-plan-list" aria-label="Пакеты кредитов">
-                  <a class="landing-plan" href="/app/" aria-label="Выбрать пакет Старт за 200 рублей">
+                  <a class="landing-plan" href="/app/" aria-label="Выбрать пакет Старт за 200 рублей" data-landing-cta="web">
                     <span class="landing-plan-radio" aria-hidden="true"></span>
                     <span class="landing-plan-main">
                       <span class="landing-plan-name-row">
@@ -469,7 +466,7 @@
                     </span>
                   </a>
 
-                  <a class="landing-plan" href="/app/" aria-label="Выбрать пакет Базовый за 399 рублей">
+                  <a class="landing-plan" href="/app/" aria-label="Выбрать пакет Базовый за 399 рублей" data-landing-cta="web">
                     <span class="landing-plan-radio" aria-hidden="true"></span>
                     <span class="landing-plan-main">
                       <span class="landing-plan-name-row">
@@ -484,7 +481,7 @@
                     </span>
                   </a>
 
-                  <a class="landing-plan is-selected" href="/app/" aria-label="Выбрать популярный пакет Продвинутый за 899 рублей">
+                  <a class="landing-plan is-selected" href="/app/" aria-label="Выбрать популярный пакет Продвинутый за 899 рублей" data-landing-cta="web">
                     <span class="landing-plan-popular">Популярный</span>
                     <span class="landing-plan-radio" aria-hidden="true"></span>
                     <span class="landing-plan-main">
@@ -500,7 +497,7 @@
                     </span>
                   </a>
 
-                  <a class="landing-plan" href="/app/" aria-label="Выбрать пакет Максимум за 1790 рублей">
+                  <a class="landing-plan" href="/app/" aria-label="Выбрать пакет Максимум за 1790 рублей" data-landing-cta="web">
                     <span class="landing-plan-radio" aria-hidden="true"></span>
                     <span class="landing-plan-main">
                       <span class="landing-plan-name-row">
@@ -521,7 +518,7 @@
                   <span>Без автосписаний</span>
                   <span>Оплата российской картой</span>
                 </div>
-                <a class="btn btn-primary landing-paywall-cta" href="/app/">Получить 560 кредитов за 899&nbsp;₽</a>
+                <a class="btn btn-primary landing-paywall-cta" href="/app/" data-landing-cta="web">Получить 560 кредитов за 899&nbsp;₽</a>
                 <p class="landing-paywall-note">Безопасная оплата через ЮKassa</p>
               </div>
             </div>
@@ -535,12 +532,16 @@
             <h2>Вопросы и ответы</h2>
           </div>
           <details open>
+            <summary>Где можно пользоваться Kartivio?</summary>
+            <p>В web-приложении, MAX и Telegram. Сервис доступен без VPN.</p>
+          </details>
+          <details>
             <summary>Кредиты сгорают?</summary>
             <p>Нет, кредиты остаются на балансе без срока сгорания.</p>
           </details>
           <details>
             <summary>Есть реферальная программа?</summary>
-            <p>Да. Делись личной ссылкой в Telegram: за каждого друга, который зарегистрируется и сделает первую генерацию, начисляем бонусные кредиты. Количество приглашений ограничено.</p>
+            <p>Да. Делись личной ссылкой: за каждого друга, который зарегистрируется и сделает первую генерацию, начисляем бонусные кредиты. Количество приглашений ограничено.</p>
           </details>
           <details>
             <summary>Сколько хранятся изображения?</summary>
@@ -588,12 +589,11 @@
       <section id="final-cta" class="section final-cta">
         <div class="container">
           <h2>Запусти Kartivio AI сейчас</h2>
-          <p>Открой web-приложение или начни через Telegram.</p>
+          <p>Открой web-приложение, MAX или бота в Telegram.</p>
           <div class="hero-actions">
-            <a class="btn btn-primary" href="/app/">Открыть web-приложение</a>
-            <a class="btn btn-ghost" href="https://t.me/kartivio_ai_bot" target="_blank" rel="noreferrer"
-              >Открыть бота</a
-            >
+            <a class="btn btn-primary" href="/app/" data-landing-cta="web">Открыть web-приложение</a>
+            <a class="btn btn-ghost" href="https://t.me/kartivio_ai_bot" target="_blank" rel="noreferrer" data-landing-cta="telegram">Открыть бота</a>
+            <a class="btn btn-ghost" href="https://max.ru/se13926200_bot" target="_blank" rel="noreferrer" data-landing-cta="max">Открыть в MAX</a>
           </div>
         </div>
       </section>
@@ -613,7 +613,7 @@
         </div>
       </div>
     </footer>
-    <script src="/landing-media.js?v=20260711-admin-analytics-1"></script>
+    <script src="/landing-media.js?v=20260813-max-simple-1"></script>
     <script>
       (function () {
         const keys = [

@@ -5264,6 +5264,10 @@ body.is-web-runtime.is-mobile-browser .app-main {
   display: none;
 }
 
+.is-max-context .auth-gate .bot-link {
+  display: none;
+}
+
 #authCheckButton {
   border-color: rgba(var(--accent-rgb), 0.52);
 }

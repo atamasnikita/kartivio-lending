@@ -159,7 +159,39 @@
     trackLandingEvent("landing_viewed", {
       source: document.referrer ? "referral" : "direct",
     });
+    const channelCtas = new Set();
+    for (const anchor of document.querySelectorAll("[data-landing-cta]")) {
+      channelCtas.add(anchor);
+      anchor.addEventListener("click", () => {
+        const channel = String(anchor.getAttribute("data-landing-cta") || "unknown").slice(0, 32);
+        const href = String(anchor.getAttribute("href") || "").slice(0, 240);
+        const source = landingEventSource(anchor);
+        trackLandingEvent("landing_cta_clicked", {
+          channel,
+          href,
+          source,
+        });
+        if (channel === "web") {
+          trackLandingEvent("app_cta_clicked", {
+            source,
+          });
+        }
+        if (channel === "max") {
+          trackLandingEvent("landing_max_click", {
+            href,
+            source,
+          });
+          trackLandingEvent("open_max_app_click", {
+            href,
+            source,
+          });
+        }
+      });
+    }
     for (const anchor of document.querySelectorAll('a[href^="/app/"]')) {
+      if (channelCtas.has(anchor)) {
+        continue;
+      }
       anchor.addEventListener("click", () => {
         trackLandingEvent("app_cta_clicked", {
           source: landingEventSource(anchor),
