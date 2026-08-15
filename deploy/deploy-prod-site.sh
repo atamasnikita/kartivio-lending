@@ -43,6 +43,9 @@ echo "==> Sync static site"
 rsync_remote \
   --exclude ".git" \
   --exclude ".DS_Store" \
+  --exclude "node_modules" \
+  --exclude "package.json" \
+  --exclude "package-lock.json" \
   --exclude "tmp" \
   --exclude "deploy" \
   --exclude ".gitignore" \
@@ -62,8 +65,8 @@ ssh_remote "
 "
 
 echo "==> Smoke check via host header"
-curl -fsS --resolve kartivio-ai.ru:443:$SITE_HOST https://kartivio-ai.ru/ >/dev/null
-curl -fsS --resolve kartivio-ai.ru:443:$SITE_HOST https://kartivio-ai.ru/app/ | grep -q 'app.js?v='
+curl --compressed --max-time 20 -fsS --resolve kartivio-ai.ru:443:$SITE_HOST https://kartivio-ai.ru/ >/dev/null
+curl --compressed --max-time 20 -fsS --resolve kartivio-ai.ru:443:$SITE_HOST https://kartivio-ai.ru/app/ | grep -q 'app.js?v='
 
 echo
 echo "Site staged on $SITE_HOST."
