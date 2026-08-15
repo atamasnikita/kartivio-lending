@@ -1,0 +1,19 @@
+{
+  "name": "landing",
+  "version": "1.0.0",
+  "private": true,
+  "main": "landing-media.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "check": "node --check app/app.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "playwright": "^1.62.1"
+  }
+}

@@ -1181,6 +1181,7 @@ body.is-web-runtime.is-mobile-browser .app-main {
 }
 
 .reference-prompt-card {
+  max-height: 1240px;
   display: grid;
   gap: 0;
   padding: 12px;
@@ -1194,10 +1195,33 @@ body.is-web-runtime.is-mobile-browser .app-main {
     linear-gradient(120deg, rgba(126, 229, 216, 0.7), rgba(88, 122, 255, 0.56), rgba(178, 110, 255, 0.48), rgba(126, 229, 216, 0.7)) border-box;
   background-size: 100% 100%, 240% 240%;
   box-shadow: 0 14px 34px rgba(5, 10, 20, 0.24);
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  will-change: max-height, padding, opacity, transform;
   transition:
+    max-height 0.24s cubic-bezier(0.23, 1, 0.32, 1),
+    padding-top 0.24s cubic-bezier(0.23, 1, 0.32, 1),
+    padding-bottom 0.24s cubic-bezier(0.23, 1, 0.32, 1),
+    opacity 0.18s ease,
+    transform 0.24s cubic-bezier(0.23, 1, 0.32, 1),
     box-shadow 0.22s ease,
     background-position 0.22s ease,
     background-size 0.22s ease;
+}
+
+.reference-prompt-card.is-template-hiding {
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  border-width: 0;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-8px) scale(0.995);
+  box-shadow: none;
+}
+
+.reference-prompt-card.is-template-gone {
+  display: none;
 }
 
 .reference-prompt-card.is-collapsed {

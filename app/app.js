@@ -34,6 +34,7 @@ const PROMPT_COUNTER_WARNING_AT = Math.floor(PROMPT_MAX_LENGTH * 0.9);
 const REFERENCE_PROMPT_NOTE_DEFAULT = "Потом его можно отредактировать перед генерацией.";
 const TEMPLATE_SKELETON_RATIOS = ["1 / 1", "4 / 5", "3 / 4", "5 / 4", "2 / 3", "3 / 2"];
 const TEMPLATE_MODAL_ANIMATION_MS = 260;
+const REFERENCE_PROMPT_TEMPLATE_VISIBILITY_MS = 240;
 
 const MODEL_COSTS = {
   "gemini-2.5-flash-image": 5,
@@ -409,6 +410,7 @@ const state = {
   referencePromptPreviousValue: "",
   referencePromptBuilt: false,
   referencePromptExpanded: false,
+  referencePromptRequestToken: 0,
   promptSource: "manual",
   promptSourceValue: "",
   sourceImageFiles: [],
@@ -937,6 +939,7 @@ let referencePromptBusyIntervalId = 0;
 let referencePromptBusyCaptionTimeoutId = 0;
 let referencePromptHeightFrameId = 0;
 let referencePromptHeightTimeoutId = 0;
+let referencePromptTemplateVisibilityTimerId = 0;
 let settingsPanelHeightFrameId = 0;
 const jumpButtons = Array.from(document.querySelectorAll("[data-nav-target]"));
 const screens = Array.from(document.querySelectorAll("[data-screen]"));
@@ -2928,6 +2931,7 @@ function revokeReferenceImagePreview() {
 }
 
 function setReferenceImage(file) {
+  state.referencePromptRequestToken += 1;
   revokeReferenceImagePreview();
   state.referenceImageFile = file instanceof File ? file : null;
   state.referencePromptBuilt = false;
@@ -3222,6 +3226,63 @@ function referencePromptShouldBeExpanded() {
   return Boolean(state.referencePromptExpanded || state.referencePromptBusy);
 }
 
+function syncReferencePromptTemplateVisibility(options = {}) {
+  const { immediate = false } = options;
+  if (!referencePromptCard) {
+    return;
+  }
+  const hiddenByTemplate = Boolean(state.selectedTemplate);
+
+  if (hiddenByTemplate) {
+    const alreadyHiding = referencePromptCard.classList.contains("is-template-hiding");
+    const alreadyGone = referencePromptCard.classList.contains("is-template-gone");
+    if (!alreadyHiding) {
+      referencePromptCard.classList.add("is-template-hiding");
+    }
+    referencePromptCard.setAttribute("aria-hidden", "true");
+    referencePromptCard.inert = true;
+    if (immediate) {
+      referencePromptCard.classList.add("is-template-gone");
+      return;
+    }
+    if (alreadyGone || referencePromptTemplateVisibilityTimerId) {
+      return;
+    }
+    referencePromptTemplateVisibilityTimerId = window.setTimeout(() => {
+      referencePromptTemplateVisibilityTimerId = 0;
+      if (state.selectedTemplate) {
+        referencePromptCard.classList.add("is-template-gone");
+      }
+    }, REFERENCE_PROMPT_TEMPLATE_VISIBILITY_MS);
+    return;
+  }
+
+  if (referencePromptTemplateVisibilityTimerId) {
+    window.clearTimeout(referencePromptTemplateVisibilityTimerId);
+    referencePromptTemplateVisibilityTimerId = 0;
+  }
+  const wasHidden = (
+    referencePromptCard.classList.contains("is-template-hiding")
+    || referencePromptCard.classList.contains("is-template-gone")
+  );
+  referencePromptCard.classList.remove("is-template-gone");
+  referencePromptCard.removeAttribute("aria-hidden");
+  referencePromptCard.inert = false;
+  if (!wasHidden) {
+    return;
+  }
+
+  const reveal = () => {
+    referencePromptCard.classList.remove("is-template-hiding");
+    syncReferencePromptExpandedHeight({ delayed: referencePromptShouldBeExpanded() });
+  };
+  if (immediate) {
+    reveal();
+    return;
+  }
+  window.requestAnimationFrame(reveal);
+}
+
 function setReferencePromptExpanded(expanded) {
   state.referencePromptExpanded = Boolean(expanded);
   syncReferencePromptControls();
@@ -3281,6 +3342,7 @@ function renderStudioSceneState() {
     );
     referencePromptToggleButton.setAttribute("aria-expanded", referenceOpen ? "true" : "false");
   }
+  syncReferencePromptTemplateVisibility();
 }
 
 function renderReferencePromptBusyStep(options = {}) {
@@ -6243,6 +6305,8 @@ async function selectTemplate(item) {
     category: resolvedItem.category,
   });
   state.referencePromptExpanded = false;
+  state.referencePromptBusy = false;
+  state.referencePromptRequestToken += 1;
   if (referenceImageFile()) {
     clearReferenceImage({ preserveNote: true });
     clearReferencePromptUndoState();
@@ -8611,10 +8675,13 @@ function validateReferenceImageFile(file) {
 }
 
 async function handleBuildReferencePrompt() {
+  let requestToken = 0;
   try {
     ensureAuthorizedForCreate();
     const file = referenceImageFile();
     validateReferenceImageFile(file);
+    requestToken = state.referencePromptRequestToken + 1;
+    state.referencePromptRequestToken = requestToken;
     state.referencePromptExpanded = true;
     state.referencePromptBusy = true;
     syncReferencePromptControls();
@@ -8625,6 +8692,13 @@ async function handleBuildReferencePrompt() {
 
     const previousPrompt = String(promptInput.value || "");
     const payload = await createReferencePromptFromImage(file);
+    if (
+      requestToken !== state.referencePromptRequestToken
+      || referenceImageFile() !== file
+      || state.selectedTemplate
+    ) {
+      return;
+    }
     const nextPrompt = String((payload && payload.prompt) || "").trim();
     if (!nextPrompt) {
       throw new Error("Сервис вернул пустой промпт.");
@@ -8641,11 +8715,16 @@ async function handleBuildReferencePrompt() {
     renderReferenceImage();
     trackProductEvent("reference_prompt_succeeded");
   } catch (error) {
+    if (requestToken && requestToken !== state.referencePromptRequestToken) {
+      return;
+    }
     trackProductEvent("reference_prompt_failed", { error_code: productEventErrorCode(error) });
     setReferencePromptNote(userFacingErrorMessage(error, "Не удалось собрать промпт по референсу."), true);
   } finally {
-    state.referencePromptBusy = false;
-    syncReferencePromptControls();
+    if (!requestToken || requestToken === state.referencePromptRequestToken || state.selectedTemplate) {
+      state.referencePromptBusy = false;
+      syncReferencePromptControls();
+    }
   }
 }
 
