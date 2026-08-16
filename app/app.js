@@ -599,6 +599,9 @@ function shouldTrackApiFetchFailure(path, error) {
   ) {
     return true;
   }
+  if (isAuthBootstrapRequestPath(normalizedPath) && (status === 401 || status === 403)) {
+    return true;
+  }
   return false;
 }
 
@@ -2743,6 +2746,7 @@ async function apiFetchBlob(path, { auth = false } = {}) {
     error.status = response.status;
     error.code = errorCode;
     error.rawMessage = rawMessage;
+    error.path = path;
     throw error;
   }
 
@@ -5608,6 +5612,27 @@ function isUnauthorizedError(error) {
   return /401|unauthorized|token/i.test(message);
 }
 
+function isAuthBootstrapRequestPath(path) {
+  const normalizedPath = String(path || "").split("?")[0];
+  return (
+    normalizedPath === "/v1/auth/refresh" ||
+    normalizedPath === "/v1/me" ||
+    normalizedPath === "/v1/wallet" ||
+    normalizedPath === "/v1/account/identities"
+  );
+}
+
+function isSessionRejectedError(error) {
+  if (isUnauthorizedError(error)) {
+    return true;
+  }
+  const status = Number(error && error.status);
+  if (status !== 403) {
+    return false;
+  }
+  return isAuthBootstrapRequestPath(error && error.path);
+}
+
 function isTransientNetworkError(error) {
   const code = normalizeErrorCode(error && error.code);
   if (code === "request_timeout" || code === "network_error") {
@@ -5686,6 +5711,9 @@ async function apiFetch(path, { method = "GET", body, auth = false, idempotencyK
       API_FETCH_TIMEOUT_MS
     );
   } catch (error) {
+    if (error && typeof error === "object") {
+      error.path = path;
+    }
     trackApiFetchFailure(path, error, { requestKind: "json", auth });
     throw error;
   }
@@ -5704,6 +5732,7 @@ async function apiFetch(path, { method = "GET", body, auth = false, idempotencyK
     error.status = response.status;
     error.code = errorCode;
     error.rawMessage = rawMessage;
+    error.path = path;
     trackApiFetchFailure(path, error, { requestKind: "json", auth });
     throw error;
   }
@@ -5757,6 +5786,9 @@ async function apiMultipart(
   const requestTimeoutMs = multipartRequestTimeoutMs(formData, timeoutMs);
   return new Promise((resolve, reject) => {
     const rejectWithDiagnostics = (error) => {
+      if (error && typeof error === "object") {
+        error.path = path;
+      }
       trackApiFetchFailure(path, error, { requestKind: "multipart", auth });
       reject(error);
     };
@@ -5896,7 +5928,7 @@ async function authorizedFetch(path, options = {}) {
   try {
     return await apiFetch(path, { ...options, auth: true });
   } catch (error) {
-    if (!isUnauthorizedError(error)) {
+    if (!isSessionRejectedError(error)) {
       throw error;
     }
     const refreshResult = await refreshSession();
@@ -5915,7 +5947,7 @@ async function authorizedMultipart(path, formData, options = {}) {
   try {
     return await apiMultipart(path, formData, { ...options, auth: true });
   } catch (error) {
-    if (!isUnauthorizedError(error)) {
+    if (!isSessionRejectedError(error)) {
       throw error;
     }
     const refreshResult = await refreshSession();
@@ -5937,7 +5969,7 @@ async function authorizedGetWithRetry(path, retries = 1) {
       return await authorizedFetch(path);
     } catch (error) {
       lastError = error;
-      if (attempt >= retries || (isUnauthorizedError(error) && !isTransientNetworkError(error))) {
+      if (attempt >= retries || (isSessionRejectedError(error) && !isTransientNetworkError(error))) {
         throw error;
       }
       await new Promise((resolve) => setTimeout(resolve, 250));
@@ -8504,7 +8536,7 @@ async function loadPrivateData({ forceServerCheck = false } = {}) {
   const [me, wallet] = await Promise.all([mePromise, walletPromise]);
   await identitiesPromise;
   if (identitiesError) {
-    if (isUnauthorizedError(identitiesError)) {
+    if (isSessionRejectedError(identitiesError)) {
       throw identitiesError;
     }
     console.warn("Account identities load failed", identitiesError);
@@ -8529,13 +8561,18 @@ function schedulePrivateDataRetry({ delayMs = 2500 } = {}) {
         }
       })
       .catch((error) => {
-        if (isUnauthorizedError(error) && !isTransientNetworkError(error)) {
+        if (isSessionRejectedError(error) && !isTransientNetworkError(error)) {
           clearAuthSessionState();
           setAuthGateVisible(true);
           setNote("Сессия устарела. Войди снова.", true);
           return;
         }
-        preserveSessionAfterTransientAuthError();
+        if (isTransientNetworkError(error)) {
+          preserveSessionAfterTransientAuthError();
+        } else {
+          clearAuthSessionState();
+          setAuthGateVisible(true);
+        }
         setNote(userFacingErrorMessage(error, "Не удалось загрузить данные аккаунта. Попробуй обновить страницу."), true);
       });
   }, delayMs);
@@ -8546,7 +8583,10 @@ async function loadPrivateDataAfterAuthSuccess() {
     await loadPrivateData({ forceServerCheck: prefersCookieAuth() });
     return true;
   } catch (error) {
-    if (isUnauthorizedError(error) && !isTransientNetworkError(error)) {
+    if (isSessionRejectedError(error) && !isTransientNetworkError(error)) {
+      throw error;
+    }
+    if (!isTransientNetworkError(error)) {
       throw error;
     }
     preserveSessionAfterTransientAuthError();
@@ -9144,7 +9184,7 @@ async function hydrateAuthorizedSession() {
     state.isCookieSession = Boolean(prefersCookieAuth() && !state.accessToken);
     return true;
   } catch (error) {
-    if (isUnauthorizedError(error) && !isTransientNetworkError(error)) {
+    if (isSessionRejectedError(error) && !isTransientNetworkError(error)) {
       clearAuthSessionState();
       return false;
     }
@@ -9152,6 +9192,12 @@ async function hydrateAuthorizedSession() {
       stage: "hydrate_authorized_session",
       error,
     });
+    if (!isTransientNetworkError(error)) {
+      clearAuthSessionState();
+      setAuthGateVisible(true);
+      setNote(userFacingErrorMessage(error, "Не удалось загрузить данные аккаунта. Войди снова."), true);
+      return false;
+    }
     preserveSessionAfterTransientAuthError();
     schedulePrivateDataRetry();
     setNote(userFacingErrorMessage(error, "Не удалось загрузить данные аккаунта. Попробуй обновить страницу."), true);
