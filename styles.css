@@ -1989,11 +1989,16 @@ a {
   }
 
   .topbar-inner {
-    min-height: 62px;
-    gap: 8px;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px 12px;
+    padding-top: 10px;
+    padding-bottom: 8px;
   }
 
   .brand {
+    grid-column: 1;
     gap: 8px;
     min-width: 0;
   }
@@ -2008,12 +2013,56 @@ a {
     font-size: 17px;
   }
 
+  .nav {
+    grid-column: 1 / -1;
+    display: flex;
+    gap: 8px;
+    order: 3;
+    overflow-x: auto;
+    margin: 0 -2px;
+    padding: 0 2px 3px;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .nav a {
+    flex: 0 0 auto;
+    min-height: 34px;
+    display: inline-flex;
+    align-items: center;
+    padding: 7px 12px;
+    border: 1px solid rgba(43, 50, 68, 0.9);
+    border-radius: 999px;
+    background: rgba(15, 23, 36, 0.72);
+    color: #c7cee3;
+    font-size: 14px;
+    line-height: 1;
+  }
+
+  .nav a:active {
+    border-color: rgba(25, 199, 181, 0.74);
+    color: #8df2e4;
+  }
+
+  .topbar-auth-slot {
+    grid-column: 2;
+    justify-self: end;
+  }
+
   .topbar .btn-sm {
     min-height: 38px;
     padding: 7px 12px;
     font-size: 16px;
     line-height: 1.08;
     white-space: nowrap;
+  }
+
+  .topbar-auth-slot .btn-sm {
+    display: none;
   }
 
   .topbar-profile {
