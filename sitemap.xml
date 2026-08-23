@@ -13,6 +13,42 @@
     <priority>0.8</priority>
   </url>
   <url>
+    <loc>https://kartivio-ai.ru/blog/</loc>
+    <lastmod>2026-08-23</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://kartivio-ai.ru/blog/ii-fotosessiya-po-foto/</loc>
+    <lastmod>2026-08-23</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://kartivio-ai.ru/blog/kakie-foto-zagruzhat/</loc>
+    <lastmod>2026-08-23</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://kartivio-ai.ru/blog/prompt-po-referensu/</loc>
+    <lastmod>2026-08-23</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://kartivio-ai.ru/blog/zhenskaya-ii-fotosessiya/</loc>
+    <lastmod>2026-08-23</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://kartivio-ai.ru/blog/semeynaya-i-parnaya-ii-fotosessiya/</loc>
+    <lastmod>2026-08-23</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://kartivio-ai.ru/terms/</loc>
     <lastmod>2026-05-09</lastmod>
     <changefreq>monthly</changefreq>
