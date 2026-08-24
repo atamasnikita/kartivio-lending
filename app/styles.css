@@ -581,6 +581,11 @@ body.is-web-runtime.is-mobile-browser .app-main {
   display: none;
 }
 
+.template-rail-card .template-preset-badge {
+  max-width: 100%;
+  font-size: 10px;
+}
+
 .template-collection-header {
   grid-column: 1 / -1;
   padding: 2px 0 4px;
@@ -809,6 +814,36 @@ body.is-web-runtime.is-mobile-browser .app-main {
   justify-content: flex-end;
   align-items: center;
   margin-top: 2px;
+}
+
+.template-preset-badge,
+.template-preset-meta {
+  width: fit-content;
+  border: 1px solid rgba(126, 229, 216, 0.34);
+  border-radius: 999px;
+  background: rgba(31, 196, 180, 0.12);
+  color: #a8f1e8;
+  font-weight: 800;
+}
+
+.template-preset-badge {
+  max-width: min(100%, 220px);
+  padding: 4px 8px;
+  overflow: hidden;
+  font-size: 11px;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.template-preset-meta {
+  padding: 5px 10px;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.template-preset-meta.is-hidden {
+  display: none;
 }
 
 .template-like-btn,
@@ -5015,6 +5050,12 @@ body.is-web-runtime.is-mobile-browser .app-main {
   gap: 12px;
 }
 
+.admin-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
 .admin-checkboxes {
   display: grid;
   gap: 10px;
@@ -5887,6 +5928,7 @@ body.is-web-runtime.is-mobile-browser.nav-hidden .bottom-nav {
 
   .admin-form-actions,
   .admin-grid-2,
+  .admin-grid-3,
   .admin-preview-grid {
     grid-template-columns: 1fr;
   }

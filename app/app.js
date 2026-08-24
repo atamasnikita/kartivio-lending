@@ -757,6 +757,9 @@ const adminAnalyticsNote = document.getElementById("adminAnalyticsNote");
 const adminTemplateStateBadge = document.getElementById("adminTemplateStateBadge");
 const adminTemplateTitleInput = document.getElementById("adminTemplateTitleInput");
 const adminTemplateCategoryInput = document.getElementById("adminTemplateCategoryInput");
+const adminTemplateModelSelect = document.getElementById("adminTemplateModelSelect");
+const adminTemplateResolutionSelect = document.getElementById("adminTemplateResolutionSelect");
+const adminTemplateRatioSelect = document.getElementById("adminTemplateRatioSelect");
 const adminTemplatePromptInput = document.getElementById("adminTemplatePromptInput");
 const adminTemplateFileInput = document.getElementById("adminTemplateFileInput");
 const adminTemplatePickFileButton = document.getElementById("adminTemplatePickFileButton");
@@ -886,6 +889,7 @@ const templateModalClose = document.getElementById("templateModalClose");
 const templateModalMediaSlot = document.getElementById("templateModalMediaSlot");
 const templateModalTitle = document.getElementById("templateModalTitle");
 const templateModalCategory = document.getElementById("templateModalCategory");
+const templateModalPreset = document.getElementById("templateModalPreset");
 const templateLikeButton = document.getElementById("templateLikeButton");
 const templateLikeCount = document.getElementById("templateLikeCount");
 const templateUsageStat = document.getElementById("templateUsageStat");
@@ -2040,6 +2044,87 @@ function ratioLabel(ratio) {
 
 function resolutionLabel(resolution) {
   return RESOLUTION_LABELS[String(resolution || "").trim()] || String(resolution || "").trim();
+}
+
+function normalizeTemplateRecommendedImageModel(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (!normalized || !ADMIN_MODEL_ORDER.includes(normalized)) {
+    return "";
+  }
+  return normalized;
+}
+
+function normalizeTemplateRecommendedResolution(value) {
+  const normalized = String(value || "").trim().toUpperCase();
+  return RESOLUTION_ORDER.includes(normalized) ? normalized : "";
+}
+
+function normalizeTemplateRecommendedRatio(value) {
+  const normalized = String(value || "").trim();
+  return RATIO_ORDER.includes(normalized) ? normalized : "";
+}
+
+function templateRecommendedPreset(item) {
+  return {
+    imageModel: normalizeTemplateRecommendedImageModel(item?.recommended_image_model),
+    resolution: normalizeTemplateRecommendedResolution(item?.recommended_resolution),
+    ratio: normalizeTemplateRecommendedRatio(item?.recommended_ratio),
+  };
+}
+
+function templateRecommendedLabel(item, { compact = false } = {}) {
+  const preset = templateRecommendedPreset(item);
+  const parts = [];
+  if (preset.imageModel) {
+    parts.push(imageModelLabel(preset.imageModel));
+  }
+  if (preset.resolution) {
+    parts.push(resolutionLabel(preset.resolution));
+  }
+  if (preset.ratio) {
+    parts.push(ratioLabel(preset.ratio));
+  }
+  if (!parts.length) {
+    return "";
+  }
+  if (compact && parts.length > 2) {
+    return `${parts[0]} · ${parts[2]}`;
+  }
+  return parts.join(" · ");
+}
+
+function applyTemplateRecommendedSettings(item) {
+  const preset = templateRecommendedPreset(item);
+  const availableModels = availableImageModelsForCurrentUser();
+  let changed = false;
+
+  if (preset.imageModel && availableModels.includes(preset.imageModel)) {
+    state.selectedImageModel = preset.imageModel;
+    changed = true;
+  }
+  if (preset.resolution) {
+    state.selectedResolution = preset.resolution;
+    changed = true;
+  }
+  if (preset.ratio) {
+    state.selectedRatio = preset.ratio;
+    changed = true;
+  }
+
+  if (changed) {
+    ensureGenerationSelectionState();
+    renderGenerationChips();
+    refreshGenerationCostNote();
+  }
+}
+
+function resetGenerationSettingsToDefaults() {
+  state.selectedImageModel = DEFAULT_IMAGE_MODEL;
+  state.selectedResolution = DEFAULT_RESOLUTION;
+  state.selectedRatio = DEFAULT_RATIO;
+  ensureGenerationSelectionState();
+  renderGenerationChips();
+  refreshGenerationCostNote();
 }
 
 function parseRatioDimensions(ratio) {
@@ -3873,6 +3958,7 @@ function clearSelectedTemplate({ clearPrompt } = { clearPrompt: false }) {
     promptInput.value = "";
     setPromptSource("manual", "");
   }
+  resetGenerationSettingsToDefaults();
   renderSelectedTemplateCard();
 }
 
@@ -3917,8 +4003,9 @@ function renderSelectedTemplateCard() {
   );
   selectedTemplateTitle.textContent = state.selectedTemplate.title || "Выбран шаблон";
   const category = String(state.selectedTemplate.category || "").trim();
+  const preset = templateRecommendedLabel(state.selectedTemplate);
   const status = selectedTemplatePromptStatus();
-  selectedTemplateMeta.textContent = category ? `${category} · ${status}` : status;
+  selectedTemplateMeta.textContent = [category, preset, status].filter(Boolean).join(" · ");
   selectedTemplateCard.classList.remove("is-hidden");
   renderStudioSceneState();
 }
@@ -4660,9 +4747,19 @@ function populateAdminTemplateDraft(item) {
   if (adminTemplateCategoryInput) {
     adminTemplateCategoryInput.value = String(item.category || "");
   }
+  if (adminTemplateModelSelect) {
+    adminTemplateModelSelect.value = normalizeTemplateRecommendedImageModel(item.recommended_image_model);
+  }
+  if (adminTemplateResolutionSelect) {
+    adminTemplateResolutionSelect.value = normalizeTemplateRecommendedResolution(item.recommended_resolution);
+  }
+  if (adminTemplateRatioSelect) {
+    adminTemplateRatioSelect.value = normalizeTemplateRecommendedRatio(item.recommended_ratio);
+  }
   if (adminTemplatePromptInput) {
     adminTemplatePromptInput.value = String(item.prompt || "");
   }
+  syncAdminTemplateRecommendedResolutionOptions();
 }
 
 function resetAdminTemplateDraft() {
@@ -4674,17 +4771,49 @@ function resetAdminTemplateDraft() {
   if (adminTemplateCategoryInput) {
     adminTemplateCategoryInput.value = "";
   }
+  if (adminTemplateModelSelect) {
+    adminTemplateModelSelect.value = "";
+  }
+  if (adminTemplateResolutionSelect) {
+    adminTemplateResolutionSelect.value = "";
+  }
+  if (adminTemplateRatioSelect) {
+    adminTemplateRatioSelect.value = "";
+  }
   if (adminTemplatePromptInput) {
     adminTemplatePromptInput.value = "";
   }
+  syncAdminTemplateRecommendedResolutionOptions();
   setAdminTemplatePreview("");
   setAdminTemplateFormNote("");
   renderAdminTemplateFormState();
 }
 
+function syncAdminTemplateRecommendedResolutionOptions() {
+  if (!adminTemplateResolutionSelect) {
+    return;
+  }
+  const model = normalizeTemplateRecommendedImageModel(adminTemplateModelSelect && adminTemplateModelSelect.value);
+  const onlyOneK = model === "gemini-2.5-flash-image";
+  Array.from(adminTemplateResolutionSelect.options || []).forEach((option) => {
+    const value = String(option.value || "").trim();
+    option.disabled = Boolean(onlyOneK && value && value !== "1K");
+  });
+  if (onlyOneK && adminTemplateResolutionSelect.value && adminTemplateResolutionSelect.value !== "1K") {
+    adminTemplateResolutionSelect.value = "1K";
+  }
+}
+
 function adminTemplateDraftBody() {
+  syncAdminTemplateRecommendedResolutionOptions();
   const title = String((adminTemplateTitleInput && adminTemplateTitleInput.value) || "").trim();
   const category = String((adminTemplateCategoryInput && adminTemplateCategoryInput.value) || "").trim();
+  const recommended_image_model =
+    normalizeTemplateRecommendedImageModel(adminTemplateModelSelect && adminTemplateModelSelect.value) || null;
+  const recommended_resolution =
+    normalizeTemplateRecommendedResolution(adminTemplateResolutionSelect && adminTemplateResolutionSelect.value) || null;
+  const recommended_ratio =
+    normalizeTemplateRecommendedRatio(adminTemplateRatioSelect && adminTemplateRatioSelect.value) || null;
   const prompt = String((adminTemplatePromptInput && adminTemplatePromptInput.value) || "").trim();
   if (!title) {
     throw new Error("Укажи название шаблона.");
@@ -4695,7 +4824,7 @@ function adminTemplateDraftBody() {
   if (prompt.length < 10) {
     throw new Error("Промпт должен быть не короче 10 символов.");
   }
-  return { title, category, prompt };
+  return { title, category, prompt, recommended_image_model, recommended_resolution, recommended_ratio };
 }
 
 function adminTemplateDraftDiffers() {
@@ -4712,7 +4841,10 @@ function adminTemplateDraftDiffers() {
   return (
     String(selected.title || "").trim() !== draft.title ||
     String(selected.category || "").trim() !== draft.category ||
-    String(selected.prompt || "").trim() !== draft.prompt
+    String(selected.prompt || "").trim() !== draft.prompt ||
+    normalizeTemplateRecommendedImageModel(selected.recommended_image_model) !== (draft.recommended_image_model || "") ||
+    normalizeTemplateRecommendedResolution(selected.recommended_resolution) !== (draft.recommended_resolution || "") ||
+    normalizeTemplateRecommendedRatio(selected.recommended_ratio) !== (draft.recommended_ratio || "")
   );
 }
 
@@ -4764,6 +4896,7 @@ function renderAdminTemplateFormState() {
   const metaParts = [
     selected.id,
     selected.category,
+    templateRecommendedLabel(selected) || "параметры не заданы",
     `${selected.usage_count || 0} использований`,
     `${selected.likes_count || 0} лайков`,
     formatAdminDateTime(selected.created_at),
@@ -5177,6 +5310,10 @@ function renderAdminTemplatesList() {
       const statusBadge = item.is_active
         ? '<span class="plan-badge">Активен</span>'
         : '<span class="plan-badge plan-badge-muted">Скрыт</span>';
+      const presetLabel = templateRecommendedLabel(item);
+      const presetBadge = presetLabel
+        ? `<span class="plan-badge plan-badge-muted">${escapeHtml(presetLabel)}</span>`
+        : "";
       const previewUrl = normalizeImageUrl(item.preview_image_url || item.full_image_url || "");
       const previewMarkup = renderTemplateMediaMarkup(previewUrl, item.title || "Шаблон", {
         className: "admin-template-thumb-media",
@@ -5193,6 +5330,7 @@ function renderAdminTemplatesList() {
                 <div class="admin-template-title-row">
                   <strong>${escapeHtml(item.title || "Без названия")}</strong>
                   ${statusBadge}
+                  ${presetBadge}
                 </div>
                 <p>${escapeHtml(item.id)} · ${escapeHtml(item.category || "Разное")}</p>
               </div>
@@ -5364,6 +5502,15 @@ async function createAdminTemplate() {
   form.append("title", draft.title);
   form.append("category", draft.category);
   form.append("prompt", draft.prompt);
+  if (draft.recommended_image_model) {
+    form.append("recommended_image_model", draft.recommended_image_model);
+  }
+  if (draft.recommended_resolution) {
+    form.append("recommended_resolution", draft.recommended_resolution);
+  }
+  if (draft.recommended_ratio) {
+    form.append("recommended_ratio", draft.recommended_ratio);
+  }
   const payload = await authorizedMultipart("/v1/admin/feed-templates", form);
   clearAdminTemplateFileSelection();
   state.selectedAdminTemplateId = String(payload.id || "").trim();
@@ -6335,6 +6482,9 @@ async function selectTemplate(item) {
   trackProductEvent("template_selected", {
     template_id: resolvedItem.id,
     category: resolvedItem.category,
+    recommended_image_model: normalizeTemplateRecommendedImageModel(resolvedItem.recommended_image_model) || null,
+    recommended_resolution: normalizeTemplateRecommendedResolution(resolvedItem.recommended_resolution) || null,
+    recommended_ratio: normalizeTemplateRecommendedRatio(resolvedItem.recommended_ratio) || null,
   });
   state.referencePromptExpanded = false;
   state.referencePromptBusy = false;
@@ -6352,10 +6502,14 @@ async function selectTemplate(item) {
     prompt: resolvedItem.prompt,
     preview_image_url: resolvedItem.preview_image_url,
     full_image_url: resolvedItem.full_image_url,
+    recommended_image_model: normalizeTemplateRecommendedImageModel(resolvedItem.recommended_image_model),
+    recommended_resolution: normalizeTemplateRecommendedResolution(resolvedItem.recommended_resolution),
+    recommended_ratio: normalizeTemplateRecommendedRatio(resolvedItem.recommended_ratio),
     usage_count: templateUsageCount(resolvedItem),
     likes_count: templateLikesCount(resolvedItem),
     liked_by_me: templateLikedByMe(resolvedItem),
   };
+  applyTemplateRecommendedSettings(state.selectedTemplate);
   promptInput.value = resolvedItem.prompt || "";
   setPromptSource("template", resolvedItem.prompt || "");
   renderSelectedTemplateCard();
@@ -6550,6 +6704,9 @@ function normalizeTemplateDetail(raw) {
     full_image_url: String(item.full_image_url || "").trim(),
     preview_width: Number(item.preview_width || 0),
     preview_height: Number(item.preview_height || 0),
+    recommended_image_model: normalizeTemplateRecommendedImageModel(item.recommended_image_model),
+    recommended_resolution: normalizeTemplateRecommendedResolution(item.recommended_resolution),
+    recommended_ratio: normalizeTemplateRecommendedRatio(item.recommended_ratio),
     description: String(item.description || "").trim(),
     search_keywords: flattenTemplateSearchField(item.search_keywords || item.keywords).trim(),
     tags: Array.isArray(item.tags) ? item.tags.map((tag) => String(tag || "").trim()).filter(Boolean) : [],
@@ -6574,6 +6731,9 @@ function mergeTemplateDetail(raw) {
     full_image_url: detail.full_image_url,
     preview_width: detail.preview_width,
     preview_height: detail.preview_height,
+    recommended_image_model: detail.recommended_image_model,
+    recommended_resolution: detail.recommended_resolution,
+    recommended_ratio: detail.recommended_ratio,
     description: detail.description,
     search_keywords: detail.search_keywords,
     tags: detail.tags,
@@ -6836,6 +6996,11 @@ function openTemplateModal(item, initialPreviewUrl = "") {
   }
   templateModalTitle.textContent = modalItem.title || "Шаблон";
   templateModalCategory.textContent = normalizeTemplateCategory(modalItem.category);
+  if (templateModalPreset) {
+    const presetLabel = templateRecommendedLabel(modalItem);
+    templateModalPreset.textContent = presetLabel ? `Рекомендуется: ${presetLabel}` : "";
+    templateModalPreset.classList.toggle("is-hidden", !presetLabel);
+  }
   renderTemplateModalStats(modalItem);
   const hasCachedPrompt = templateHasPrompt(modalItem);
   templateModalPrompt.textContent = hasCachedPrompt ? modalItem.prompt : "Загружаю промпт...";
@@ -7537,6 +7702,10 @@ function createTemplateCard(item, { itemIndex = 0, totalItems = 0, layout = "gri
     priority: Boolean(priority && shouldEagerLoadImage),
     autoplay: isTemplateVideoUrl(imageUrl) && shouldEagerLoadImage,
   });
+  const presetLabel = templateRecommendedLabel(item, { compact: true });
+  const presetMarkup = presetLabel
+    ? `<span class="template-preset-badge">${escapeHtml(presetLabel)}</span>`
+    : "";
   card.innerHTML = `
     <div class="tool-media">
       ${mediaMarkup}
@@ -7548,6 +7717,7 @@ function createTemplateCard(item, { itemIndex = 0, totalItems = 0, layout = "gri
       </button>
     </div>
     <div class="tool-overlay">
+      ${presetMarkup}
       <strong>${escapeHtml(item.title)}</strong>
       <p>${escapeHtml(normalizeTemplateCategory(item.category))}</p>
       <div class="template-card-stats">
@@ -7858,6 +8028,9 @@ function renderTemplates(payload) {
     full_image_url: String(item.full_image_url || "").trim(),
     preview_width: Number(item.preview_width || 0),
     preview_height: Number(item.preview_height || 0),
+    recommended_image_model: normalizeTemplateRecommendedImageModel(item.recommended_image_model),
+    recommended_resolution: normalizeTemplateRecommendedResolution(item.recommended_resolution),
+    recommended_ratio: normalizeTemplateRecommendedRatio(item.recommended_ratio),
     description: String(item.description || "").trim(),
     search_keywords: flattenTemplateSearchField(item.search_keywords || item.keywords).trim(),
     tags: Array.isArray(item.tags) ? item.tags.map((tag) => String(tag || "").trim()).filter(Boolean) : [],
@@ -9841,12 +10014,18 @@ function bindEvents() {
   for (const input of [
     adminTemplateTitleInput,
     adminTemplateCategoryInput,
+    adminTemplateModelSelect,
+    adminTemplateResolutionSelect,
+    adminTemplateRatioSelect,
     adminTemplatePromptInput,
   ]) {
     if (input) {
-      input.addEventListener("input", () => {
+      const handleAdminTemplateDraftChange = () => {
+        syncAdminTemplateRecommendedResolutionOptions();
         renderAdminTemplateFormState();
-      });
+      };
+      input.addEventListener("input", handleAdminTemplateDraftChange);
+      input.addEventListener("change", handleAdminTemplateDraftChange);
     }
   }
   if (adminTemplatePickFileButton && adminTemplateFileInput) {

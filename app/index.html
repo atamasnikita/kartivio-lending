@@ -601,6 +601,39 @@
                   <input id="adminTemplateCategoryInput" type="text" maxlength="60" placeholder="Ретро" />
                 </div>
               </div>
+              <div class="admin-grid-3">
+                <label class="field">
+                  <span>Модель</span>
+                  <select id="adminTemplateModelSelect">
+                    <option value="">Не задано</option>
+                    <option value="gemini-2.5-flash-image">Nano Banana</option>
+                    <option value="gemini-3.1-flash-image-preview">Nano Banana 2</option>
+                    <option value="gemini-3-pro-image-preview">Nano Banana Pro</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span>Качество</span>
+                  <select id="adminTemplateResolutionSelect">
+                    <option value="">Не задано</option>
+                    <option value="1K">1K</option>
+                    <option value="2K">2K</option>
+                    <option value="4K">4K</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span>Формат</span>
+                  <select id="adminTemplateRatioSelect">
+                    <option value="">Не задано</option>
+                    <option value="1:1">1:1</option>
+                    <option value="2:3">2:3</option>
+                    <option value="3:2">3:2</option>
+                    <option value="3:4">3:4</option>
+                    <option value="4:3">4:3</option>
+                    <option value="4:5">4:5</option>
+                    <option value="9:16">9:16</option>
+                  </select>
+                </label>
+              </div>
               <label class="field">
                 <span>Промпт</span>
                 <textarea id="adminTemplatePromptInput" rows="8" maxlength="3000" placeholder="Полный промпт шаблона"></textarea>
@@ -810,6 +843,7 @@
         <div class="template-modal-body">
           <strong id="templateModalTitle">Шаблон</strong>
           <span id="templateModalCategory">Категория</span>
+          <div id="templateModalPreset" class="template-preset-meta is-hidden"></div>
           <div class="template-modal-prompt-section">
             <div id="templateModalPromptScroll" class="template-modal-prompt-scroll is-collapsed">
               <p id="templateModalPrompt" class="template-modal-prompt"></p>
