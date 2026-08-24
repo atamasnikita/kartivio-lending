@@ -747,6 +747,9 @@ const adminAnalyticsPeriod = document.getElementById("adminAnalyticsPeriod");
 const refreshAdminAnalyticsButton = document.getElementById("refreshAdminAnalyticsButton");
 const adminAnalyticsKpis = document.getElementById("adminAnalyticsKpis");
 const adminAnalyticsCohort = document.getElementById("adminAnalyticsCohort");
+const adminAnalyticsRetention = document.getElementById("adminAnalyticsRetention");
+const adminAnalyticsReturning = document.getElementById("adminAnalyticsReturning");
+const adminAnalyticsChannels = document.getElementById("adminAnalyticsChannels");
 const adminAnalyticsEventFunnel = document.getElementById("adminAnalyticsEventFunnel");
 const adminAnalyticsWelcome = document.getElementById("adminAnalyticsWelcome");
 const adminAnalyticsReliability = document.getElementById("adminAnalyticsReliability");
@@ -4531,6 +4534,77 @@ function renderAdminAnalytics() {
         `,
       )
       .join("");
+  }
+
+  if (adminAnalyticsRetention) {
+    const rows = Array.isArray(payload.retention) ? payload.retention : [];
+    adminAnalyticsRetention.innerHTML = rows.length
+      ? rows
+          .map(
+            (item) => `
+              <div class="admin-analytics-row">
+                <div class="admin-analytics-row-label">
+                  <strong>${escapeHtml(String(item.label || `D${item.day || ""}`))}</strong>
+                  <span>${formatAnalyticsNumber(item.returned_users)} из ${formatAnalyticsNumber(item.cohort_users)} вернулись</span>
+                </div>
+                <div class="admin-analytics-row-value">
+                  <strong>${formatAnalyticsPercent(item.return_rate)}</strong>
+                  <small>${formatAnalyticsPercent(item.regeneration_rate)} снова генерировали</small>
+                </div>
+              </div>
+            `,
+          )
+          .join("")
+      : adminAnalyticsEmpty("Пока мало пользователей для D1/D3/D7.");
+  }
+
+  if (adminAnalyticsReturning) {
+    const returning = payload.returning || {};
+    const rows = [
+      ["Активные", returning.active_users, "любое действие"],
+      ["Новые активные", returning.new_active_users, "регистрация в период"],
+      ["Вернувшиеся", returning.returning_active_users, "созданы раньше периода"],
+      ["2+ активных дня", returning.multi_day_active_users, "возврат внутри периода"],
+      ["Повторно генерировали", returning.repeat_generators, "были генерации раньше"],
+      ["Повторно покупали", returning.repeat_buyers, "были оплаты раньше"],
+    ];
+    adminAnalyticsReturning.innerHTML = rows
+      .map(
+        ([label, value, detail]) => `
+          <div class="admin-analytics-row">
+            <div class="admin-analytics-row-label">
+              <strong>${escapeHtml(String(label))}</strong>
+              <span>${escapeHtml(String(detail))}</span>
+            </div>
+            <div class="admin-analytics-row-value">
+              <strong>${formatAnalyticsNumber(value)}</strong>
+            </div>
+          </div>
+        `,
+      )
+      .join("");
+  }
+
+  if (adminAnalyticsChannels) {
+    const rows = Array.isArray(payload.channel_activity) ? payload.channel_activity : [];
+    adminAnalyticsChannels.innerHTML = rows.length
+      ? rows
+          .map(
+            (item) => `
+              <div class="admin-analytics-row">
+                <div class="admin-analytics-row-label">
+                  <strong>${escapeHtml(String(item.label || item.channel || "Канал"))}</strong>
+                  <span>${formatAnalyticsNumber(item.events)} событий · ${formatAnalyticsNumber(item.successful_jobs)} успешных генераций</span>
+                </div>
+                <div class="admin-analytics-row-value">
+                  <strong>${formatAnalyticsNumber(item.active_users)}</strong>
+                  <small>активных</small>
+                </div>
+              </div>
+            `,
+          )
+          .join("")
+      : adminAnalyticsEmpty("Нет активности по каналам за период.");
   }
 
   if (adminAnalyticsEventFunnel) {
