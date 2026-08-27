@@ -4330,6 +4330,7 @@ body.is-web-runtime.is-mobile-browser .app-main {
 }
 
 .profile-balance-home-card,
+.profile-referral-card,
 .profile-reference-showcase,
 .profile-account-card {
   width: 100%;
@@ -4474,6 +4475,263 @@ body.is-web-runtime.is-mobile-browser .app-main {
   color: #f6f8ff;
   font-size: 22px;
   line-height: 1;
+}
+
+.profile-referral-card {
+  position: relative;
+  padding: 0;
+  display: grid;
+  border-color: rgba(var(--accent-rgb), 0.24);
+  background: rgba(12, 16, 23, 0.92);
+  overflow: hidden;
+}
+
+.profile-referral-toggle {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) 38px;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.profile-referral-toggle:disabled {
+  cursor: default;
+}
+
+.profile-referral-toggle:focus-visible {
+  outline: 2px solid rgba(var(--accent-rgb), 0.72);
+  outline-offset: -4px;
+}
+
+.profile-referral-icon {
+  width: 48px;
+  height: 48px;
+  border: 1px solid rgba(var(--accent-rgb), 0.38);
+  border-radius: 18px;
+  background: rgba(var(--accent-rgb), 0.1);
+  color: #70f5e5;
+  display: grid;
+  place-items: center;
+}
+
+.profile-referral-icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.profile-referral-copy {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+
+.profile-referral-copy strong {
+  margin: 0;
+  color: #f3f6ff;
+  font-size: clamp(24px, 5.6vw, 32px);
+  font-weight: 820;
+  line-height: 1.06;
+  letter-spacing: 0;
+}
+
+.profile-referral-copy > span:last-child,
+.profile-referral-note {
+  margin: 0;
+  color: #a7afc0;
+  font-size: 14px;
+  line-height: 1.38;
+}
+
+.profile-referral-chevron {
+  width: 38px;
+  height: 38px;
+  border: 1px solid rgba(58, 68, 92, 0.72);
+  border-radius: 999px;
+  background: rgba(11, 16, 26, 0.72);
+  color: #dbe7f8;
+  display: grid;
+  place-items: center;
+  transition:
+    transform 0.24s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.2s ease,
+    color 0.2s ease;
+}
+
+.profile-referral-chevron svg {
+  width: 18px;
+  height: 18px;
+}
+
+.profile-referral-attention-dot {
+  position: absolute;
+  top: 14px;
+  right: 24px;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #ff4f6d;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.profile-referral-attention-dot.is-hidden {
+  display: none;
+}
+
+.profile-referral-card.is-expanded .profile-referral-chevron {
+  border-color: rgba(var(--accent-rgb), 0.48);
+  color: var(--accent);
+  transform: rotate(180deg);
+}
+
+.profile-referral-details {
+  display: grid;
+  gap: 11px;
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  padding: 0 16px;
+  transform: translateY(-5px);
+  transition:
+    max-height 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.22s ease,
+    padding-bottom 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.profile-referral-card.is-expanded .profile-referral-details {
+  max-height: 220px;
+  opacity: 1;
+  padding-bottom: 16px;
+  transform: translateY(0);
+}
+
+.profile-referral-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.profile-referral-stats span {
+  min-width: 0;
+  border: 1px solid rgba(48, 56, 75, 0.72);
+  border-radius: 15px;
+  background: rgba(8, 12, 18, 0.46);
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+}
+
+.profile-referral-stats strong {
+  color: #f6f8ff;
+  font-size: 21px;
+  line-height: 1;
+}
+
+.profile-referral-stats small {
+  min-width: 0;
+  color: #8f99ad;
+  font-size: 12px;
+  line-height: 1.16;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-referral-copy-btn {
+  width: auto;
+  height: 48px;
+  min-height: 48px;
+  min-width: 0;
+  border: 1px solid transparent;
+  border-radius: 15px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 15px;
+  line-height: 1;
+  padding: 0 10px;
+  background: #28c8b9;
+  color: #061012;
+}
+
+.profile-referral-copy-btn svg {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+}
+
+.profile-referral-copy-btn span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-referral-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.profile-referral-actions > .profile-referral-copy-btn {
+  flex: 1 1 0;
+  width: 0;
+}
+
+.profile-referral-copy-btn-secondary {
+  border-color: rgba(58, 68, 92, 0.72);
+  background: rgba(14, 20, 31, 0.82);
+  color: #dbe4f4;
+}
+
+.profile-referral-card.is-disabled {
+  border-color: rgba(42, 49, 66, 0.78);
+  background: rgba(12, 16, 23, 0.92);
+}
+
+.app-toast {
+  position: fixed;
+  z-index: 80;
+  left: 50%;
+  bottom: calc(98px + max(env(safe-area-inset-bottom), var(--tg-safe-bottom, 0px)));
+  transform: translate(-50%, 0);
+  width: max-content;
+  max-width: min(420px, calc(100vw - 32px));
+  border: 1px solid rgba(var(--accent-rgb), 0.4);
+  border-radius: 999px;
+  background: rgba(14, 22, 30, 0.94);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.34);
+  color: #e9fff9;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.2;
+  padding: 12px 16px;
+  text-align: center;
+  opacity: 1;
+  pointer-events: none;
+  transition:
+    opacity 0.18s ease,
+    transform 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.app-toast.is-hidden {
+  display: block !important;
+  opacity: 0;
+  transform: translate(-50%, 8px);
+}
+
+.app-toast.is-error {
+  border-color: rgba(255, 138, 150, 0.46);
+  color: #ffd7dc;
 }
 
 .profile-reference-showcase {
@@ -4684,6 +4942,7 @@ body.is-web-runtime.is-mobile-browser .app-main {
 
 @media (hover: hover) and (pointer: fine) {
   .profile-quick-stat:hover,
+  .profile-referral-toggle:hover,
   .profile-reference-showcase:hover,
   .profile-account-card .profile-sync-item:hover {
     border-color: rgba(var(--accent-rgb), 0.38);
@@ -4721,6 +4980,61 @@ body.is-web-runtime.is-mobile-browser .app-main {
     padding: 15px;
   }
 
+  .profile-referral-card {
+    padding: 0;
+  }
+
+  .profile-referral-toggle {
+    grid-template-columns: 40px minmax(0, 1fr) 34px;
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .profile-referral-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 14px;
+  }
+
+  .profile-referral-icon svg {
+    width: 19px;
+    height: 19px;
+  }
+
+  .profile-referral-copy {
+    gap: 3px;
+  }
+
+  .profile-referral-copy strong {
+    font-size: 24px;
+  }
+
+  .profile-referral-copy > span:last-child,
+  .profile-referral-note {
+    font-size: 13px;
+    line-height: 1.3;
+  }
+
+  .profile-referral-chevron {
+    width: 34px;
+    height: 34px;
+  }
+
+  .profile-referral-attention-dot {
+    top: 12px;
+    right: 20px;
+  }
+
+  .profile-referral-details {
+    gap: 9px;
+    padding: 0 12px;
+  }
+
+  .profile-referral-card.is-expanded .profile-referral-details {
+    max-height: 200px;
+    padding-bottom: 12px;
+  }
+
   .profile-balance-main {
     grid-template-columns: 1fr;
     gap: 12px;
@@ -4742,6 +5056,41 @@ body.is-web-runtime.is-mobile-browser .app-main {
 
   .profile-quick-stat strong {
     font-size: 20px;
+  }
+
+  .profile-referral-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .profile-referral-stats span {
+    gap: 3px;
+    padding: 8px 7px;
+  }
+
+  .profile-referral-stats strong {
+    font-size: 18px;
+  }
+
+  .profile-referral-stats small {
+    font-size: 10px;
+  }
+
+  .profile-referral-copy-btn {
+    height: 44px;
+    min-height: 44px;
+    border-radius: 14px;
+    font-size: 14px;
+    gap: 6px;
+    padding: 0 8px;
+  }
+
+  .profile-referral-actions {
+    gap: 7px;
+  }
+
+  .app-toast {
+    bottom: calc(98px + max(env(safe-area-inset-bottom), var(--tg-safe-bottom, 0px)));
   }
 
   .profile-reference-showcase {
@@ -4767,6 +5116,12 @@ body.is-web-runtime.is-mobile-browser .app-main {
   .profile-account-card .profile-sync-badge {
     position: static;
     justify-self: start;
+  }
+}
+
+@media (max-width: 340px) {
+  .profile-referral-stats {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -5427,6 +5782,7 @@ body.is-web-runtime.is-mobile-browser .app-main {
 }
 
 .nav-btn {
+  position: relative;
   flex: 1 1 0;
   height: 46px;
   min-height: 46px;
@@ -5476,6 +5832,26 @@ body.is-web-runtime.is-mobile-browser .app-main {
 
 .nav-btn.is-active span {
   font-weight: 700;
+}
+
+.nav-referral-badge {
+  position: absolute;
+  top: 7px;
+  right: 22px;
+  width: 8px;
+  height: 8px;
+  min-width: 8px;
+  min-height: 8px;
+  border: 0;
+  border-radius: 999px;
+  background: #ff4f6d;
+  padding: 0;
+  box-shadow: none;
+  pointer-events: none;
+}
+
+.nav-referral-badge.is-hidden {
+  display: none;
 }
 
 .nav-btn-center {

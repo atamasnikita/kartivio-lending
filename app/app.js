@@ -6,6 +6,8 @@ const STORAGE_KEYS = {
   telegramWebLoginToken: "kartivio.telegram_web_login_token",
   acquisitionAnonymousId: "kartivio.acquisition_anonymous_id",
   acquisitionFirstTouch: "kartivio.acquisition_first_touch",
+  pendingReferralCode: "kartivio.pending_referral_code",
+  referralProfileSeen: "kartivio.referral_profile_seen",
   productSessionId: "kartivio.product_session_id",
   productAnalyticsDisabled: "kartivio.product_analytics_disabled",
 };
@@ -400,6 +402,9 @@ const state = {
   walletBalanceCredits: 0,
   linkedProviders: new Set(),
   acquisitionTouch: null,
+  referral: null,
+  profileReferralExpanded: false,
+  trackedReferralCardView: false,
   telegramLinkToken: "",
   telegramLinkPollTimer: null,
   telegramWebLoginToken: "",
@@ -461,6 +466,7 @@ const PRODUCT_EVENT_BATCH_SIZE = 10;
 let productEventQueue = [];
 let productEventFlushTimer = null;
 let checkoutPendingUnlockTimer = null;
+let appToastTimer = null;
 
 function isProductAnalyticsDisabled() {
   if (state.me?.is_admin) {
@@ -720,6 +726,18 @@ const profileReferenceBadge = document.getElementById("profileReferenceBadge");
 const profileReferenceText = document.getElementById("profileReferenceText");
 const profileReferenceAction = document.getElementById("profileReferenceAction");
 const profileTopupAction = document.getElementById("profileTopupAction");
+const profileReferralCard = document.getElementById("profileReferralCard");
+const profileReferralToggle = document.getElementById("profileReferralToggle");
+const profileReferralDetails = document.getElementById("profileReferralDetails");
+const profileReferralText = document.getElementById("profileReferralText");
+const profileReferralRewarded = document.getElementById("profileReferralRewarded");
+const profileReferralRemaining = document.getElementById("profileReferralRemaining");
+const profileReferralCopy = document.getElementById("profileReferralCopy");
+const profileReferralCopyWeb = document.getElementById("profileReferralCopyWeb");
+const profileReferralNote = document.getElementById("profileReferralNote");
+const profileReferralCardBadge = document.getElementById("profileReferralCardBadge");
+const profileReferralNavBadge = document.getElementById("profileReferralNavBadge");
+const appToast = document.getElementById("appToast");
 const profileSyncText = document.getElementById("profileSyncText");
 const profileSyncBadge = document.getElementById("profileSyncBadge");
 const identityYandexCard = document.getElementById("identityYandexCard");
@@ -1602,6 +1620,70 @@ function captureFirstAcquisitionTouch() {
   writeStoredAcquisitionTouch(nextTouch);
   state.acquisitionTouch = nextTouch;
   return nextTouch;
+}
+
+function normalizeReferralCode(raw) {
+  let value = String(raw || "").trim().toLowerCase();
+  if (value.startsWith("ref_")) {
+    value = value.slice(4);
+  }
+  return /^[a-z0-9]{6,32}$/.test(value) ? value : "";
+}
+
+function readStoredReferralCode() {
+  try {
+    return normalizeReferralCode(window.localStorage.getItem(STORAGE_KEYS.pendingReferralCode));
+  } catch (_error) {
+    return "";
+  }
+}
+
+function writeStoredReferralCode(code) {
+  const normalized = normalizeReferralCode(code);
+  if (!normalized) {
+    return;
+  }
+  try {
+    window.localStorage.setItem(STORAGE_KEYS.pendingReferralCode, normalized);
+  } catch (_error) {
+    // noop
+  }
+}
+
+function clearStoredReferralCode() {
+  try {
+    window.localStorage.removeItem(STORAGE_KEYS.pendingReferralCode);
+  } catch (_error) {
+    // noop
+  }
+}
+
+function captureReferralCodeFromLocation() {
+  const params = new URLSearchParams(window.location.search);
+  const code = normalizeReferralCode(
+    params.get("ref") || params.get("referral") || params.get("referral_code"),
+  );
+  if (!code) {
+    return "";
+  }
+  writeStoredReferralCode(code);
+  return code;
+}
+
+function hasSeenProfileReferralCard() {
+  try {
+    return window.localStorage.getItem(STORAGE_KEYS.referralProfileSeen) === "1";
+  } catch (_error) {
+    return false;
+  }
+}
+
+function markProfileReferralCardSeen() {
+  try {
+    window.localStorage.setItem(STORAGE_KEYS.referralProfileSeen, "1");
+  } catch (_error) {
+    // noop
+  }
 }
 
 async function syncAcquisitionTouch({ auth = false } = {}) {
@@ -2940,6 +3022,196 @@ function openFirstPhotosetPaywall() {
   });
 }
 
+function normalizeReferralLink(raw) {
+  const value = String(raw || "").trim();
+  if (!value) {
+    return "";
+  }
+  try {
+    return new URL(value, window.location.origin).toString();
+  } catch (_error) {
+    return value;
+  }
+}
+
+function currentReferralLink(kind = "telegram") {
+  const source = kind === "web" ? state.referral?.app_link : state.referral?.telegram_deep_link;
+  const raw = String(source || "").trim();
+  if (!raw) {
+    return "";
+  }
+  return normalizeReferralLink(raw);
+}
+
+function setProfileReferralNote(message, isError = false) {
+  if (!profileReferralNote) {
+    return;
+  }
+  profileReferralNote.textContent = String(message || "");
+  profileReferralNote.style.color = isError ? "#ff8f8f" : "";
+}
+
+function showAppToast(message, isError = false) {
+  if (!appToast) {
+    return;
+  }
+  appToast.textContent = String(message || "");
+  appToast.classList.toggle("is-error", Boolean(isError));
+  appToast.classList.remove("is-hidden");
+  window.clearTimeout(appToastTimer);
+  appToastTimer = window.setTimeout(() => {
+    appToast.classList.add("is-hidden");
+  }, 1800);
+}
+
+function setProfileReferralExpanded(expanded) {
+  state.profileReferralExpanded = Boolean(expanded);
+  if (state.profileReferralExpanded) {
+    markProfileReferralCardSeen();
+  }
+  renderProfileReferral();
+}
+
+function shouldShowProfileReferralAttention(hasSession, referral, remaining) {
+  return Boolean(hasSession && referral && remaining > 0 && !hasSeenProfileReferralCard());
+}
+
+function renderProfileReferral() {
+  const hasSession = hasActiveSession();
+  const referral = state.referral || null;
+  const summary = referral?.summary || {};
+  const rewardCredits = Number(referral?.reward_credits || 20);
+  const rewarded = Number(summary.rewarded || 0);
+  const total = Number(summary.total || 0);
+  const remaining = Number(summary.remaining ?? referral?.max_rewards_per_user ?? 10);
+  const telegramLink = currentReferralLink("telegram");
+  const webLink = currentReferralLink("web");
+
+  if (profileReferralCard) {
+    profileReferralCard.classList.toggle("is-disabled", !hasSession || !referral);
+    profileReferralCard.classList.toggle("is-expanded", state.profileReferralExpanded);
+    profileReferralCard.classList.toggle("is-collapsed", !state.profileReferralExpanded);
+  }
+  if (profileReferralToggle) {
+    profileReferralToggle.setAttribute("aria-expanded", state.profileReferralExpanded ? "true" : "false");
+    profileReferralToggle.disabled = !hasSession;
+  }
+  if (profileReferralDetails) {
+    profileReferralDetails.setAttribute("aria-hidden", state.profileReferralExpanded ? "false" : "true");
+    if (state.profileReferralExpanded) {
+      profileReferralDetails.removeAttribute("inert");
+    } else {
+      profileReferralDetails.setAttribute("inert", "");
+    }
+  }
+  if (profileReferralText) {
+    profileReferralText.textContent = hasSession
+      ? `+${rewardCredits} кредитов за друга после первой генерации.`
+      : "Войди, чтобы получить свою ссылку и приглашать друзей.";
+  }
+  if (profileReferralRewarded) {
+    profileReferralRewarded.textContent = String(rewarded);
+  }
+  if (profileReferralRemaining) {
+    profileReferralRemaining.textContent = String(Math.max(0, remaining));
+  }
+  if (profileReferralCopy) {
+    profileReferralCopy.disabled = !hasSession || !telegramLink;
+  }
+  if (profileReferralCopyWeb) {
+    profileReferralCopyWeb.disabled = !hasSession || !webLink;
+  }
+  const showAttention = shouldShowProfileReferralAttention(hasSession, referral, remaining);
+  if (profileReferralCardBadge) {
+    profileReferralCardBadge.classList.toggle("is-hidden", !showAttention);
+  }
+  if (profileReferralNavBadge) {
+    profileReferralNavBadge.textContent = "";
+    profileReferralNavBadge.classList.toggle("is-hidden", !showAttention);
+  }
+  if (!hasSession) {
+    setProfileReferralNote("Ссылка появится после входа.");
+  } else if (!referral) {
+    setProfileReferralNote("Готовим реферальную ссылку...");
+  } else {
+    setProfileReferralNote(
+      total > 0
+        ? `Приглашено: ${total}. Telegram открывает бота, веб-ссылка ведет в приложение.`
+        : "Telegram открывает бота, веб-ссылка ведет в приложение.",
+    );
+  }
+
+  if (state.currentScreen === "profile" && referral && !state.trackedReferralCardView) {
+    state.trackedReferralCardView = true;
+    trackProductEvent("referral_card_viewed", { source: "profile" });
+  }
+}
+
+async function loadReferralSummary() {
+  if (!hasActiveSession()) {
+    state.referral = null;
+    renderProfileReferral();
+    return null;
+  }
+  try {
+    const payload = await authorizedGetWithRetry("/v1/referrals/me", 1);
+    state.referral = payload || null;
+    renderProfileReferral();
+    return payload;
+  } catch (error) {
+    state.referral = null;
+    renderProfileReferral();
+    console.warn("Referral summary load failed", error);
+    return null;
+  }
+}
+
+async function applyStoredReferralCode() {
+  if (!hasActiveSession()) {
+    return false;
+  }
+  const referralCode = readStoredReferralCode();
+  if (!referralCode) {
+    return false;
+  }
+  try {
+    const payload = await authorizedFetch("/v1/referrals/apply", {
+      method: "POST",
+      body: { referral_code: referralCode },
+    });
+    clearStoredReferralCode();
+    trackProductEvent("referral_code_applied", {
+      source: "app_link",
+      status: String(payload?.status || "unknown"),
+      error_code: String(payload?.reason || ""),
+    });
+    return true;
+  } catch (error) {
+    console.warn("Referral code apply failed", error);
+    return false;
+  }
+}
+
+async function copyProfileReferralLink(kind = "telegram") {
+  const normalizedKind = kind === "web" ? "web" : "telegram";
+  const link = currentReferralLink(normalizedKind);
+  if (!link) {
+    setProfileReferralNote("Реферальная ссылка еще не готова.", true);
+    return;
+  }
+  try {
+    await copyPromptToClipboard(link);
+    trackProductEvent("referral_link_copied", { source: "profile", link_type: normalizedKind });
+    const label = normalizedKind === "web" ? "Веб-ссылка скопирована" : "Telegram-ссылка скопирована";
+    setProfileReferralNote(label);
+    showAppToast(label);
+  } catch (error) {
+    const message = userFacingErrorMessage(error, "Не удалось скопировать ссылку.");
+    setProfileReferralNote(message, true);
+    showAppToast(message, true);
+  }
+}
+
 function switchScreen(nextScreen) {
   const target = String(nextScreen || "").trim();
   if (!target) {
@@ -2956,6 +3228,8 @@ function switchScreen(nextScreen) {
   } else if (target === "tokens") {
     trackProductEvent("paywall_viewed", { screen: "tokens", source: "navigation" });
     syncPlansAfterEligibilityChange();
+  } else if (target === "profile") {
+    renderProfileReferral();
   }
   appShell.classList.toggle("is-paywall-active", target === "tokens");
   for (const screen of screens) {
@@ -3265,6 +3539,7 @@ function renderProfileSummary() {
       profileReferenceAction.textContent = hasReferenceAccess ? "Попробовать" : "Посмотреть пакеты";
     }
   }
+  renderProfileReferral();
 }
 
 function handleProfilePrimaryAction() {
@@ -4314,6 +4589,9 @@ async function logoutSession() {
   state.isCookieSession = false;
   state.lastAuthProvider = "";
   state.me = null;
+  state.referral = null;
+  state.profileReferralExpanded = false;
+  state.trackedReferralCardView = false;
   state.telegramLinkToken = "";
   state.telegramWebLoginToken = "";
   clearReferenceImage({ preserveNote: true });
@@ -8758,6 +9036,7 @@ async function loadPrivateData({ forceServerCheck = false } = {}) {
     state.isCookieSession = false;
     state.linkedProviders = new Set();
     state.me = null;
+    state.referral = null;
     state.walletBalanceCredits = 0;
     userName.textContent = "—";
     userTgId.textContent = "—";
@@ -8771,16 +9050,22 @@ async function loadPrivateData({ forceServerCheck = false } = {}) {
     renderGenerationChips();
     refreshGenerationCostNote();
     renderProfileSummary();
+    renderProfileReferral();
     return;
   }
   const mePromise = authorizedGetWithRetry("/v1/me", 1);
   const walletPromise = authorizedGetWithRetry("/v1/wallet?limit=1", 1);
   let identitiesError = null;
+  let referralError = null;
   const identitiesPromise = loadIdentities().catch((error) => {
     identitiesError = error;
     return null;
   });
-  const [me, wallet] = await Promise.all([mePromise, walletPromise]);
+  const referralPromise = authorizedGetWithRetry("/v1/referrals/me", 1).catch((error) => {
+    referralError = error;
+    return null;
+  });
+  const [me, wallet, referral] = await Promise.all([mePromise, walletPromise, referralPromise]);
   await identitiesPromise;
   if (identitiesError) {
     if (isSessionRejectedError(identitiesError)) {
@@ -8788,6 +9073,10 @@ async function loadPrivateData({ forceServerCheck = false } = {}) {
     }
     console.warn("Account identities load failed", identitiesError);
   }
+  if (referralError) {
+    console.warn("Referral summary load failed", referralError);
+  }
+  state.referral = referral || null;
   state.isCookieSession = Boolean(prefersCookieAuth() && !state.accessToken);
   renderUser(me, wallet);
 }
@@ -8828,6 +9117,10 @@ function schedulePrivateDataRetry({ delayMs = 2500 } = {}) {
 async function loadPrivateDataAfterAuthSuccess() {
   try {
     await loadPrivateData({ forceServerCheck: prefersCookieAuth() });
+    const appliedReferral = await applyStoredReferralCode();
+    if (appliedReferral) {
+      await loadReferralSummary();
+    }
     return true;
   } catch (error) {
     if (isSessionRejectedError(error) && !isTransientNetworkError(error)) {
@@ -10023,6 +10316,21 @@ function bindEvents() {
   if (profileFavoritesButton) {
     profileFavoritesButton.addEventListener("click", openProfileFavorites);
   }
+  if (profileReferralToggle) {
+    profileReferralToggle.addEventListener("click", () => {
+      setProfileReferralExpanded(!state.profileReferralExpanded);
+    });
+  }
+  if (profileReferralCopy) {
+    profileReferralCopy.addEventListener("click", () => {
+      copyProfileReferralLink("telegram").catch(() => {});
+    });
+  }
+  if (profileReferralCopyWeb) {
+    profileReferralCopyWeb.addEventListener("click", () => {
+      copyProfileReferralLink("web").catch(() => {});
+    });
+  }
   if (profileReferenceAction) {
     profileReferenceAction.addEventListener("click", openProfileReferencePrompt);
   }
@@ -10463,6 +10771,7 @@ async function bootstrap() {
   unlockTemplateModalScroll();
   loadState();
   captureFirstAcquisitionTouch();
+  captureReferralCodeFromLocation();
   const telegramSdkPromise = ensureTelegramSdkLoaded();
   const apiBasePromise = (async () => {
     try {
@@ -10610,6 +10919,14 @@ async function bootstrap() {
       await ensureMaxLinkedForAuthorizedSession();
     }
     syncAcquisitionTouch({ auth: true }).catch(() => {});
+    applyStoredReferralCode()
+      .then((applied) => {
+        if (applied) {
+          return loadReferralSummary();
+        }
+        return null;
+      })
+      .catch(() => {});
     setAuthGateVisible(false);
     ensurePublicDataLoaded({ notifyOnError: true }).catch(() => {});
   } else {
