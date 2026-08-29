@@ -3144,7 +3144,6 @@ function firstPhotosetModalImagesHtml() {
   const images = [
     ["./assets/paywall/lilac.jpg?v=20260624b", "Девушка с сиренью"],
     ["./assets/paywall/mirror-flowers.jpg?v=20260624b", "Портрет в зеркале среди цветов"],
-    ["./assets/paywall/red-dress.jpg?v=20260624b", "Портрет в красном платье"],
     ["./assets/paywall/man-field.jpg?v=20260624b", "Мужской портрет в поле"],
     ["./assets/paywall/couple-mirror.jpg?v=20260624b", "Пара в зеркале"],
   ];
