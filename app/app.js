@@ -53,6 +53,10 @@ const TOPUP_DISPLAY_TITLES = Object.freeze({
   large: "Максимум",
 });
 const FIRST_PHOTOSET_TOPUP_CODE = "first_small_bonus";
+const FIRST_PHOTOSET_DOWNSELL_TOPUP_CODE = "first_photoset_329_downsell";
+const FIRST_PHOTOSET_RESULT_MODAL_DELAY_MS = 4000;
+const FIRST_PHOTOSET_RESULT_MODAL_VISIBILITY_RATIO = 0.6;
+const ADMIN_FIRST_PHOTOSET_MODAL_TEST_ENABLED = true;
 
 const IMAGE_MODEL_LABELS = {
   "gemini-2.5-flash-image": "Nano Banana",
@@ -443,6 +447,11 @@ const state = {
   trackedResultJobIds: new Set(),
   trackedSuccessfulGenerationJobIds: new Set(),
   trackedFirstPhotosetOfferViews: new Set(),
+  trackedFirstPhotosetModalJobIds: new Set(),
+  firstPhotosetModalPendingJobId: "",
+  firstPhotosetModalTimer: null,
+  firstPhotosetModalObserver: null,
+  firstPhotosetModalMode: "",
 };
 
 let tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
@@ -3022,6 +3031,280 @@ function openFirstPhotosetPaywall() {
   });
 }
 
+function firstPhotosetModalTestEnabled() {
+  return Boolean(ADMIN_FIRST_PHOTOSET_MODAL_TEST_ENABLED && state.me?.is_admin);
+}
+
+function firstPhotosetModalEligibleForJob(job) {
+  const jobId = String(job?.id || "").trim();
+  if (!firstPhotosetModalTestEnabled() || !hasActiveSession() || !jobId) {
+    return false;
+  }
+  if (state.trackedFirstPhotosetModalJobIds.has(jobId)) {
+    return false;
+  }
+  return String(job?.status || "").toLowerCase() === "done" && Boolean(job?.result_image_url);
+}
+
+function clearFirstPhotosetModalSchedule() {
+  if (state.firstPhotosetModalTimer) {
+    window.clearTimeout(state.firstPhotosetModalTimer);
+    state.firstPhotosetModalTimer = null;
+  }
+  if (state.firstPhotosetModalObserver) {
+    state.firstPhotosetModalObserver.disconnect();
+    state.firstPhotosetModalObserver = null;
+  }
+  state.firstPhotosetModalPendingJobId = "";
+}
+
+function activeResultVisibleEnough() {
+  if (!activeResult || typeof activeResult.getBoundingClientRect !== "function") {
+    return true;
+  }
+  const rect = activeResult.getBoundingClientRect();
+  const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
+  const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+  if (rect.width <= 0 || rect.height <= 0 || viewportWidth <= 0 || viewportHeight <= 0) {
+    return false;
+  }
+  const visibleWidth = Math.max(0, Math.min(rect.right, viewportWidth) - Math.max(rect.left, 0));
+  const visibleHeight = Math.max(0, Math.min(rect.bottom, viewportHeight) - Math.max(rect.top, 0));
+  const visibleRatio = (visibleWidth * visibleHeight) / (rect.width * rect.height);
+  return visibleRatio >= FIRST_PHOTOSET_RESULT_MODAL_VISIBILITY_RATIO;
+}
+
+function armFirstPhotosetModalTimer(jobId) {
+  if (state.firstPhotosetModalTimer || state.trackedFirstPhotosetModalJobIds.has(jobId)) {
+    return;
+  }
+  state.firstPhotosetModalTimer = window.setTimeout(() => {
+    state.firstPhotosetModalTimer = null;
+    if (
+      state.firstPhotosetModalPendingJobId !== jobId ||
+      state.currentScreen !== "studio" ||
+      !activeResultVisibleEnough()
+    ) {
+      return;
+    }
+    openFirstPhotosetResultModal(jobId);
+  }, FIRST_PHOTOSET_RESULT_MODAL_DELAY_MS);
+}
+
+function scheduleFirstPhotosetResultModal(job) {
+  clearFirstPhotosetModalSchedule();
+  if (!firstPhotosetModalEligibleForJob(job)) {
+    return;
+  }
+  const jobId = String(job.id || "").trim();
+  state.firstPhotosetModalPendingJobId = jobId;
+
+  if (typeof IntersectionObserver !== "function" || !activeResult) {
+    armFirstPhotosetModalTimer(jobId);
+    return;
+  }
+
+  state.firstPhotosetModalObserver = new IntersectionObserver(
+    (entries) => {
+      const entry = entries.find((item) => item.target === activeResult);
+      const isVisible = Boolean(
+        entry &&
+          entry.isIntersecting &&
+          entry.intersectionRatio >= FIRST_PHOTOSET_RESULT_MODAL_VISIBILITY_RATIO,
+      );
+      if (isVisible) {
+        armFirstPhotosetModalTimer(jobId);
+        return;
+      }
+      if (state.firstPhotosetModalTimer) {
+        window.clearTimeout(state.firstPhotosetModalTimer);
+        state.firstPhotosetModalTimer = null;
+      }
+    },
+    { threshold: [0, FIRST_PHOTOSET_RESULT_MODAL_VISIBILITY_RATIO, 1] },
+  );
+  state.firstPhotosetModalObserver.observe(activeResult);
+}
+
+function ensureFirstPhotosetModalLayer() {
+  let layer = document.getElementById("firstPhotosetModalLayer");
+  if (layer) {
+    return layer;
+  }
+  layer = document.createElement("div");
+  layer.id = "firstPhotosetModalLayer";
+  layer.className = "first-photoset-modal-layer";
+  layer.setAttribute("aria-live", "polite");
+  document.body.appendChild(layer);
+  layer.addEventListener("click", handleFirstPhotosetModalClick);
+  return layer;
+}
+
+function firstPhotosetModalImagesHtml() {
+  const images = [
+    ["./assets/paywall/lilac.jpg?v=20260624b", "Девушка с сиренью"],
+    ["./assets/paywall/mirror-flowers.jpg?v=20260624b", "Портрет в зеркале среди цветов"],
+    ["./assets/paywall/red-dress.jpg?v=20260624b", "Портрет в красном платье"],
+    ["./assets/paywall/man-field.jpg?v=20260624b", "Мужской портрет в поле"],
+    ["./assets/paywall/couple-mirror.jpg?v=20260624b", "Пара в зеркале"],
+  ];
+  return images
+    .map(([src, alt], index) => (
+      `<img class="first-photoset-modal-image first-photoset-modal-image-${index + 1}" src="${escapeHtml(src)}" alt="${escapeHtml(alt)}" decoding="async" />`
+    ))
+    .join("");
+}
+
+function firstPhotosetPrimaryModalHtml() {
+  return `
+    <article class="first-photoset-modal-card" role="dialog" aria-modal="true" aria-label="Первый фотосет">
+      <button class="first-photoset-modal-close" type="button" data-first-photoset-action="downsell" aria-label="Закрыть">
+        <i data-lucide="x"></i>
+      </button>
+      <div class="first-photoset-modal-copy">
+        <span class="first-photoset-modal-kicker">Первый фотосет</span>
+        <h2>27 фото <span>за 399 ₽</span></h2>
+        <p>Получилось хорошо. Можно собрать полный фотосет из 27 кадров. Для первой покупки добавим 5 фото бонусом.</p>
+        <div class="first-photoset-modal-benefits">
+          <span>кредиты не сгорают</span>
+          <span>без подписки</span>
+          <span>оплата ЮKassa</span>
+        </div>
+      </div>
+      <div class="first-photoset-modal-gallery" aria-hidden="true">
+        ${firstPhotosetModalImagesHtml()}
+      </div>
+      <div class="first-photoset-modal-actions">
+        <button class="primary-action" type="button" data-first-photoset-action="buy399">Получить 27 фото за 399 ₽</button>
+        <button class="soft-btn" type="button" data-first-photoset-action="downsell">Не сейчас</button>
+      </div>
+    </article>
+  `;
+}
+
+function firstPhotosetDownsellModalHtml() {
+  return `
+    <article class="first-photoset-modal-card first-photoset-modal-card-compact" role="dialog" aria-modal="true" aria-label="Разовый вариант">
+      <button class="first-photoset-modal-close" type="button" data-first-photoset-action="close329" aria-label="Закрыть">
+        <i data-lucide="x"></i>
+      </button>
+      <div class="first-photoset-modal-copy">
+        <span class="first-photoset-modal-kicker">Разовый вариант</span>
+        <h2>27 фото <span>за 329 ₽</span></h2>
+        <p>Окей, начнем мягче: 27 кадров за 329 ₽. Предложение только для первой покупки.</p>
+      </div>
+      <div class="first-photoset-downsell-price">
+        <div>
+          <strong>329 ₽</strong>
+          <small>270 кредитов · 27 фото</small>
+        </div>
+        <span>-70 ₽</span>
+      </div>
+      <div class="first-photoset-modal-benefits">
+        <span>один раз</span>
+        <span>кредиты не сгорают</span>
+        <span>без подписки</span>
+      </div>
+      <div class="first-photoset-modal-actions">
+        <button class="primary-action" type="button" data-first-photoset-action="buy329">Забрать за 329 ₽</button>
+        <button class="soft-btn" type="button" data-first-photoset-action="close329">Не сейчас</button>
+      </div>
+    </article>
+  `;
+}
+
+function renderFirstPhotosetModal(html, mode) {
+  const layer = ensureFirstPhotosetModalLayer();
+  state.firstPhotosetModalMode = mode;
+  layer.innerHTML = html;
+  layer.classList.add("is-open");
+  window.requestAnimationFrame(() => {
+    layer.classList.add("is-visible");
+  });
+  document.documentElement.classList.add("first-photoset-modal-open");
+  document.body.classList.add("first-photoset-modal-open");
+  refreshIcons();
+}
+
+function closeFirstPhotosetModal(eventName = "") {
+  const layer = document.getElementById("firstPhotosetModalLayer");
+  if (!layer) {
+    return;
+  }
+  if (eventName) {
+    trackProductEvent(eventName, {
+      source: "admin_modal_after_result",
+      package_code: state.firstPhotosetModalMode === "downsell"
+        ? FIRST_PHOTOSET_DOWNSELL_TOPUP_CODE
+        : FIRST_PHOTOSET_TOPUP_CODE,
+    });
+  }
+  state.firstPhotosetModalMode = "";
+  layer.classList.remove("is-visible");
+  document.documentElement.classList.remove("first-photoset-modal-open");
+  document.body.classList.remove("first-photoset-modal-open");
+  window.setTimeout(() => {
+    if (!layer.classList.contains("is-visible")) {
+      layer.classList.remove("is-open");
+      layer.innerHTML = "";
+    }
+  }, 180);
+}
+
+function openFirstPhotosetResultModal(jobId) {
+  if (state.trackedFirstPhotosetModalJobIds.has(jobId)) {
+    return;
+  }
+  clearFirstPhotosetModalSchedule();
+  state.trackedFirstPhotosetModalJobIds.add(jobId);
+  renderFirstPhotosetModal(firstPhotosetPrimaryModalHtml(), "primary");
+  trackProductEvent("first_photoset_offer_viewed", {
+    source: "admin_modal_after_result",
+    package_code: FIRST_PHOTOSET_TOPUP_CODE,
+  });
+}
+
+function showFirstPhotosetDownsellModal() {
+  trackProductEvent("first_photoset_offer_dismissed", {
+    source: "admin_modal_after_result",
+    package_code: FIRST_PHOTOSET_TOPUP_CODE,
+  });
+  const layer = ensureFirstPhotosetModalLayer();
+  layer.classList.remove("is-visible");
+  window.setTimeout(() => {
+    renderFirstPhotosetModal(firstPhotosetDownsellModalHtml(), "downsell");
+    trackProductEvent("first_photoset_downsell_viewed", {
+      source: "admin_modal_after_result",
+      package_code: FIRST_PHOTOSET_DOWNSELL_TOPUP_CODE,
+    });
+  }, 160);
+}
+
+function handleFirstPhotosetModalClick(event) {
+  const layer = document.getElementById("firstPhotosetModalLayer");
+  const actionButton = event.target.closest("[data-first-photoset-action]");
+  const action = actionButton ? actionButton.dataset.firstPhotosetAction : "";
+  if (!action && event.target !== layer) {
+    return;
+  }
+
+  if (action === "downsell" || (!action && state.firstPhotosetModalMode === "primary")) {
+    showFirstPhotosetDownsellModal();
+    return;
+  }
+  if (action === "close329" || (!action && state.firstPhotosetModalMode === "downsell")) {
+    closeFirstPhotosetModal("first_photoset_downsell_dismissed");
+    return;
+  }
+  if (action === "buy399" || action === "buy329") {
+    const code = action === "buy329" ? FIRST_PHOTOSET_DOWNSELL_TOPUP_CODE : FIRST_PHOTOSET_TOPUP_CODE;
+    if (actionButton) {
+      actionButton.disabled = true;
+    }
+    buyPackage(code).finally(() => closeFirstPhotosetModal());
+  }
+}
+
 function normalizeReferralLink(raw) {
   const value = String(raw || "").trim();
   if (!value) {
@@ -3222,6 +3505,10 @@ function switchScreen(nextScreen) {
     return;
   }
   closeTemplateModal();
+  if (target !== "studio") {
+    clearFirstPhotosetModalSchedule();
+    closeFirstPhotosetModal();
+  }
   state.currentScreen = target;
   if (target === "feed") {
     trackProductEvent("feed_viewed", { screen: "feed" });
@@ -8543,6 +8830,7 @@ function renderActiveResultSubmitting(cost) {
 }
 
 function renderActiveResultLoading(job) {
+  clearFirstPhotosetModalSchedule();
   const status = String(job?.status || "").toLowerCase();
   const isQueued = status === "queued";
   activeResult.className = "active-result active-result-loading empty-result";
@@ -8620,6 +8908,7 @@ async function renderActiveImage(job, renderToken) {
       });
     }
     renderFirstPhotosetResultOffer();
+    scheduleFirstPhotosetResultModal(job);
   } catch (error) {
     if (renderToken !== state.activeImageRenderToken) {
       return;
@@ -8699,6 +8988,7 @@ function renderActiveJob(job) {
     return;
   }
   state.activeImageRenderToken += 1;
+  clearFirstPhotosetModalSchedule();
   if (normalizedStatus === "failed") {
     renderActiveResultState({
       variant: "error",
