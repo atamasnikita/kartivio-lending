@@ -54,9 +54,10 @@ const TOPUP_DISPLAY_TITLES = Object.freeze({
 });
 const FIRST_PHOTOSET_TOPUP_CODE = "first_small_bonus";
 const FIRST_PHOTOSET_DOWNSELL_TOPUP_CODE = "first_photoset_329_downsell";
-const FIRST_PHOTOSET_RESULT_MODAL_DELAY_MS = 4000;
-const FIRST_PHOTOSET_RESULT_MODAL_VISIBILITY_RATIO = 0.6;
-const ADMIN_FIRST_PHOTOSET_MODAL_TEST_ENABLED = true;
+const FIRST_PHOTOSET_SHEET_DELAY_MS = 9000;
+const FIRST_PHOTOSET_SHEET_RESCHEDULE_MS = 1400;
+const FIRST_PHOTOSET_SHEET_TRANSITION_MS = 220;
+const ADMIN_FIRST_PHOTOSET_SHEET_TEST_ENABLED = true;
 
 const IMAGE_MODEL_LABELS = {
   "gemini-2.5-flash-image": "Nano Banana",
@@ -447,11 +448,12 @@ const state = {
   trackedResultJobIds: new Set(),
   trackedSuccessfulGenerationJobIds: new Set(),
   trackedFirstPhotosetOfferViews: new Set(),
-  trackedFirstPhotosetModalJobIds: new Set(),
-  firstPhotosetModalPendingJobId: "",
-  firstPhotosetModalTimer: null,
-  firstPhotosetModalObserver: null,
-  firstPhotosetModalMode: "",
+  firstPhotosetSheetTimer: null,
+  firstPhotosetSheetTransitionTimer: null,
+  firstPhotosetSheetFrame: null,
+  firstPhotosetSheetMode: "",
+  firstPhotosetSheetSource: "",
+  firstPhotosetSheetSeenThisSession: false,
 };
 
 let tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
@@ -1467,6 +1469,12 @@ function setAuthGateVisible(visible) {
   if (appShell) {
     appShell.classList.toggle("is-hidden", visible);
   }
+  if (visible) {
+    clearFirstPhotosetSheetSchedule();
+    closeFirstPhotosetSheet();
+  } else {
+    scheduleFirstPhotosetSessionSheet({ delayMs: FIRST_PHOTOSET_SHEET_RESCHEDULE_MS, source: "admin_session_resume" });
+  }
   if (visible && wasHidden) {
     trackDiagnosticEvent("auth_gate_shown", { stage: "set_visible" });
   }
@@ -1480,6 +1488,7 @@ function setBootPending(pending) {
   bootSplash.classList.toggle("is-hidden", !pending);
   if (!pending) {
     scheduleDeferredStartup();
+    scheduleFirstPhotosetSessionSheet();
   }
 }
 
@@ -3031,268 +3040,241 @@ function openFirstPhotosetPaywall() {
   });
 }
 
-function firstPhotosetModalTestEnabled() {
-  return Boolean(ADMIN_FIRST_PHOTOSET_MODAL_TEST_ENABLED && state.me?.is_admin);
+function firstPhotosetSheetTestEnabled() {
+  return Boolean(ADMIN_FIRST_PHOTOSET_SHEET_TEST_ENABLED && state.me?.is_admin && hasActiveSession());
 }
 
-function firstPhotosetModalEligibleForJob(job) {
-  const jobId = String(job?.id || "").trim();
-  if (!firstPhotosetModalTestEnabled() || !hasActiveSession() || !jobId) {
-    return false;
-  }
-  if (state.trackedFirstPhotosetModalJobIds.has(jobId)) {
-    return false;
-  }
-  return String(job?.status || "").toLowerCase() === "done" && Boolean(job?.result_image_url);
+function firstPhotosetSheetAllowedScreen() {
+  return ["feed", "history", "studio", "profile"].includes(state.currentScreen);
 }
 
-function clearFirstPhotosetModalSchedule() {
-  if (state.firstPhotosetModalTimer) {
-    window.clearTimeout(state.firstPhotosetModalTimer);
-    state.firstPhotosetModalTimer = null;
-  }
-  if (state.firstPhotosetModalObserver) {
-    state.firstPhotosetModalObserver.disconnect();
-    state.firstPhotosetModalObserver = null;
-  }
-  state.firstPhotosetModalPendingJobId = "";
+function firstPhotosetSheetOpen() {
+  const layer = document.getElementById("firstPhotosetSheetLayer");
+  return Boolean(layer && layer.classList.contains("is-open"));
 }
 
-function activeResultVisibleEnough() {
-  if (!activeResult || typeof activeResult.getBoundingClientRect !== "function") {
-    return true;
-  }
-  const rect = activeResult.getBoundingClientRect();
-  const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
-  const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
-  if (rect.width <= 0 || rect.height <= 0 || viewportWidth <= 0 || viewportHeight <= 0) {
-    return false;
-  }
-  const visibleWidth = Math.max(0, Math.min(rect.right, viewportWidth) - Math.max(rect.left, 0));
-  const visibleHeight = Math.max(0, Math.min(rect.bottom, viewportHeight) - Math.max(rect.top, 0));
-  const visibleRatio = (visibleWidth * visibleHeight) / (rect.width * rect.height);
-  return visibleRatio >= FIRST_PHOTOSET_RESULT_MODAL_VISIBILITY_RATIO;
+function blockingOverlayActiveForFirstPhotosetSheet() {
+  const authVisible = Boolean(authGate && !authGate.classList.contains("is-hidden"));
+  const bootVisible = Boolean(bootSplash && !bootSplash.classList.contains("is-hidden"));
+  const templateVisible = Boolean(templateModal && !templateModal.classList.contains("is-hidden"));
+  return Boolean(authVisible || bootVisible || templateVisible || state.checkoutPendingCode);
 }
 
-function armFirstPhotosetModalTimer(jobId) {
-  if (state.firstPhotosetModalTimer || state.trackedFirstPhotosetModalJobIds.has(jobId)) {
+function firstPhotosetSheetBlockReason() {
+  if (!firstPhotosetSheetTestEnabled() || state.firstPhotosetSheetSeenThisSession || firstPhotosetSheetOpen()) {
+    return "disabled";
+  }
+  if (!firstPhotosetSheetAllowedScreen()) {
+    return "screen";
+  }
+  if (blockingOverlayActiveForFirstPhotosetSheet()) {
+    return "busy";
+  }
+  return "";
+}
+
+function clearFirstPhotosetSheetSchedule() {
+  if (state.firstPhotosetSheetTimer) {
+    window.clearTimeout(state.firstPhotosetSheetTimer);
+    state.firstPhotosetSheetTimer = null;
+  }
+}
+
+function scheduleFirstPhotosetSessionSheet({ delayMs = FIRST_PHOTOSET_SHEET_DELAY_MS, source = "admin_session" } = {}) {
+  if (state.firstPhotosetSheetTimer || state.firstPhotosetSheetMode) {
     return;
   }
-  state.firstPhotosetModalTimer = window.setTimeout(() => {
-    state.firstPhotosetModalTimer = null;
-    if (
-      state.firstPhotosetModalPendingJobId !== jobId ||
-      state.currentScreen !== "studio" ||
-      !activeResultVisibleEnough()
-    ) {
+  const blockReason = firstPhotosetSheetBlockReason();
+  if (blockReason === "disabled" || blockReason === "screen") {
+    return;
+  }
+  state.firstPhotosetSheetSource = source;
+  state.firstPhotosetSheetTimer = window.setTimeout(() => {
+    state.firstPhotosetSheetTimer = null;
+    const nextBlockReason = firstPhotosetSheetBlockReason();
+    if (!nextBlockReason) {
+      openFirstPhotosetSheet();
       return;
     }
-    openFirstPhotosetResultModal(jobId);
-  }, FIRST_PHOTOSET_RESULT_MODAL_DELAY_MS);
+    if (nextBlockReason === "busy") {
+      scheduleFirstPhotosetSessionSheet({
+        delayMs: FIRST_PHOTOSET_SHEET_RESCHEDULE_MS,
+        source: "admin_session_resume",
+      });
+    }
+  }, delayMs);
 }
 
-function scheduleFirstPhotosetResultModal(job) {
-  clearFirstPhotosetModalSchedule();
-  if (!firstPhotosetModalEligibleForJob(job)) {
-    return;
-  }
-  const jobId = String(job.id || "").trim();
-  state.firstPhotosetModalPendingJobId = jobId;
-
-  if (typeof IntersectionObserver !== "function" || !activeResult) {
-    armFirstPhotosetModalTimer(jobId);
-    return;
-  }
-
-  state.firstPhotosetModalObserver = new IntersectionObserver(
-    (entries) => {
-      const entry = entries.find((item) => item.target === activeResult);
-      const isVisible = Boolean(
-        entry &&
-          entry.isIntersecting &&
-          entry.intersectionRatio >= FIRST_PHOTOSET_RESULT_MODAL_VISIBILITY_RATIO,
-      );
-      if (isVisible) {
-        armFirstPhotosetModalTimer(jobId);
-        return;
-      }
-      if (state.firstPhotosetModalTimer) {
-        window.clearTimeout(state.firstPhotosetModalTimer);
-        state.firstPhotosetModalTimer = null;
-      }
-    },
-    { threshold: [0, FIRST_PHOTOSET_RESULT_MODAL_VISIBILITY_RATIO, 1] },
-  );
-  state.firstPhotosetModalObserver.observe(activeResult);
-}
-
-function ensureFirstPhotosetModalLayer() {
-  let layer = document.getElementById("firstPhotosetModalLayer");
+function ensureFirstPhotosetSheetLayer() {
+  let layer = document.getElementById("firstPhotosetSheetLayer");
   if (layer) {
     return layer;
   }
   layer = document.createElement("div");
-  layer.id = "firstPhotosetModalLayer";
-  layer.className = "first-photoset-modal-layer";
+  layer.id = "firstPhotosetSheetLayer";
+  layer.className = "first-photoset-sheet-layer";
   layer.setAttribute("aria-live", "polite");
   document.body.appendChild(layer);
-  layer.addEventListener("click", handleFirstPhotosetModalClick);
+  layer.addEventListener("click", handleFirstPhotosetSheetClick);
   return layer;
 }
 
-function firstPhotosetModalImagesHtml() {
-  const images = [
-    ["./assets/paywall/lilac.jpg?v=20260624b", "Девушка с сиренью"],
-    ["./assets/paywall/mirror-flowers.jpg?v=20260624b", "Портрет в зеркале среди цветов"],
-    ["./assets/paywall/man-field.jpg?v=20260624b", "Мужской портрет в поле"],
-    ["./assets/paywall/couple-mirror.jpg?v=20260624b", "Пара в зеркале"],
-  ];
-  return images
-    .map(([src, alt], index) => (
-      `<img class="first-photoset-modal-image first-photoset-modal-image-${index + 1}" src="${escapeHtml(src)}" alt="${escapeHtml(alt)}" decoding="async" />`
-    ))
-    .join("");
+function firstPhotosetSheetEventProperties(packageCode) {
+  return {
+    source: state.firstPhotosetSheetSource || "admin_session",
+    screen: state.currentScreen,
+    package_code: packageCode,
+  };
 }
 
-function firstPhotosetPrimaryModalHtml() {
+function firstPhotosetPrimarySheetHtml() {
   return `
-    <article class="first-photoset-modal-card" role="dialog" aria-modal="true" aria-label="Первый фотосет">
-      <button class="first-photoset-modal-close" type="button" data-first-photoset-action="downsell" aria-label="Закрыть">
+    <article class="first-photoset-sheet-card" role="dialog" aria-modal="false" aria-label="Первый фотосет">
+      <button class="first-photoset-sheet-close" type="button" data-first-photoset-sheet-action="downsell" aria-label="Закрыть">
         <i data-lucide="x"></i>
       </button>
-      <div class="first-photoset-modal-copy">
-        <span class="first-photoset-modal-kicker">Первый фотосет</span>
-        <h2>27 фото <span>за 399 ₽</span></h2>
-        <p>Получилось хорошо. Можно собрать полный фотосет из 27 кадров. Для первой покупки добавим 5 фото бонусом.</p>
-        <div class="first-photoset-modal-benefits">
-          <span>кредиты не сгорают</span>
-          <span>без подписки</span>
-          <span>оплата ЮKassa</span>
-        </div>
+      <div class="first-photoset-sheet-icon" aria-hidden="true">
+        <i data-lucide="sparkles"></i>
       </div>
-      <div class="first-photoset-modal-gallery" aria-hidden="true">
-        ${firstPhotosetModalImagesHtml()}
+      <div class="first-photoset-sheet-copy">
+        <span>Первый фотосет</span>
+        <strong>Получилось хорошо</strong>
+        <p>Можно собрать полный фотосет из 27 кадров. Для первой покупки добавим 5 фото бонусом.</p>
       </div>
-      <div class="first-photoset-modal-actions">
-        <button class="primary-action" type="button" data-first-photoset-action="buy399">Получить 27 фото за 399 ₽</button>
-        <button class="soft-btn" type="button" data-first-photoset-action="downsell">Не сейчас</button>
+      <div class="first-photoset-sheet-actions">
+        <button class="primary-action" type="button" data-first-photoset-sheet-action="buy399">Собрать за 399 ₽</button>
+        <button class="soft-btn" type="button" data-first-photoset-sheet-action="downsell">Не сейчас</button>
       </div>
     </article>
   `;
 }
 
-function firstPhotosetDownsellModalHtml() {
+function firstPhotosetDownsellSheetHtml() {
   return `
-    <article class="first-photoset-modal-card first-photoset-modal-card-compact" role="dialog" aria-modal="true" aria-label="Разовый вариант">
-      <button class="first-photoset-modal-close" type="button" data-first-photoset-action="close329" aria-label="Закрыть">
+    <article class="first-photoset-sheet-card first-photoset-sheet-card-downsell" role="dialog" aria-modal="false" aria-label="Второй оффер">
+      <button class="first-photoset-sheet-close" type="button" data-first-photoset-sheet-action="close329" aria-label="Закрыть">
         <i data-lucide="x"></i>
       </button>
-      <div class="first-photoset-modal-copy">
-        <span class="first-photoset-modal-kicker">Разовый вариант</span>
-        <h2>27 фото <span>за 329 ₽</span></h2>
-        <p>Окей, начнем мягче: 27 кадров за 329 ₽. Предложение только для первой покупки.</p>
+      <div class="first-photoset-sheet-icon" aria-hidden="true">
+        <i data-lucide="badge-percent"></i>
       </div>
-      <div class="first-photoset-downsell-price">
-        <div>
-          <strong>329 ₽</strong>
-          <small>270 кредитов · 27 фото</small>
-        </div>
-        <span>-70 ₽</span>
+      <div class="first-photoset-sheet-copy">
+        <span>Только для первой покупки</span>
+        <strong>Окей, начнем мягче</strong>
+        <p>27 кадров за 329 ₽. Предложение только для первой покупки.</p>
       </div>
-      <div class="first-photoset-modal-benefits">
-        <span>один раз</span>
-        <span>кредиты не сгорают</span>
-        <span>без подписки</span>
-      </div>
-      <div class="first-photoset-modal-actions">
-        <button class="primary-action" type="button" data-first-photoset-action="buy329">Забрать за 329 ₽</button>
-        <button class="soft-btn" type="button" data-first-photoset-action="close329">Не сейчас</button>
+      <div class="first-photoset-sheet-actions">
+        <button class="primary-action" type="button" data-first-photoset-sheet-action="buy329">Получить за 329 ₽</button>
+        <button class="soft-btn" type="button" data-first-photoset-sheet-action="close329">Закрыть</button>
       </div>
     </article>
   `;
 }
 
-function renderFirstPhotosetModal(html, mode) {
-  const layer = ensureFirstPhotosetModalLayer();
-  state.firstPhotosetModalMode = mode;
+function renderFirstPhotosetSheet(html, mode) {
+  const layer = ensureFirstPhotosetSheetLayer();
+  if (state.firstPhotosetSheetTransitionTimer) {
+    window.clearTimeout(state.firstPhotosetSheetTransitionTimer);
+    state.firstPhotosetSheetTransitionTimer = null;
+  }
+  if (state.firstPhotosetSheetFrame) {
+    window.cancelAnimationFrame(state.firstPhotosetSheetFrame);
+    state.firstPhotosetSheetFrame = null;
+  }
+  state.firstPhotosetSheetMode = mode;
   layer.innerHTML = html;
   layer.classList.add("is-open");
-  window.requestAnimationFrame(() => {
-    layer.classList.add("is-visible");
+  state.firstPhotosetSheetFrame = window.requestAnimationFrame(() => {
+    if (state.firstPhotosetSheetMode === mode && layer.classList.contains("is-open")) {
+      layer.classList.add("is-visible");
+    }
+    state.firstPhotosetSheetFrame = null;
   });
-  document.documentElement.classList.add("first-photoset-modal-open");
-  document.body.classList.add("first-photoset-modal-open");
   refreshIcons();
 }
 
-function closeFirstPhotosetModal(eventName = "") {
-  const layer = document.getElementById("firstPhotosetModalLayer");
+function closeFirstPhotosetSheet(eventName = "") {
+  const layer = document.getElementById("firstPhotosetSheetLayer");
   if (!layer) {
+    state.firstPhotosetSheetMode = "";
     return;
   }
-  if (eventName) {
-    trackProductEvent(eventName, {
-      source: "admin_modal_after_result",
-      package_code: state.firstPhotosetModalMode === "downsell"
-        ? FIRST_PHOTOSET_DOWNSELL_TOPUP_CODE
-        : FIRST_PHOTOSET_TOPUP_CODE,
-    });
+  const mode = state.firstPhotosetSheetMode;
+  if (state.firstPhotosetSheetFrame) {
+    window.cancelAnimationFrame(state.firstPhotosetSheetFrame);
+    state.firstPhotosetSheetFrame = null;
   }
-  state.firstPhotosetModalMode = "";
+  if (eventName) {
+    trackProductEvent(
+      eventName,
+      firstPhotosetSheetEventProperties(
+        mode === "downsell" ? FIRST_PHOTOSET_DOWNSELL_TOPUP_CODE : FIRST_PHOTOSET_TOPUP_CODE,
+      ),
+    );
+  }
+  state.firstPhotosetSheetMode = "";
   layer.classList.remove("is-visible");
-  document.documentElement.classList.remove("first-photoset-modal-open");
-  document.body.classList.remove("first-photoset-modal-open");
-  window.setTimeout(() => {
+  if (state.firstPhotosetSheetTransitionTimer) {
+    window.clearTimeout(state.firstPhotosetSheetTransitionTimer);
+  }
+  state.firstPhotosetSheetTransitionTimer = window.setTimeout(() => {
     if (!layer.classList.contains("is-visible")) {
       layer.classList.remove("is-open");
       layer.innerHTML = "";
     }
-  }, 180);
+    state.firstPhotosetSheetTransitionTimer = null;
+  }, FIRST_PHOTOSET_SHEET_TRANSITION_MS);
 }
 
-function openFirstPhotosetResultModal(jobId) {
-  if (state.trackedFirstPhotosetModalJobIds.has(jobId)) {
+function openFirstPhotosetSheet() {
+  clearFirstPhotosetSheetSchedule();
+  if (firstPhotosetSheetBlockReason()) {
     return;
   }
-  clearFirstPhotosetModalSchedule();
-  state.trackedFirstPhotosetModalJobIds.add(jobId);
-  renderFirstPhotosetModal(firstPhotosetPrimaryModalHtml(), "primary");
-  trackProductEvent("first_photoset_offer_viewed", {
-    source: "admin_modal_after_result",
-    package_code: FIRST_PHOTOSET_TOPUP_CODE,
-  });
+  state.firstPhotosetSheetSeenThisSession = true;
+  renderFirstPhotosetSheet(firstPhotosetPrimarySheetHtml(), "primary");
+  trackProductEvent(
+    "first_photoset_sheet_viewed",
+    firstPhotosetSheetEventProperties(FIRST_PHOTOSET_TOPUP_CODE),
+  );
 }
 
-function showFirstPhotosetDownsellModal() {
-  trackProductEvent("first_photoset_offer_dismissed", {
-    source: "admin_modal_after_result",
-    package_code: FIRST_PHOTOSET_TOPUP_CODE,
-  });
-  const layer = ensureFirstPhotosetModalLayer();
+function showFirstPhotosetDownsellSheet() {
+  trackProductEvent(
+    "first_photoset_sheet_dismissed",
+    firstPhotosetSheetEventProperties(FIRST_PHOTOSET_TOPUP_CODE),
+  );
+  const layer = ensureFirstPhotosetSheetLayer();
+  if (state.firstPhotosetSheetFrame) {
+    window.cancelAnimationFrame(state.firstPhotosetSheetFrame);
+    state.firstPhotosetSheetFrame = null;
+  }
   layer.classList.remove("is-visible");
-  window.setTimeout(() => {
-    renderFirstPhotosetModal(firstPhotosetDownsellModalHtml(), "downsell");
-    trackProductEvent("first_photoset_downsell_viewed", {
-      source: "admin_modal_after_result",
-      package_code: FIRST_PHOTOSET_DOWNSELL_TOPUP_CODE,
-    });
-  }, 160);
+  if (state.firstPhotosetSheetTransitionTimer) {
+    window.clearTimeout(state.firstPhotosetSheetTransitionTimer);
+  }
+  state.firstPhotosetSheetTransitionTimer = window.setTimeout(() => {
+    renderFirstPhotosetSheet(firstPhotosetDownsellSheetHtml(), "downsell");
+    trackProductEvent(
+      "first_photoset_downsell_sheet_viewed",
+      firstPhotosetSheetEventProperties(FIRST_PHOTOSET_DOWNSELL_TOPUP_CODE),
+    );
+  }, FIRST_PHOTOSET_SHEET_TRANSITION_MS);
 }
 
-function handleFirstPhotosetModalClick(event) {
-  const layer = document.getElementById("firstPhotosetModalLayer");
-  const actionButton = event.target.closest("[data-first-photoset-action]");
-  const action = actionButton ? actionButton.dataset.firstPhotosetAction : "";
-  if (!action && event.target !== layer) {
+function handleFirstPhotosetSheetClick(event) {
+  const actionButton = event.target.closest("[data-first-photoset-sheet-action]");
+  const action = actionButton ? actionButton.dataset.firstPhotosetSheetAction : "";
+  if (!action) {
     return;
   }
 
-  if (action === "downsell" || (!action && state.firstPhotosetModalMode === "primary")) {
-    showFirstPhotosetDownsellModal();
+  if (action === "downsell") {
+    showFirstPhotosetDownsellSheet();
     return;
   }
-  if (action === "close329" || (!action && state.firstPhotosetModalMode === "downsell")) {
-    closeFirstPhotosetModal("first_photoset_downsell_dismissed");
+  if (action === "close329") {
+    closeFirstPhotosetSheet("first_photoset_downsell_sheet_dismissed");
     return;
   }
   if (action === "buy399" || action === "buy329") {
@@ -3300,7 +3282,7 @@ function handleFirstPhotosetModalClick(event) {
     if (actionButton) {
       actionButton.disabled = true;
     }
-    buyPackage(code).finally(() => closeFirstPhotosetModal());
+    buyPackage(code).finally(() => closeFirstPhotosetSheet());
   }
 }
 
@@ -3504,10 +3486,6 @@ function switchScreen(nextScreen) {
     return;
   }
   closeTemplateModal();
-  if (target !== "studio") {
-    clearFirstPhotosetModalSchedule();
-    closeFirstPhotosetModal();
-  }
   state.currentScreen = target;
   if (target === "feed") {
     trackProductEvent("feed_viewed", { screen: "feed" });
@@ -3545,6 +3523,12 @@ function switchScreen(nextScreen) {
     window.requestAnimationFrame(() => maybeAutoLoadMoreTemplates());
   } else if (target === "tokens") {
     loadPaywallGalleryImages();
+  }
+  if (firstPhotosetSheetAllowedScreen()) {
+    scheduleFirstPhotosetSessionSheet({ delayMs: FIRST_PHOTOSET_SHEET_RESCHEDULE_MS, source: "admin_session_screen" });
+  } else {
+    clearFirstPhotosetSheetSchedule();
+    closeFirstPhotosetSheet();
   }
 }
 
@@ -6798,8 +6782,19 @@ function selectedTopupForCode(code) {
   return state.topups.find((item) => String(item?.code || "").trim() === String(code || "").trim()) || null;
 }
 
+function firstPhotosetTopupFallback(code) {
+  const normalizedCode = String(code || "").trim();
+  if (normalizedCode === FIRST_PHOTOSET_TOPUP_CODE) {
+    return { credits: 270, price_rub: 399 };
+  }
+  if (normalizedCode === FIRST_PHOTOSET_DOWNSELL_TOPUP_CODE) {
+    return { credits: 270, price_rub: 329 };
+  }
+  return null;
+}
+
 function trackCheckoutPackageEvent(eventName, code, extra = {}) {
-  const selectedPackage = selectedTopupForCode(code);
+  const selectedPackage = selectedTopupForCode(code) || firstPhotosetTopupFallback(code);
   trackProductEvent(eventName, {
     package_code: code,
     credits: Number(selectedPackage?.credits || 0),
@@ -7595,9 +7590,12 @@ function closeTemplateModal() {
   }
   unlockTemplateModalScroll();
   setTemplateModalNote("");
+  scheduleFirstPhotosetSessionSheet({ delayMs: FIRST_PHOTOSET_SHEET_RESCHEDULE_MS, source: "admin_session_resume" });
 }
 
 function openTemplateModal(item, initialPreviewUrl = "") {
+  clearFirstPhotosetSheetSchedule();
+  closeFirstPhotosetSheet();
   const itemId = String(item?.id || "").trim();
   const cachedItem = state.templates.find((template) => template.id === itemId);
   const modalItem = {
@@ -8829,7 +8827,6 @@ function renderActiveResultSubmitting(cost) {
 }
 
 function renderActiveResultLoading(job) {
-  clearFirstPhotosetModalSchedule();
   const status = String(job?.status || "").toLowerCase();
   const isQueued = status === "queued";
   activeResult.className = "active-result active-result-loading empty-result";
@@ -8907,7 +8904,6 @@ async function renderActiveImage(job, renderToken) {
       });
     }
     renderFirstPhotosetResultOffer();
-    scheduleFirstPhotosetResultModal(job);
   } catch (error) {
     if (renderToken !== state.activeImageRenderToken) {
       return;
@@ -8987,7 +8983,6 @@ function renderActiveJob(job) {
     return;
   }
   state.activeImageRenderToken += 1;
-  clearFirstPhotosetModalSchedule();
   if (normalizedStatus === "failed") {
     renderActiveResultState({
       variant: "error",
