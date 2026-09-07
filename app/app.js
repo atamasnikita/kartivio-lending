@@ -3143,7 +3143,6 @@ function firstPhotosetPrimarySheetHtml() {
       </div>
       <div class="first-photoset-sheet-actions">
         <button class="primary-action" type="button" data-first-photoset-sheet-action="buy399">Собрать за 399 ₽</button>
-        <button class="soft-btn" type="button" data-first-photoset-sheet-action="downsell">Не сейчас</button>
       </div>
     </article>
   `;
@@ -3165,7 +3164,6 @@ function firstPhotosetDownsellSheetHtml() {
       </div>
       <div class="first-photoset-sheet-actions">
         <button class="primary-action" type="button" data-first-photoset-sheet-action="buy329">Получить за 329 ₽</button>
-        <button class="soft-btn" type="button" data-first-photoset-sheet-action="close329">Закрыть</button>
       </div>
     </article>
   `;
