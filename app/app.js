@@ -54,10 +54,14 @@ const TOPUP_DISPLAY_TITLES = Object.freeze({
 });
 const FIRST_PHOTOSET_TOPUP_CODE = "first_small_bonus";
 const FIRST_PHOTOSET_DOWNSELL_TOPUP_CODE = "first_photoset_329_downsell";
-const FIRST_PHOTOSET_SHEET_DELAY_MS = 9000;
+const FIRST_PHOTOSET_SHEET_DELAY_MS = 4000;
 const FIRST_PHOTOSET_SHEET_RESCHEDULE_MS = 1400;
 const FIRST_PHOTOSET_SHEET_TRANSITION_MS = 220;
-const ADMIN_FIRST_PHOTOSET_SHEET_TEST_ENABLED = true;
+const FIRST_PHOTOSET_OFFER_STATUS_NOT_STARTED = "not_started";
+const FIRST_PHOTOSET_OFFER_EVENT_PRIMARY_VIEWED = "primary_viewed";
+const FIRST_PHOTOSET_OFFER_EVENT_PRIMARY_DISMISSED = "primary_dismissed";
+const FIRST_PHOTOSET_OFFER_EVENT_DOWNSELL_VIEWED = "downsell_viewed";
+const FIRST_PHOTOSET_OFFER_EVENT_DOWNSELL_DISMISSED = "downsell_dismissed";
 
 const IMAGE_MODEL_LABELS = {
   "gemini-2.5-flash-image": "Nano Banana",
@@ -454,6 +458,8 @@ const state = {
   firstPhotosetSheetMode: "",
   firstPhotosetSheetSource: "",
   firstPhotosetSheetSeenThisSession: false,
+  firstPhotosetPrimaryDismissPromise: null,
+  firstPhotosetOfferState: null,
 };
 
 let tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
@@ -1473,7 +1479,7 @@ function setAuthGateVisible(visible) {
     clearFirstPhotosetSheetSchedule();
     closeFirstPhotosetSheet();
   } else {
-    scheduleFirstPhotosetSessionSheet({ delayMs: FIRST_PHOTOSET_SHEET_RESCHEDULE_MS, source: "admin_session_resume" });
+    scheduleFirstPhotosetSessionSheet({ source: "session_resume" });
   }
   if (visible && wasHidden) {
     trackDiagnosticEvent("auth_gate_shown", { stage: "set_visible" });
@@ -3040,8 +3046,57 @@ function openFirstPhotosetPaywall() {
   });
 }
 
-function firstPhotosetSheetTestEnabled() {
-  return Boolean(ADMIN_FIRST_PHOTOSET_SHEET_TEST_ENABLED && state.me?.is_admin && hasActiveSession());
+function normalizeFirstPhotosetOfferState(payload) {
+  const status = String(payload?.status || FIRST_PHOTOSET_OFFER_STATUS_NOT_STARTED).trim()
+    || FIRST_PHOTOSET_OFFER_STATUS_NOT_STARTED;
+  const nextSheetRaw = String(payload?.next_sheet || "").trim().toLowerCase();
+  const nextSheet = nextSheetRaw === "primary" || nextSheetRaw === "downsell" ? nextSheetRaw : "";
+  return {
+    status,
+    eligible: Boolean(payload?.eligible),
+    reason: String(payload?.reason || "").trim(),
+    next_sheet: nextSheet,
+  };
+}
+
+function setFirstPhotosetOfferState(payload) {
+  state.firstPhotosetOfferState = payload ? normalizeFirstPhotosetOfferState(payload) : null;
+}
+
+function firstPhotosetSheetEnabled() {
+  return Boolean(
+    hasActiveSession()
+      && !state.me?.is_admin
+      && state.firstPhotosetOfferState
+      && state.firstPhotosetOfferState.eligible
+      && state.firstPhotosetOfferState.next_sheet,
+  );
+}
+
+async function refreshFirstPhotosetOfferState() {
+  if (!hasActiveSession()) {
+    setFirstPhotosetOfferState(null);
+    return null;
+  }
+  const payload = await authorizedGetWithRetry("/v1/first-photoset-offer/state", 1);
+  setFirstPhotosetOfferState(payload);
+  return state.firstPhotosetOfferState;
+}
+
+async function recordFirstPhotosetOfferStateEvent(eventName) {
+  if (!hasActiveSession()) {
+    return null;
+  }
+  const payload = await authorizedFetch("/v1/first-photoset-offer/events", {
+    method: "POST",
+    body: {
+      event: eventName,
+      source: state.firstPhotosetSheetSource || "session",
+      screen: state.currentScreen || "",
+    },
+  });
+  setFirstPhotosetOfferState(payload);
+  return state.firstPhotosetOfferState;
 }
 
 function firstPhotosetSheetAllowedScreen() {
@@ -3061,7 +3116,7 @@ function blockingOverlayActiveForFirstPhotosetSheet() {
 }
 
 function firstPhotosetSheetBlockReason() {
-  if (!firstPhotosetSheetTestEnabled() || state.firstPhotosetSheetSeenThisSession || firstPhotosetSheetOpen()) {
+  if (!firstPhotosetSheetEnabled() || state.firstPhotosetSheetSeenThisSession || firstPhotosetSheetOpen()) {
     return "disabled";
   }
   if (!firstPhotosetSheetAllowedScreen()) {
@@ -3080,7 +3135,7 @@ function clearFirstPhotosetSheetSchedule() {
   }
 }
 
-function scheduleFirstPhotosetSessionSheet({ delayMs = FIRST_PHOTOSET_SHEET_DELAY_MS, source = "admin_session" } = {}) {
+function scheduleFirstPhotosetSessionSheet({ delayMs = FIRST_PHOTOSET_SHEET_DELAY_MS, source = "session" } = {}) {
   if (state.firstPhotosetSheetTimer || state.firstPhotosetSheetMode) {
     return;
   }
@@ -3093,13 +3148,15 @@ function scheduleFirstPhotosetSessionSheet({ delayMs = FIRST_PHOTOSET_SHEET_DELA
     state.firstPhotosetSheetTimer = null;
     const nextBlockReason = firstPhotosetSheetBlockReason();
     if (!nextBlockReason) {
-      openFirstPhotosetSheet();
+      openFirstPhotosetSheet().catch((error) => {
+        console.warn("First photoset sheet open failed", error);
+      });
       return;
     }
     if (nextBlockReason === "busy") {
       scheduleFirstPhotosetSessionSheet({
         delayMs: FIRST_PHOTOSET_SHEET_RESCHEDULE_MS,
-        source: "admin_session_resume",
+        source: "busy_resume",
       });
     }
   }, delayMs);
@@ -3121,7 +3178,7 @@ function ensureFirstPhotosetSheetLayer() {
 
 function firstPhotosetSheetEventProperties(packageCode) {
   return {
-    source: state.firstPhotosetSheetSource || "admin_session",
+    source: state.firstPhotosetSheetSource || "session",
     screen: state.currentScreen,
     package_code: packageCode,
   };
@@ -3224,17 +3281,32 @@ function closeFirstPhotosetSheet(eventName = "") {
   }, FIRST_PHOTOSET_SHEET_TRANSITION_MS);
 }
 
-function openFirstPhotosetSheet() {
+async function openFirstPhotosetSheet() {
   clearFirstPhotosetSheetSchedule();
   if (firstPhotosetSheetBlockReason()) {
     return;
   }
+  const nextSheet = state.firstPhotosetOfferState?.next_sheet === "downsell" ? "downsell" : "primary";
   state.firstPhotosetSheetSeenThisSession = true;
+  if (nextSheet === "downsell") {
+    renderFirstPhotosetSheet(firstPhotosetDownsellSheetHtml(), "downsell");
+    trackProductEvent(
+      "first_photoset_downsell_sheet_viewed",
+      firstPhotosetSheetEventProperties(FIRST_PHOTOSET_DOWNSELL_TOPUP_CODE),
+    );
+    recordFirstPhotosetOfferStateEvent(FIRST_PHOTOSET_OFFER_EVENT_DOWNSELL_VIEWED).catch((error) => {
+      console.warn("First photoset downsell view state update failed", error);
+    });
+    return;
+  }
   renderFirstPhotosetSheet(firstPhotosetPrimarySheetHtml(), "primary");
   trackProductEvent(
     "first_photoset_sheet_viewed",
     firstPhotosetSheetEventProperties(FIRST_PHOTOSET_TOPUP_CODE),
   );
+  recordFirstPhotosetOfferStateEvent(FIRST_PHOTOSET_OFFER_EVENT_PRIMARY_VIEWED).catch((error) => {
+    console.warn("First photoset primary view state update failed", error);
+  });
 }
 
 function showFirstPhotosetDownsellSheet() {
@@ -3242,6 +3314,22 @@ function showFirstPhotosetDownsellSheet() {
     "first_photoset_sheet_dismissed",
     firstPhotosetSheetEventProperties(FIRST_PHOTOSET_TOPUP_CODE),
   );
+  setFirstPhotosetOfferState({
+    ...(state.firstPhotosetOfferState || {}),
+    status: FIRST_PHOTOSET_OFFER_EVENT_PRIMARY_DISMISSED,
+    eligible: true,
+    next_sheet: "downsell",
+  });
+  state.firstPhotosetPrimaryDismissPromise = recordFirstPhotosetOfferStateEvent(
+    FIRST_PHOTOSET_OFFER_EVENT_PRIMARY_DISMISSED,
+  )
+    .catch((error) => {
+      console.warn("First photoset primary dismiss state update failed", error);
+      return null;
+    })
+    .finally(() => {
+      state.firstPhotosetPrimaryDismissPromise = null;
+    });
   const layer = ensureFirstPhotosetSheetLayer();
   if (state.firstPhotosetSheetFrame) {
     window.cancelAnimationFrame(state.firstPhotosetSheetFrame);
@@ -3257,10 +3345,27 @@ function showFirstPhotosetDownsellSheet() {
       "first_photoset_downsell_sheet_viewed",
       firstPhotosetSheetEventProperties(FIRST_PHOTOSET_DOWNSELL_TOPUP_CODE),
     );
+    recordFirstPhotosetOfferStateEvent(FIRST_PHOTOSET_OFFER_EVENT_DOWNSELL_VIEWED).catch((error) => {
+      console.warn("First photoset downsell view state update failed", error);
+    });
   }, FIRST_PHOTOSET_SHEET_TRANSITION_MS);
 }
 
-function handleFirstPhotosetSheetClick(event) {
+async function ensureFirstPhotosetDownsellStateReady() {
+  if (state.firstPhotosetPrimaryDismissPromise) {
+    await state.firstPhotosetPrimaryDismissPromise;
+  }
+  const status = String(state.firstPhotosetOfferState?.status || "").trim();
+  if (
+    status === FIRST_PHOTOSET_OFFER_EVENT_PRIMARY_DISMISSED
+    || status === FIRST_PHOTOSET_OFFER_EVENT_DOWNSELL_VIEWED
+  ) {
+    return;
+  }
+  await recordFirstPhotosetOfferStateEvent(FIRST_PHOTOSET_OFFER_EVENT_PRIMARY_DISMISSED);
+}
+
+async function handleFirstPhotosetSheetClick(event) {
   const actionButton = event.target.closest("[data-first-photoset-sheet-action]");
   const action = actionButton ? actionButton.dataset.firstPhotosetSheetAction : "";
   if (!action) {
@@ -3272,6 +3377,16 @@ function handleFirstPhotosetSheetClick(event) {
     return;
   }
   if (action === "close329") {
+    setFirstPhotosetOfferState({
+      ...(state.firstPhotosetOfferState || {}),
+      status: FIRST_PHOTOSET_OFFER_EVENT_DOWNSELL_DISMISSED,
+      eligible: false,
+      reason: "offer_dismissed",
+      next_sheet: "",
+    });
+    recordFirstPhotosetOfferStateEvent(FIRST_PHOTOSET_OFFER_EVENT_DOWNSELL_DISMISSED).catch((error) => {
+      console.warn("First photoset downsell dismiss state update failed", error);
+    });
     closeFirstPhotosetSheet("first_photoset_downsell_sheet_dismissed");
     return;
   }
@@ -3280,7 +3395,22 @@ function handleFirstPhotosetSheetClick(event) {
     if (actionButton) {
       actionButton.disabled = true;
     }
-    buyPackage(code).finally(() => closeFirstPhotosetSheet());
+    try {
+      if (action === "buy329") {
+        await ensureFirstPhotosetDownsellStateReady();
+      }
+      await buyPackage(code);
+    } catch (error) {
+      console.warn("First photoset checkout failed", error);
+      trackDiagnosticEvent("checkout_create_failed", {
+        packageCode: code,
+        stage: "first_photoset_sheet",
+        error,
+      });
+      setNote(userFacingErrorMessage(error, "Не удалось открыть оплату."), true);
+    } finally {
+      closeFirstPhotosetSheet();
+    }
   }
 }
 
@@ -3523,7 +3653,7 @@ function switchScreen(nextScreen) {
     loadPaywallGalleryImages();
   }
   if (firstPhotosetSheetAllowedScreen()) {
-    scheduleFirstPhotosetSessionSheet({ delayMs: FIRST_PHOTOSET_SHEET_RESCHEDULE_MS, source: "admin_session_screen" });
+    scheduleFirstPhotosetSessionSheet({ delayMs: FIRST_PHOTOSET_SHEET_RESCHEDULE_MS, source: "screen_change" });
   } else {
     clearFirstPhotosetSheetSchedule();
     closeFirstPhotosetSheet();
@@ -4858,6 +4988,10 @@ async function logoutSession() {
   state.lastAuthProvider = "";
   state.me = null;
   state.referral = null;
+  setFirstPhotosetOfferState(null);
+  state.firstPhotosetSheetSeenThisSession = false;
+  clearFirstPhotosetSheetSchedule();
+  closeFirstPhotosetSheet();
   state.profileReferralExpanded = false;
   state.trackedReferralCardView = false;
   state.telegramLinkToken = "";
@@ -6419,6 +6553,10 @@ function clearAuthSessionState({ persist = true } = {}) {
   state.isCookieSession = false;
   state.lastAuthProvider = "";
   state.telegramWebLoginToken = "";
+  setFirstPhotosetOfferState(null);
+  state.firstPhotosetSheetSeenThisSession = false;
+  clearFirstPhotosetSheetSchedule();
+  closeFirstPhotosetSheet();
   if (persist) {
     saveState();
   }
@@ -7588,7 +7726,7 @@ function closeTemplateModal() {
   }
   unlockTemplateModalScroll();
   setTemplateModalNote("");
-  scheduleFirstPhotosetSessionSheet({ delayMs: FIRST_PHOTOSET_SHEET_RESCHEDULE_MS, source: "admin_session_resume" });
+  scheduleFirstPhotosetSessionSheet({ delayMs: FIRST_PHOTOSET_SHEET_RESCHEDULE_MS, source: "template_modal_closed" });
 }
 
 function openTemplateModal(item, initialPreviewUrl = "") {
@@ -8901,7 +9039,6 @@ async function renderActiveImage(job, renderToken) {
         repeatHistoryJob(job);
       });
     }
-    renderFirstPhotosetResultOffer();
   } catch (error) {
     if (renderToken !== state.activeImageRenderToken) {
       return;
@@ -8918,37 +9055,6 @@ async function renderActiveImage(job, renderToken) {
       },
     });
   }
-}
-
-function renderFirstPhotosetResultOffer() {
-  const previous = activeResult.querySelector(".first-photoset-result-offer");
-  if (previous) {
-    previous.remove();
-  }
-  activeResult.classList.remove("has-first-photoset-offer");
-  if (!firstPhotosetOfferEligible("after_second_success")) {
-    return;
-  }
-
-  const offer = document.createElement("article");
-  offer.className = "first-photoset-result-offer";
-  offer.innerHTML = `
-    <div class="first-photoset-result-copy">
-      <span class="first-photoset-kicker">Первый фотосет</span>
-      <strong>27 фото за 399 ₽</strong>
-      <p>Базовый пакет плюс 5 фото бонусом для первой покупки.</p>
-    </div>
-    <button class="primary-action first-photoset-result-cta" type="button">
-      Получить 27 фото
-    </button>
-  `;
-  const button = offer.querySelector("button");
-  if (button) {
-    button.addEventListener("click", openFirstPhotosetPaywall);
-  }
-  activeResult.appendChild(offer);
-  activeResult.classList.add("has-first-photoset-offer");
-  trackFirstPhotosetOfferViewed("after_second_success");
 }
 
 function renderActiveJob(job) {
@@ -9319,6 +9425,10 @@ async function loadPrivateData({ forceServerCheck = false } = {}) {
     state.linkedProviders = new Set();
     state.me = null;
     state.referral = null;
+    setFirstPhotosetOfferState(null);
+    state.firstPhotosetSheetSeenThisSession = false;
+    clearFirstPhotosetSheetSchedule();
+    closeFirstPhotosetSheet();
     state.walletBalanceCredits = 0;
     userName.textContent = "—";
     userTgId.textContent = "—";
@@ -9339,6 +9449,7 @@ async function loadPrivateData({ forceServerCheck = false } = {}) {
   const walletPromise = authorizedGetWithRetry("/v1/wallet?limit=1", 1);
   let identitiesError = null;
   let referralError = null;
+  let firstPhotosetOfferError = null;
   const identitiesPromise = loadIdentities().catch((error) => {
     identitiesError = error;
     return null;
@@ -9347,7 +9458,16 @@ async function loadPrivateData({ forceServerCheck = false } = {}) {
     referralError = error;
     return null;
   });
-  const [me, wallet, referral] = await Promise.all([mePromise, walletPromise, referralPromise]);
+  const firstPhotosetOfferPromise = refreshFirstPhotosetOfferState().catch((error) => {
+    firstPhotosetOfferError = error;
+    return null;
+  });
+  const [me, wallet, referral] = await Promise.all([
+    mePromise,
+    walletPromise,
+    referralPromise,
+    firstPhotosetOfferPromise,
+  ]);
   await identitiesPromise;
   if (identitiesError) {
     if (isSessionRejectedError(identitiesError)) {
@@ -9358,9 +9478,13 @@ async function loadPrivateData({ forceServerCheck = false } = {}) {
   if (referralError) {
     console.warn("Referral summary load failed", referralError);
   }
+  if (firstPhotosetOfferError) {
+    console.warn("First photoset offer state load failed", firstPhotosetOfferError);
+  }
   state.referral = referral || null;
   state.isCookieSession = Boolean(prefersCookieAuth() && !state.accessToken);
   renderUser(me, wallet);
+  scheduleFirstPhotosetSessionSheet({ source: "session_resume" });
 }
 
 function schedulePrivateDataRetry({ delayMs = 2500 } = {}) {
@@ -9617,7 +9741,13 @@ async function pollActiveJob(jobId) {
     }
     await refreshWalletBalance().catch(() => null);
     if (String(job.status || "").toLowerCase() === "done" && job.result_image_url) {
-      renderFirstPhotosetResultOffer();
+      await refreshFirstPhotosetOfferState().catch((error) => {
+        console.warn("First photoset offer state refresh failed", error);
+      });
+      scheduleFirstPhotosetSessionSheet({
+        delayMs: FIRST_PHOTOSET_SHEET_DELAY_MS,
+        source: "after_second_success",
+      });
     }
     if (state.currentScreen === "history") {
       await loadHistory({ forceServerCheck: true });
