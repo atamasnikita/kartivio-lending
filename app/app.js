@@ -429,6 +429,7 @@ const state = {
   promptSourceValue: "",
   sourceImageFiles: [],
   sourceImagePreviewUrls: [],
+  templatePhotoWarningConfirmedKey: "",
   historyItems: null,
   historyLoadedAt: 0,
   historyLoadPromise: null,
@@ -938,6 +939,10 @@ const templatePromptToggle = document.getElementById("templatePromptToggle");
 const templateCopyPromptButton = document.getElementById("templateCopyPromptButton");
 const templateUseButton = document.getElementById("templateUseButton");
 const templateModalNote = document.getElementById("templateModalNote");
+const templatePhotoWarning = document.getElementById("templatePhotoWarning");
+const templatePhotoWarningClose = document.getElementById("templatePhotoWarningClose");
+const templatePhotoWarningAddPhoto = document.getElementById("templatePhotoWarningAddPhoto");
+const templatePhotoWarningContinue = document.getElementById("templatePhotoWarningContinue");
 
 let templateFeedAutoLoadRaf = 0;
 let lastTemplateGridColumnCount = 0;
@@ -994,6 +999,7 @@ let privateDataRetryTimer = null;
 let templateModalCloseTimer = null;
 let templateModalImageLoadToken = 0;
 let templateModalScrollTop = 0;
+let templatePhotoWarningCloseTimer = 0;
 let telegramViewportListenersAttached = false;
 let telegramImmersiveListenersAttached = false;
 let telegramImmersiveRetryTimer = 0;
@@ -4438,6 +4444,7 @@ function fileIdentity(file) {
 }
 
 function setSourceImages(files) {
+  state.templatePhotoWarningConfirmedKey = "";
   state.sourceImageFiles = files.slice(0, MAX_SOURCE_IMAGES);
   setSourceImagePreviewFromFiles(state.sourceImageFiles);
 }
@@ -4630,6 +4637,7 @@ function handleReferenceImageChange() {
 function clearSelectedTemplate({ clearPrompt } = { clearPrompt: false }) {
   state.selectedTemplateId = "";
   state.selectedTemplate = null;
+  state.templatePhotoWarningConfirmedKey = "";
   if (clearPrompt) {
     promptInput.value = "";
     setPromptSource("manual", "");
@@ -4646,12 +4654,12 @@ function selectedTemplatePromptStatus() {
   const currentPrompt = normalizePromptForComparison(promptInput.value);
   const sourcePrompt = normalizePromptForComparison(state.selectedTemplate.prompt);
   if (!currentPrompt) {
-    return hasSourceImage ? "Промпт очищен · фото добавлено" : "Промпт очищен";
+    return hasSourceImage ? "Промпт очищен · фото добавлено" : "Промпт очищен · фото не добавлено";
   }
   if (currentPrompt === sourcePrompt) {
-    return hasSourceImage ? "Шаблон вставлен · фото добавлено" : "Шаблон вставлен без изменений";
+    return hasSourceImage ? "Шаблон вставлен · фото добавлено" : "Шаблон вставлен · фото не добавлено";
   }
-  return hasSourceImage ? "Шаблон выбран · промпт изменен · фото добавлено" : "Шаблон выбран, промпт изменен";
+  return hasSourceImage ? "Шаблон выбран · промпт изменен · фото добавлено" : "Шаблон выбран · фото не добавлено";
 }
 
 function toggleSourceTips(forceVisible = null) {
@@ -7264,6 +7272,7 @@ async function selectTemplate(item) {
     setReferencePromptNote("Фото-референс убрано: выбран шаблон.");
   }
   state.selectedTemplateId = resolvedItem.id;
+  state.templatePhotoWarningConfirmedKey = "";
   state.selectedTemplate = {
     id: resolvedItem.id,
     title: resolvedItem.title,
@@ -9595,6 +9604,75 @@ function buildClientRequestId() {
   return `webapp_${suffix}`;
 }
 
+function templatePhotoWarningKey() {
+  return state.selectedTemplateId ? `template:${state.selectedTemplateId}` : "";
+}
+
+function selectedTemplateProductEventPayload() {
+  return {
+    template_id: state.selectedTemplateId || "",
+    category: state.selectedTemplate?.category || "",
+  };
+}
+
+function shouldWarnTemplateWithoutSourcePhotos(sourceImages) {
+  const warningKey = templatePhotoWarningKey();
+  return Boolean(
+    state.selectedTemplate &&
+    warningKey &&
+    sourceImages.length === 0 &&
+    state.templatePhotoWarningConfirmedKey !== warningKey,
+  );
+}
+
+function setTemplatePhotoWarningVisible(visible) {
+  if (!templatePhotoWarning) {
+    return;
+  }
+  window.clearTimeout(templatePhotoWarningCloseTimer);
+  templatePhotoWarningCloseTimer = 0;
+  if (visible) {
+    if (templatePhotoWarningAddPhoto) {
+      templatePhotoWarningAddPhoto.disabled = false;
+    }
+    if (templatePhotoWarningContinue) {
+      templatePhotoWarningContinue.disabled = false;
+    }
+    templatePhotoWarning.classList.remove("is-hidden");
+    window.requestAnimationFrame(() => {
+      templatePhotoWarning.classList.add("is-visible");
+    });
+    window.setTimeout(() => {
+      templatePhotoWarningAddPhoto?.focus();
+    }, 80);
+    refreshIcons();
+    return;
+  }
+  templatePhotoWarning.classList.remove("is-visible");
+  templatePhotoWarningCloseTimer = window.setTimeout(() => {
+    templatePhotoWarning.classList.add("is-hidden");
+    templatePhotoWarningCloseTimer = 0;
+  }, 180);
+}
+
+function closeTemplatePhotoWarning(reason = "closed") {
+  setTemplatePhotoWarningVisible(false);
+  trackProductEvent("template_without_photo_warning_closed", {
+    ...selectedTemplateProductEventPayload(),
+    action: reason,
+  });
+}
+
+function showTemplatePhotoWarning() {
+  if (!templatePhotoWarning) {
+    setCreateNote("Добавь 1-3 фото, чтобы шаблон сохранил твое лицо.", true);
+    return false;
+  }
+  trackProductEvent("template_without_photo_warning_viewed", selectedTemplateProductEventPayload());
+  setTemplatePhotoWarningVisible(true);
+  return true;
+}
+
 async function createTextGeneration(prompt, imageModel, outputSize, clientRequestId) {
   return authorizedFetch("/v1/generations", {
     method: "POST",
@@ -9759,7 +9837,8 @@ async function pollActiveJob(jobId) {
   }
 }
 
-async function handleCreate() {
+async function handleCreate(options = {}) {
+  const bypassTemplatePhotoWarning = Boolean(options && options.bypassTemplatePhotoWarning);
   const prompt = promptInput.value.trim();
   const imageModel = state.selectedImageModel || DEFAULT_IMAGE_MODEL;
   const outputSize = currentOutputSizeSelection();
@@ -9797,6 +9876,10 @@ async function handleCreate() {
           throw new Error("Поддерживаются только PNG, JPG и WEBP.");
         }
       }
+    }
+    if (!bypassTemplatePhotoWarning && shouldWarnTemplateWithoutSourcePhotos(sourceImages)) {
+      showTemplatePhotoWarning();
+      return;
     }
     requestStarted = true;
     blurGenerationInputs();
@@ -10471,6 +10554,49 @@ function bindEvents() {
     });
   }
   createButton.addEventListener("click", handleCreate);
+  if (templatePhotoWarning) {
+    templatePhotoWarning.addEventListener("click", (event) => {
+      if (event.target === templatePhotoWarning) {
+        closeTemplatePhotoWarning("overlay");
+      }
+    });
+  }
+  if (templatePhotoWarningClose) {
+    templatePhotoWarningClose.addEventListener("click", () => {
+      closeTemplatePhotoWarning("close");
+    });
+  }
+  if (templatePhotoWarningAddPhoto) {
+    templatePhotoWarningAddPhoto.addEventListener("click", () => {
+      templatePhotoWarningAddPhoto.disabled = true;
+      if (templatePhotoWarningContinue) {
+        templatePhotoWarningContinue.disabled = true;
+      }
+      trackProductEvent("template_without_photo_warning_add_photo", selectedTemplateProductEventPayload());
+      closeTemplatePhotoWarning("add_photo");
+      openSourceImagePicker();
+    });
+  }
+  if (templatePhotoWarningContinue) {
+    templatePhotoWarningContinue.addEventListener("click", () => {
+      if (templatePhotoWarningContinue.disabled) {
+        return;
+      }
+      templatePhotoWarningContinue.disabled = true;
+      if (templatePhotoWarningAddPhoto) {
+        templatePhotoWarningAddPhoto.disabled = true;
+      }
+      state.templatePhotoWarningConfirmedKey = templatePhotoWarningKey();
+      trackProductEvent("template_without_photo_warning_continue", selectedTemplateProductEventPayload());
+      closeTemplatePhotoWarning("continue");
+      handleCreate({ bypassTemplatePhotoWarning: true }).finally(() => {
+        templatePhotoWarningContinue.disabled = false;
+        if (templatePhotoWarningAddPhoto) {
+          templatePhotoWarningAddPhoto.disabled = false;
+        }
+      });
+    });
+  }
   refreshHistoryButton.addEventListener("click", () => loadHistory({ forceServerCheck: true }).catch((error) => {
     setCreateNote(userFacingErrorMessage(error, "Не удалось загрузить историю."), true);
   }));
@@ -11172,6 +11298,14 @@ function bindEvents() {
     toggleSourceTips(false);
   });
   document.addEventListener("keydown", (event) => {
+    if (
+      event.key === "Escape" &&
+      templatePhotoWarning &&
+      !templatePhotoWarning.classList.contains("is-hidden")
+    ) {
+      closeTemplatePhotoWarning("escape");
+      return;
+    }
     if (event.key === "Escape" && templateModal && !templateModal.classList.contains("is-hidden")) {
       closeTemplateModal();
     }

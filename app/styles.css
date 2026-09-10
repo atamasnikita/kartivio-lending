@@ -4812,6 +4812,148 @@ body.is-web-runtime.is-mobile-browser .app-main {
   color: #ffd7dc;
 }
 
+.template-photo-warning {
+  position: fixed;
+  inset: 0;
+  z-index: 78;
+  display: grid;
+  place-items: center;
+  padding: calc(18px + max(var(--tg-safe-top, 0px), env(safe-area-inset-top)) + var(--tg-controls-offset, 0px)) 18px calc(104px + max(env(safe-area-inset-bottom), var(--tg-safe-bottom, 0px)));
+  background: rgba(4, 6, 10, 0.5);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease;
+}
+
+.template-photo-warning.is-hidden {
+  display: none;
+}
+
+.template-photo-warning.is-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.template-photo-warning-card {
+  position: relative;
+  width: min(100%, 440px);
+  border: 1px solid rgba(84, 101, 138, 0.64);
+  border-radius: 8px;
+  background: rgba(12, 17, 27, 0.96);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.48);
+  padding: 18px;
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 14px;
+  transform: translateY(12px) scale(0.98);
+  opacity: 0.96;
+  transition:
+    opacity 0.2s ease,
+    transform 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+  overflow: hidden;
+}
+
+.template-photo-warning-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 2px;
+  background: linear-gradient(90deg, rgba(255, 184, 92, 0.86), rgba(255, 184, 92, 0.08));
+  pointer-events: none;
+}
+
+.template-photo-warning.is-visible .template-photo-warning-card {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.template-photo-warning-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 36px;
+  height: 36px;
+  border: 1px solid rgba(57, 71, 102, 0.7);
+  border-radius: 999px;
+  background: rgba(15, 23, 37, 0.74);
+  color: #c8d1e4;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.template-photo-warning-close:hover {
+  border-color: rgba(98, 115, 154, 0.78);
+  color: #f2f6ff;
+}
+
+.template-photo-warning-close svg {
+  width: 18px;
+  height: 18px;
+}
+
+.template-photo-warning-icon {
+  width: 48px;
+  height: 48px;
+  border: 1px solid rgba(var(--accent-rgb), 0.48);
+  border-radius: 8px;
+  background: rgba(var(--accent-rgb), 0.13);
+  color: #7ff6ea;
+  display: grid;
+  place-items: center;
+}
+
+.template-photo-warning-icon svg {
+  width: 23px;
+  height: 23px;
+}
+
+.template-photo-warning-copy {
+  min-width: 0;
+  padding-right: 34px;
+}
+
+.template-photo-warning-copy span {
+  display: block;
+  margin-bottom: 5px;
+  color: #ffc06f;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  line-height: 1.1;
+  text-transform: uppercase;
+}
+
+.template-photo-warning-copy strong {
+  display: block;
+  color: #f2f6ff;
+  font-size: 24px;
+  line-height: 1.12;
+}
+
+.template-photo-warning-copy p {
+  margin: 8px 0 0;
+  color: #aeb8cb;
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.template-photo-warning-actions {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.template-photo-warning-actions .primary-action,
+.template-photo-warning-actions .soft-btn {
+  min-height: 48px;
+  font-size: 15px;
+}
+
 .profile-reference-showcase {
   padding: 18px;
   display: grid;
@@ -6511,6 +6653,48 @@ body.is-web-runtime.is-mobile-browser.nav-hidden .bottom-nav {
   }
 }
 
+@media (max-width: 640px) {
+  .template-photo-warning {
+    place-items: end center;
+    padding: calc(12px + max(var(--tg-safe-top, 0px), env(safe-area-inset-top)) + var(--tg-controls-offset, 0px)) 12px calc(100px + max(env(safe-area-inset-bottom), var(--tg-safe-bottom, 0px)));
+  }
+
+  .template-photo-warning-card {
+    grid-template-columns: 42px minmax(0, 1fr);
+    gap: 11px;
+    padding: 14px;
+    transform: translateY(18px);
+  }
+
+  .template-photo-warning-icon {
+    width: 42px;
+    height: 42px;
+  }
+
+  .template-photo-warning-icon svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .template-photo-warning-copy {
+    padding-right: 30px;
+  }
+
+  .template-photo-warning-copy strong {
+    font-size: 20px;
+  }
+
+  .template-photo-warning-copy p {
+    font-size: 13px;
+  }
+
+  .template-photo-warning-actions .primary-action,
+  .template-photo-warning-actions .soft-btn {
+    min-height: 44px;
+    font-size: 14px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .reference-prompt-card,
   .reference-prompt-card::before,
@@ -6525,6 +6709,8 @@ body.is-web-runtime.is-mobile-browser.nav-hidden .bottom-nav {
   .tool-card .tool-media-image,
   .template-modal,
   .template-modal-card,
+  .template-photo-warning,
+  .template-photo-warning-card,
   .first-photoset-sheet-card,
   .choice-chip,
   .template-section-open,

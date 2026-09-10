@@ -11,7 +11,7 @@
     />
     <meta name="kartivio-yandex-metrika-id" content="109102691" />
     <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=20260907-first-photoset-public-state" />
+    <link rel="stylesheet" href="./styles.css?v=20260910-template-photo-warning" />
     <script src="./vendor/lucide.min.js?v=1.18.0" defer></script>
   </head>
   <body>
@@ -896,6 +896,33 @@
 
     <div id="appToast" class="app-toast is-hidden" role="status" aria-live="polite"></div>
 
+    <div
+      id="templatePhotoWarning"
+      class="template-photo-warning is-hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="templatePhotoWarningTitle"
+      aria-describedby="templatePhotoWarningText"
+    >
+      <article class="template-photo-warning-card">
+        <button id="templatePhotoWarningClose" class="template-photo-warning-close" type="button" aria-label="Закрыть">
+          <i data-lucide="x"></i>
+        </button>
+        <span class="template-photo-warning-icon" aria-hidden="true"><i data-lucide="image-plus"></i></span>
+        <div class="template-photo-warning-copy">
+          <span>Важно</span>
+          <strong id="templatePhotoWarningTitle">Добавь свои фото</strong>
+          <p id="templatePhotoWarningText">
+            Без них получится обычная картинка по шаблону, а не фотосессия с твоим лицом.
+          </p>
+        </div>
+        <div class="template-photo-warning-actions">
+          <button id="templatePhotoWarningAddPhoto" class="primary-action" type="button">Добавить фото</button>
+          <button id="templatePhotoWarningContinue" class="soft-btn" type="button">Продолжить без фото</button>
+        </div>
+      </article>
+    </div>
+
     <div id="templateModal" class="template-modal is-hidden" role="dialog" aria-modal="true" aria-labelledby="templateModalTitle">
       <article class="template-modal-card">
         <div class="template-modal-media">
@@ -939,6 +966,6 @@
       </article>
     </div>
 
-    <script src="./app.js?v=20260907-first-photoset-public-state" defer></script>
+    <script src="./app.js?v=20260910-template-photo-warning" defer></script>
   </body>
 </html>
