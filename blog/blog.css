@@ -55,17 +55,16 @@ body {
 
 .blog-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
 }
 
 .blog-card {
-  min-height: 100%;
   display: flex;
-  min-height: 220px;
-  padding: 24px;
+  min-height: 178px;
+  padding: 18px;
   border: 1px solid #253048;
-  border-radius: 18px;
+  border-radius: 14px;
   background:
     radial-gradient(circle at 12% 0%, rgba(25, 199, 181, 0.1), rgba(25, 199, 181, 0) 34%),
     rgba(13, 18, 29, 0.82);
@@ -86,20 +85,20 @@ body {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  gap: 18px;
+  gap: 14px;
 }
 
 .blog-card h2 {
   margin: 0;
-  font-size: clamp(24px, 2.6vw, 34px);
-  line-height: 1.05;
+  font-size: clamp(20px, 1.7vw, 26px);
+  line-height: 1.1;
 }
 
 .blog-card p {
-  margin: 12px 0 0;
+  margin: 9px 0 0;
   color: var(--muted);
-  font-size: 18px;
-  line-height: 1.45;
+  font-size: 15px;
+  line-height: 1.42;
 }
 
 .blog-meta {
@@ -108,18 +107,19 @@ body {
   gap: 10px;
   flex-wrap: wrap;
   color: #c1c8dd;
-  font-size: 15px;
+  font-size: 13px;
 }
 
 .blog-tag {
   display: inline-flex;
   align-items: center;
-  min-height: 30px;
-  padding: 5px 11px;
+  min-height: 26px;
+  padding: 4px 9px;
   border: 1px solid rgba(25, 199, 181, 0.52);
   border-radius: 999px;
   color: #9ff4e8;
   background: rgba(25, 199, 181, 0.08);
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -222,6 +222,10 @@ body {
   margin: 0;
 }
 
+.article-cta--compact h2 {
+  font-size: clamp(26px, 3vw, 34px);
+}
+
 .article-cta p {
   margin: 0;
   color: #c5ccdf;
@@ -277,6 +281,102 @@ body {
   color: #e8edfb;
   font-size: 18px;
   line-height: 1.58;
+}
+
+.prompt-examples-grid {
+  margin: 28px 0 44px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.prompt-example {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #26324a;
+  border-radius: 18px;
+  background: rgba(10, 15, 24, 0.94);
+}
+
+.prompt-example img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  object-fit: cover;
+  background: #111827;
+}
+
+.prompt-example-body {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+}
+
+.prompt-example-eyebrow {
+  margin: 0;
+  color: #8df2e4;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.prompt-example h3 {
+  margin: 0;
+  font-size: 24px;
+  line-height: 1.12;
+}
+
+.prompt-example-text {
+  margin: 0;
+  color: #dce3f5;
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.prompt-example-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  padding-top: 2px;
+}
+
+.prompt-copy-btn,
+.prompt-example-actions a {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 13px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.prompt-copy-btn {
+  border: 1px solid rgba(25, 199, 181, 0.6);
+  background: rgba(25, 199, 181, 0.13);
+  color: #9ff4e8;
+  cursor: pointer;
+}
+
+.prompt-copy-btn:hover,
+.prompt-copy-btn.is-copied {
+  background: rgba(25, 199, 181, 0.22);
+  border-color: rgba(25, 199, 181, 0.9);
+}
+
+.prompt-example-actions a {
+  border: 1px solid #2b3650;
+  color: #dce3f5;
+  background: rgba(19, 26, 41, 0.9);
+}
+
+.prompt-example-actions a:hover {
+  border-color: rgba(25, 199, 181, 0.68);
+  color: #f4f7ff;
 }
 
 .reference-flow {
@@ -387,7 +487,10 @@ body {
 }
 
 @media (max-width: 980px) {
-  .blog-grid,
+  .blog-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .article-layout {
     grid-template-columns: 1fr;
   }
@@ -402,6 +505,10 @@ body {
   .article-main {
     padding-top: 38px;
     padding-bottom: 72px;
+  }
+
+  .blog-grid {
+    grid-template-columns: 1fr;
   }
 
   .blog-card {
@@ -434,6 +541,18 @@ body {
   .prompt-box {
     padding: 18px;
     border-radius: 16px;
+  }
+
+  .prompt-examples-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .prompt-example-body {
+    padding: 16px;
+  }
+
+  .prompt-example h3 {
+    font-size: 22px;
   }
 
   .reference-flow {

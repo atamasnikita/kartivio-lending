@@ -14,9 +14,21 @@
   </url>
   <url>
     <loc>https://kartivio-ai.ru/blog/</loc>
-    <lastmod>2026-08-23</lastmod>
+    <lastmod>2026-09-10</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://kartivio-ai.ru/blog/promty-dlya-ii-fotosessii/</loc>
+    <lastmod>2026-09-11</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://kartivio-ai.ru/blog/neyroset-dlya-foto/</loc>
+    <lastmod>2026-09-10</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
   </url>
   <url>
     <loc>https://kartivio-ai.ru/blog/ii-fotosessiya-po-foto/</loc>
