@@ -10,11 +10,49 @@ const STORAGE_KEYS = {
   referralProfileSeen: "kartivio.referral_profile_seen",
   productSessionId: "kartivio.product_session_id",
   productAnalyticsDisabled: "kartivio.product_analytics_disabled",
+  yandexMetrikaActivatedUser: "kartivio.yandex_metrika_activated_user",
 };
 
 const DEFAULT_PROD_API_BASE = "https://api.kartivio-ai.ru";
 const DEFAULT_LOCAL_API_BASE = "http://127.0.0.1:8093";
 const YANDEX_METRIKA_ID_META_NAME = "kartivio-yandex-metrika-id";
+const YANDEX_METRIKA_GOALS = Object.freeze({
+  photo_upload_selected: "photo_uploaded",
+  generation_submitted: "generation_submitted",
+  result_viewed: "result_viewed",
+  paywall_viewed: "paywall_viewed",
+  package_selected: "package_selected",
+  checkout_started: "checkout_started",
+  checkout_opened: "checkout_opened",
+  reference_prompt_succeeded: "reference_prompt_succeeded",
+  first_photoset_offer_viewed: "first_photoset_offer_viewed",
+  first_photoset_sheet_viewed: "first_photoset_primary_viewed",
+  first_photoset_sheet_dismissed: "first_photoset_primary_dismissed",
+  first_photoset_downsell_sheet_viewed: "first_photoset_downsell_viewed",
+  first_photoset_downsell_sheet_dismissed: "first_photoset_downsell_dismissed",
+});
+const YANDEX_METRIKA_ACTIVATED_GOAL = "activated_user";
+const ACTIVATED_USER_SUCCESSFUL_RESULTS = 2;
+const YANDEX_METRIKA_GOAL_PARAM_KEYS = new Set([
+  "category",
+  "credits",
+  "error_code",
+  "file_count",
+  "has_photo",
+  "image_model",
+  "output_size",
+  "package_code",
+  "price_rub",
+  "prompt_source",
+  "recommended_image_model",
+  "recommended_ratio",
+  "recommended_resolution",
+  "screen",
+  "source",
+  "status",
+  "successful_generation_count",
+  "template_id",
+]);
 const TELEGRAM_WEB_APP_SDK_SRC = "./vendor/telegram-web-app.js?v=62";
 const AUTH_BRIDGE_HASH_KEY = "auth_bridge";
 const API_HEALTHCHECK_TIMEOUT_MS = 2500;
@@ -660,6 +698,7 @@ function trackProductEvent(eventName, properties = {}) {
   if (!normalizedName) {
     return;
   }
+  trackYandexMetrikaProductGoal(normalizedName, properties);
   productEventQueue.push({
     client_event_id: productEventUuid(),
     event_name: normalizedName,
@@ -1130,6 +1169,100 @@ function loadYandexMetrika() {
     accurateTrackBounce: true,
     trackLinks: true,
   });
+}
+
+function sanitizeYandexMetrikaGoalParams(properties = {}) {
+  const payload = {
+    platform: productEventPlatform(),
+    screen: state.currentScreen || "unknown",
+    source: runtimeSource(),
+  };
+  const entries = Object.entries(properties && typeof properties === "object" ? properties : {});
+  for (const [key, value] of entries) {
+    if (!YANDEX_METRIKA_GOAL_PARAM_KEYS.has(key)) {
+      continue;
+    }
+    if (value === null || value === undefined) {
+      payload[key] = "";
+      continue;
+    }
+    if (typeof value === "boolean" || typeof value === "number") {
+      payload[key] = value;
+      continue;
+    }
+    if (typeof value === "string") {
+      payload[key] = value.slice(0, 160);
+    }
+  }
+  return payload;
+}
+
+function yandexMetrikaActivatedUserKey() {
+  const userId = String(state.me?.id || "").trim();
+  if (userId) {
+    return `${STORAGE_KEYS.yandexMetrikaActivatedUser}:${userId}`;
+  }
+  return `${STORAGE_KEYS.yandexMetrikaActivatedUser}:anonymous:${ensureAcquisitionAnonymousId()}`;
+}
+
+function wasYandexMetrikaActivatedUserSent() {
+  try {
+    return window.localStorage.getItem(yandexMetrikaActivatedUserKey()) === "1";
+  } catch (_error) {
+    return false;
+  }
+}
+
+function markYandexMetrikaActivatedUserSent() {
+  try {
+    window.localStorage.setItem(yandexMetrikaActivatedUserKey(), "1");
+  } catch (_error) {
+    // noop
+  }
+}
+
+function sendYandexMetrikaGoal(goalName, properties = {}) {
+  const normalizedGoal = String(goalName || "").trim();
+  if (!normalizedGoal || !shouldLoadDeferredAnalytics()) {
+    return;
+  }
+  const metrikaId = Number.parseInt(yandexMetrikaIdFromMeta(), 10);
+  if (!Number.isFinite(metrikaId) || metrikaId <= 0) {
+    return;
+  }
+  try {
+    loadYandexMetrika();
+    if (typeof window.ym !== "function") {
+      return;
+    }
+    window.ym(metrikaId, "reachGoal", normalizedGoal, sanitizeYandexMetrikaGoalParams(properties));
+  } catch (_error) {
+    // Yandex Metrica must never block product flow.
+  }
+}
+
+function maybeTrackYandexMetrikaActivatedUser(properties = {}) {
+  if (successfulGenerationCount() < ACTIVATED_USER_SUCCESSFUL_RESULTS) {
+    return;
+  }
+  if (wasYandexMetrikaActivatedUserSent()) {
+    return;
+  }
+  markYandexMetrikaActivatedUserSent();
+  sendYandexMetrikaGoal(YANDEX_METRIKA_ACTIVATED_GOAL, {
+    ...properties,
+    successful_generation_count: successfulGenerationCount(),
+  });
+}
+
+function trackYandexMetrikaProductGoal(eventName, properties = {}) {
+  const goalName = YANDEX_METRIKA_GOALS[eventName];
+  if (goalName) {
+    sendYandexMetrikaGoal(goalName, properties);
+  }
+  if (eventName === "result_viewed") {
+    maybeTrackYandexMetrikaActivatedUser(properties);
+  }
 }
 
 function scheduleDeferredStartup() {
