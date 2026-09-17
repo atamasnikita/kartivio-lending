@@ -277,7 +277,7 @@ const API_ERROR_MESSAGES = Object.freeze({
   unsupported_source_image_type: "Поддерживаются только PNG, JPG и WEBP.",
   source_image_too_large: "Одно из фото слишком большое. Используй файл до 10 MB.",
   source_image_not_found: "Не удалось найти загруженное фото. Попробуй загрузить заново.",
-  reference_prompt_paid_feature_required: "Эта функция откроется после первой оплаты.",
+  reference_prompt_paid_feature_required: "Сначала войди в аккаунт.",
   reference_prompt_rate_limit_exceeded: "Слишком много запросов на сборку промпта. Попробуй чуть позже.",
   reference_prompt_daily_limit_exceeded: "Лимит сборки промптов на сегодня исчерпан.",
   reference_prompt_image_required: "Сначала добавь фото-референс.",
@@ -4014,8 +4014,6 @@ function renderProfileSummary() {
   const actionKind = profilePrimaryActionKind();
   const successfulCount = successfulGenerationCount();
   const favoritesCount = profileFavoriteTemplateCount();
-  const hasReferenceAccess = hasReferencePromptAccess();
-
   if (profileAvatarLarge) {
     profileAvatarLarge.textContent = avatarLetter;
   }
@@ -4058,22 +4056,20 @@ function renderProfileSummary() {
         : "История и избранное";
   }
   if (profileReferenceCard) {
-    profileReferenceCard.classList.toggle("is-available", hasReferenceAccess);
+    profileReferenceCard.classList.add("is-available");
   }
   if (profileReferenceBadge) {
-    profileReferenceBadge.textContent = hasReferenceAccess ? "Доступно" : "После оплаты";
+    profileReferenceBadge.textContent = "Доступно";
   }
   if (profileReferenceText) {
-    profileReferenceText.textContent = hasReferenceAccess
-      ? "Загрузи референс — получи готовый промпт без списания кредитов."
-      : "Загрузи референс — получи готовый промпт для генерации.";
+    profileReferenceText.textContent = "Загрузи референс — получи готовый промпт без списания кредитов.";
   }
   if (profileReferenceAction) {
     const label = profileReferenceAction.querySelector("span");
     if (label) {
-      label.textContent = hasReferenceAccess ? "Попробовать" : "Посмотреть пакеты";
+      label.textContent = "Попробовать";
     } else {
-      profileReferenceAction.textContent = hasReferenceAccess ? "Попробовать" : "Посмотреть пакеты";
+      profileReferenceAction.textContent = "Попробовать";
     }
   }
   renderProfileReferral();
@@ -4104,26 +4100,20 @@ function openProfileFavorites() {
 }
 
 function openProfileReferencePrompt() {
-  if (!hasReferencePromptAccess()) {
-    openReferencePromptPaywall();
-    return;
-  }
   switchScreen("studio");
   setReferencePromptExpanded(true);
 }
 
 function hasReferencePromptAccess() {
-  return Boolean(hasSuccessfulPayment() || isAdminUser());
+  return true;
 }
 
 function referencePromptLocked() {
-  return Boolean(hasActiveSession() && !hasReferencePromptAccess());
+  return false;
 }
 
 function defaultReferencePromptNote() {
-  return referencePromptLocked()
-    ? "Фича откроется после первой оплаты."
-    : REFERENCE_PROMPT_NOTE_DEFAULT;
+  return REFERENCE_PROMPT_NOTE_DEFAULT;
 }
 
 function referencePromptShouldBeExpanded() {
@@ -4482,9 +4472,8 @@ function openReferencePromptPaywall() {
     setReferencePromptNote("Сначала войди в аккаунт.", true);
     return;
   }
-  switchScreen("tokens");
-  setPlansNote("Промпт по референсу откроется после первой оплаты.");
-  setReferencePromptNote("Фича откроется после первой оплаты.");
+  switchScreen("studio");
+  setReferencePromptExpanded(true);
 }
 
 function handleReferenceDropzoneAction() {
