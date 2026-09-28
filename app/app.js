@@ -4,6 +4,7 @@ const STORAGE_KEYS = {
   refreshToken: "kartivio.refresh_token",
   lastAuthProvider: "kartivio.last_auth_provider",
   telegramWebLoginToken: "kartivio.telegram_web_login_token",
+  marketingToken: "kartivio.marketing_token",
   acquisitionAnonymousId: "kartivio.acquisition_anonymous_id",
   acquisitionFirstTouch: "kartivio.acquisition_first_touch",
   pendingReferralCode: "kartivio.pending_referral_code",
@@ -449,6 +450,7 @@ const state = {
   walletBalanceCredits: 0,
   linkedProviders: new Set(),
   acquisitionTouch: null,
+  marketingToken: "",
   referral: null,
   profileReferralExpanded: false,
   trackedReferralCardView: false,
@@ -1876,6 +1878,140 @@ async function syncAcquisitionTouch({ auth = false } = {}) {
   });
 }
 
+function normalizeMarketingToken(raw) {
+  let value = String(raw || "").trim();
+  if (!value) {
+    return "";
+  }
+  if (!value.startsWith("mk_")) {
+    value = `mk_${value}`;
+  }
+  return /^mk_[A-Za-z0-9_-]{8,48}$/.test(value) ? value : "";
+}
+
+function readStoredMarketingToken() {
+  try {
+    return normalizeMarketingToken(window.localStorage.getItem(STORAGE_KEYS.marketingToken));
+  } catch (_error) {
+    return "";
+  }
+}
+
+function writeStoredMarketingToken(token) {
+  const normalized = normalizeMarketingToken(token);
+  if (!normalized) {
+    return "";
+  }
+  try {
+    window.localStorage.setItem(STORAGE_KEYS.marketingToken, normalized);
+  } catch (_error) {
+    // noop
+  }
+  state.marketingToken = normalized;
+  return normalized;
+}
+
+function currentMarketingToken() {
+  const normalized = normalizeMarketingToken(state.marketingToken) || readStoredMarketingToken();
+  if (normalized) {
+    state.marketingToken = normalized;
+  }
+  return normalized;
+}
+
+function captureMarketingTokenFromLocation() {
+  const params = new URLSearchParams(window.location.search);
+  const token = normalizeMarketingToken(params.get("mk") || params.get("marketing_token"));
+  if (!token) {
+    return "";
+  }
+  return writeStoredMarketingToken(token);
+}
+
+function locationHasMarketingSignal() {
+  const params = new URLSearchParams(window.location.search);
+  return Boolean(
+    params.get("utm_source") ||
+      params.get("utm_medium") ||
+      params.get("utm_campaign") ||
+      params.get("utm_content") ||
+      params.get("utm_term") ||
+      params.get("utm_device") ||
+      params.get("utm_position") ||
+      params.get("yclid")
+  );
+}
+
+function buildMarketingHandoffPayload() {
+  const params = new URLSearchParams(window.location.search);
+  const currentTouch = {
+    anonymous_id: ensureAcquisitionAnonymousId(),
+    utm_source: normalizeAttributionValue(params.get("utm_source"), 128),
+    utm_medium: normalizeAttributionValue(params.get("utm_medium"), 128),
+    utm_campaign: normalizeAttributionValue(params.get("utm_campaign"), 255),
+    utm_content: normalizeAttributionValue(params.get("utm_content"), 255),
+    utm_term: normalizeAttributionValue(params.get("utm_term"), 255),
+    utm_device: normalizeAttributionValue(params.get("utm_device"), 64),
+    utm_position: normalizeAttributionValue(params.get("utm_position"), 64),
+    yclid: normalizeAttributionValue(params.get("yclid"), 255),
+    referrer: normalizeAttributionValue(document.referrer, 1024),
+    landing_path: normalizeAttributionValue(window.location.pathname, 512),
+    target: "webapp",
+  };
+  const touch = hasAcquisitionSignal(currentTouch)
+    ? currentTouch
+    : state.acquisitionTouch || readStoredAcquisitionTouch();
+  if (!touch || !hasAcquisitionSignal(touch)) {
+    return null;
+  }
+  return {
+    anonymous_id: normalizeAttributionValue(touch.anonymous_id, 128) || undefined,
+    utm_source: normalizeAttributionValue(touch.utm_source, 128) || undefined,
+    utm_medium: normalizeAttributionValue(touch.utm_medium, 128) || undefined,
+    utm_campaign: normalizeAttributionValue(touch.utm_campaign, 255) || undefined,
+    utm_content: normalizeAttributionValue(touch.utm_content, 255) || undefined,
+    utm_term: normalizeAttributionValue(touch.utm_term, 255) || undefined,
+    utm_device: normalizeAttributionValue(touch.utm_device, 64) || undefined,
+    utm_position: normalizeAttributionValue(touch.utm_position, 64) || undefined,
+    yclid: normalizeAttributionValue(touch.yclid, 255) || undefined,
+    referrer: normalizeAttributionValue(touch.referrer, 1024) || undefined,
+    landing_path: normalizeAttributionValue(touch.landing_path, 512) || undefined,
+    target: normalizeAttributionValue(touch.target, 32) || "webapp",
+  };
+}
+
+async function syncMarketingHandoff({ auth = false } = {}) {
+  let token = currentMarketingToken();
+  const locationParams = new URLSearchParams(window.location.search);
+  const locationToken = normalizeMarketingToken(
+    locationParams.get("mk") || locationParams.get("marketing_token")
+  );
+  const shouldCreateFreshToken = locationHasMarketingSignal() && !locationToken;
+  const request = auth ? authorizedFetch : apiFetch;
+  if (token && !shouldCreateFreshToken) {
+    if (auth) {
+      await request("/v1/attribution/handoff/claim", {
+        method: "POST",
+        body: { marketing_token: token },
+        auth,
+      });
+    }
+    return token;
+  }
+
+  const payload = buildMarketingHandoffPayload();
+  if (!payload) {
+    return "";
+  }
+  const result = await request("/v1/attribution/handoff", {
+    method: "POST",
+    body: payload,
+    auth,
+  });
+  token = normalizeMarketingToken(result?.start_param || result?.marketing_token);
+  return token ? writeStoredMarketingToken(token) : "";
+}
+
 function oauthRedirectUri() {
   const url = new URL(window.location.href);
   url.search = "";
@@ -2682,6 +2818,7 @@ function loadState() {
     localStorage.removeItem(STORAGE_KEYS.telegramWebLoginToken);
   }
   state.acquisitionTouch = readStoredAcquisitionTouch();
+  state.marketingToken = readStoredMarketingToken();
 }
 
 function escapeHtml(raw) {
@@ -7157,7 +7294,7 @@ async function buyPackage(code) {
   try {
     const result = await authorizedFetch("/v1/payments/checkout", {
       method: "POST",
-      body: { kind: "topup", code },
+      body: { kind: "topup", code, marketing_token: currentMarketingToken() || undefined },
       idempotencyKey: idem,
     });
     if (result.checkout_url) {
@@ -10160,6 +10297,7 @@ async function pollTelegramWebLoginStatus() {
         throw new Error("Не удалось получить токены входа.");
       }
       await finalizeAuthSession(payload, "telegram");
+      syncMarketingHandoff({ auth: true }).catch(() => {});
       ensurePublicDataLoaded().catch(() => {});
       renderAuthGateActions();
       setAuthGateVisible(false);
@@ -10206,7 +10344,10 @@ async function startTelegramWebLogin(options = {}) {
   }
   clearTelegramWebLoginPolling();
   try {
-    const payload = await apiFetch("/v1/auth/telegram/web/start", { method: "POST" });
+    const payload = await apiFetch("/v1/auth/telegram/web/start", {
+      method: "POST",
+      body: { marketing_token: currentMarketingToken() || undefined },
+    });
     state.telegramWebLoginToken = String(payload.login_token || "").trim();
     const deepLink = String(payload.deep_link_url || "").trim();
     if (!state.telegramWebLoginToken || !deepLink) {
@@ -10382,6 +10523,7 @@ async function loginViaTelegram(options = {}) {
     });
     await finalizeAuthSession(payload, "telegram");
     syncAcquisitionTouch({ auth: true }).catch(() => {});
+    syncMarketingHandoff({ auth: true }).catch(() => {});
     ensurePublicDataLoaded().catch(() => {});
     setAuthGateVisible(false);
     if (!silent) {
@@ -10426,6 +10568,7 @@ async function loginViaMax(options = {}) {
     });
     await finalizeAuthSession(payload, "max");
     syncAcquisitionTouch({ auth: true }).catch(() => {});
+    syncMarketingHandoff({ auth: true }).catch(() => {});
     ensurePublicDataLoaded().catch(() => {});
     setAuthGateVisible(false);
     if (!silent) {
@@ -10479,6 +10622,7 @@ async function loginViaYandexCode(code, codeVerifier) {
   });
   await finalizeAuthSession(payload, "yandex");
   syncAcquisitionTouch({ auth: true }).catch(() => {});
+  syncMarketingHandoff({ auth: true }).catch(() => {});
   ensurePublicDataLoaded().catch(() => {});
   setAuthGateVisible(false);
   setNote("Авторизация через Яндекс успешна.");
@@ -10494,6 +10638,7 @@ async function loginViaYandexCallback(code, stateToken) {
   });
   await finalizeAuthSession(payload, "yandex");
   syncAcquisitionTouch({ auth: true }).catch(() => {});
+  syncMarketingHandoff({ auth: true }).catch(() => {});
   ensurePublicDataLoaded().catch(() => {});
   setAuthGateVisible(false);
   setNote("Авторизация через Яндекс успешна.");
@@ -11439,12 +11584,14 @@ async function bootstrap() {
   unlockTemplateModalScroll();
   loadState();
   captureFirstAcquisitionTouch();
+  captureMarketingTokenFromLocation();
   captureReferralCodeFromLocation();
   const telegramSdkPromise = ensureTelegramSdkLoaded();
   const apiBasePromise = (async () => {
     try {
       await resolveApiBase();
       syncAcquisitionTouch().catch(() => {});
+      syncMarketingHandoff().catch(() => {});
       refreshAuthButtons();
     } catch (error) {
       trackDiagnosticEvent("boot_failed", {
@@ -11587,6 +11734,7 @@ async function bootstrap() {
       await ensureMaxLinkedForAuthorizedSession();
     }
     syncAcquisitionTouch({ auth: true }).catch(() => {});
+    syncMarketingHandoff({ auth: true }).catch(() => {});
     applyStoredReferralCode()
       .then((applied) => {
         if (applied) {

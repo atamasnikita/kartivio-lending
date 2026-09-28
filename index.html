@@ -617,6 +617,7 @@
     <script src="/landing-media.js?v=20260813-max-simple-1"></script>
     <script>
       (function () {
+        const apiBase = "https://api.kartivio-ai.ru";
         const keys = [
           "utm_source",
           "utm_medium",
@@ -633,17 +634,111 @@
           const value = String(current.searchParams.get(key) || "").trim();
           if (value) preserved.set(key, value);
         }
-        if (!preserved.toString()) return;
+        const hasPreserved = Boolean(preserved.toString());
 
-        const anchors = Array.from(document.querySelectorAll('a[href="/app/"]'));
-        for (const anchor of anchors) {
-          const target = new URL(anchor.getAttribute("href"), window.location.origin);
+        function withPreservedParams(href) {
+          const target = new URL(href, window.location.origin);
           for (const [key, value] of preserved.entries()) {
             if (!target.searchParams.has(key)) {
               target.searchParams.set(key, value);
             }
           }
-          anchor.setAttribute("href", target.pathname + target.search + target.hash);
+          return target.pathname + target.search + target.hash;
+        }
+
+        function ctaTarget(anchor) {
+          const explicit = String(anchor.dataset.landingCta || "").trim().toLowerCase();
+          if (explicit) return explicit;
+          const href = String(anchor.getAttribute("href") || "");
+          if (href.includes("t.me") || href.includes("telegram.me")) return "telegram";
+          if (href.includes("max.ru")) return "max";
+          return "web";
+        }
+
+        function decorateUrl(href, targetName, startParam) {
+          const url = new URL(href, window.location.origin);
+          if (targetName === "telegram") {
+            url.searchParams.set("start", startParam);
+            return url.toString();
+          }
+          if (targetName === "max") {
+            url.searchParams.set("start", startParam);
+            url.searchParams.set("start_param", startParam);
+            return url.toString();
+          }
+          url.searchParams.set("mk", startParam);
+          for (const [key, value] of preserved.entries()) {
+            if (!url.searchParams.has(key)) {
+              url.searchParams.set(key, value);
+            }
+          }
+          return url.pathname + url.search + url.hash;
+        }
+
+        async function createMarketingHandoff(targetName) {
+          if (!hasPreserved) return "";
+          const payload = { target: targetName, landing_path: window.location.pathname };
+          for (const [key, value] of preserved.entries()) {
+            payload[key] = value;
+          }
+          payload.referrer = document.referrer || undefined;
+          const response = await fetch(`${apiBase}/v1/attribution/handoff`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          if (!response.ok) return "";
+          const data = await response.json();
+          return String(data.start_param || data.marketing_token || "").trim();
+        }
+
+        if (hasPreserved) {
+          const webAnchors = Array.from(document.querySelectorAll('a[href="/app/"]'));
+          for (const anchor of webAnchors) {
+            anchor.setAttribute("href", withPreservedParams(anchor.getAttribute("href")));
+          }
+        }
+
+        const ctaAnchors = Array.from(document.querySelectorAll("[data-landing-cta]"));
+        for (const anchor of ctaAnchors) {
+          anchor.addEventListener("click", async (event) => {
+            if (!hasPreserved || event.defaultPrevented || event.button !== 0) return;
+            if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+            const targetName = ctaTarget(anchor);
+            const originalHref = anchor.getAttribute("href") || "";
+            if (!originalHref) return;
+            event.preventDefault();
+
+            let popup = null;
+            const opensNewTab = String(anchor.getAttribute("target") || "").toLowerCase() === "_blank";
+            if (opensNewTab) {
+              try {
+                popup = window.open("about:blank", "_blank", "noopener,noreferrer");
+              } catch (_error) {
+                popup = null;
+              }
+            }
+
+            let nextHref = originalHref;
+            try {
+              const startParam = await createMarketingHandoff(targetName);
+              if (startParam) {
+                nextHref = decorateUrl(originalHref, targetName, startParam);
+              } else if (targetName === "web") {
+                nextHref = withPreservedParams(originalHref);
+              }
+            } catch (_error) {
+              if (targetName === "web") {
+                nextHref = withPreservedParams(originalHref);
+              }
+            }
+
+            if (popup && !popup.closed) {
+              popup.location.href = nextHref;
+              return;
+            }
+            window.location.assign(nextHref);
+          });
         }
       })();
     </script>
