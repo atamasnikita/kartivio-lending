@@ -1923,6 +1923,7 @@ function marketingTokenFromSearchParams(params) {
   return normalizeMarketingToken(
     params.get("mk") ||
       params.get("marketing_token") ||
+      params.get("startapp") ||
       params.get("start_param") ||
       params.get("start")
   );
