@@ -1919,9 +1919,18 @@ function currentMarketingToken() {
   return normalized;
 }
 
+function marketingTokenFromSearchParams(params) {
+  return normalizeMarketingToken(
+    params.get("mk") ||
+      params.get("marketing_token") ||
+      params.get("start_param") ||
+      params.get("start")
+  );
+}
+
 function captureMarketingTokenFromLocation() {
   const params = new URLSearchParams(window.location.search);
-  const token = normalizeMarketingToken(params.get("mk") || params.get("marketing_token"));
+  const token = marketingTokenFromSearchParams(params);
   if (!token) {
     return "";
   }
@@ -1983,9 +1992,7 @@ function buildMarketingHandoffPayload() {
 async function syncMarketingHandoff({ auth = false } = {}) {
   let token = currentMarketingToken();
   const locationParams = new URLSearchParams(window.location.search);
-  const locationToken = normalizeMarketingToken(
-    locationParams.get("mk") || locationParams.get("marketing_token")
-  );
+  const locationToken = marketingTokenFromSearchParams(locationParams);
   const shouldCreateFreshToken = locationHasMarketingSignal() && !locationToken;
   const request = auth ? authorizedFetch : apiFetch;
   if (token && !shouldCreateFreshToken) {
