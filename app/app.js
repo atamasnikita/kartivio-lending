@@ -216,7 +216,10 @@ const ADMIN_MODEL_ORDER = [
 ];
 const DEFAULT_IMAGE_MODEL = "gemini-3.1-flash-image-preview";
 const DEFAULT_RESOLUTION = "2K";
+const FREE_DEFAULT_RESOLUTION = "1K";
 const DEFAULT_RATIO = "1:1";
+const PAID_GENERATION_UNLOCK_LABEL = "После оплаты";
+const PAID_GENERATION_UNLOCK_NOTE = "2K, 4K и Pro-модель откроются после первой покупки. Бесплатно можно попробовать Nano Banana 2 в 1K.";
 
 const STATUS_LABELS = {
   queued: "В очереди",
@@ -396,6 +399,7 @@ const JOB_ERROR_MESSAGES = Object.freeze({
   gemini_overloaded: "Сервис Nano Banana перегружен. Кредиты возвращены.",
   gemini_generation_failed: "Ошибка генерации в Nano Banana. Кредиты возвращены.",
   gemini_invalid_request: "Некорректные параметры генерации.",
+  paid_generation_settings_required: PAID_GENERATION_UNLOCK_NOTE,
   gemini_empty_result: "Провайдер не вернул изображение. Кредиты возвращены.",
   gemini_invalid_image_data: "Провайдер вернул поврежденный результат. Кредиты возвращены.",
   source_image_not_found: "Референс-фото недоступно. Загрузите его снова.",
@@ -2387,14 +2391,22 @@ function formatCredits(amount) {
 }
 
 function setCreateButtonIdleLabel() {
+  if (hasActiveSession() && walletBalanceCredits() <= 0) {
+    createButton.textContent = "Нет кредитов · Пополнить";
+    createButton.classList.remove("is-loading");
+    createButton.classList.add("is-topup-action");
+    return;
+  }
   const cost = selectedGenerationCost();
   createButton.textContent = `Генерировать · ${formatCredits(cost)}`;
   createButton.classList.remove("is-loading");
+  createButton.classList.remove("is-topup-action");
 }
 
 function setCreateButtonBusyLabel(label = "Генерация...") {
   createButton.textContent = label;
   createButton.classList.add("is-loading");
+  createButton.classList.remove("is-topup-action");
 }
 
 function prefersReducedMotion() {
@@ -2488,14 +2500,28 @@ function templateRecommendedLabel(item, { compact = false } = {}) {
 function applyTemplateRecommendedSettings(item) {
   const preset = templateRecommendedPreset(item);
   const availableModels = availableImageModelsForCurrentUser();
+  let targetModel = state.selectedImageModel || DEFAULT_IMAGE_MODEL;
   let changed = false;
+  let downgradedPaidRecommendation = false;
 
   if (preset.imageModel && availableModels.includes(preset.imageModel)) {
-    state.selectedImageModel = preset.imageModel;
+    if (imageModelRequiresPayment(preset.imageModel)) {
+      targetModel = fallbackImageModelForCurrentUser();
+      state.selectedImageModel = targetModel;
+      downgradedPaidRecommendation = true;
+    } else {
+      targetModel = preset.imageModel;
+      state.selectedImageModel = targetModel;
+    }
     changed = true;
   }
   if (preset.resolution) {
-    state.selectedResolution = preset.resolution;
+    if (resolutionRequiresPayment(targetModel, preset.resolution)) {
+      state.selectedResolution = defaultResolutionForCurrentUser();
+      downgradedPaidRecommendation = true;
+    } else {
+      state.selectedResolution = preset.resolution;
+    }
     changed = true;
   }
   if (preset.ratio) {
@@ -2507,12 +2533,17 @@ function applyTemplateRecommendedSettings(item) {
     ensureGenerationSelectionState();
     renderGenerationChips();
     refreshGenerationCostNote();
+    if (downgradedPaidRecommendation) {
+      showPaidGenerationSettingsNote(
+        "Шаблон лучше раскрывается в высоком качестве. Бесплатно поставили 1K, 2K/4K и Pro откроются после первой покупки.",
+      );
+    }
   }
 }
 
 function resetGenerationSettingsToDefaults() {
   state.selectedImageModel = DEFAULT_IMAGE_MODEL;
-  state.selectedResolution = DEFAULT_RESOLUTION;
+  state.selectedResolution = defaultResolutionForCurrentUser();
   state.selectedRatio = DEFAULT_RATIO;
   ensureGenerationSelectionState();
   renderGenerationChips();
@@ -2561,12 +2592,66 @@ function availableRatiosFor(model, resolution) {
   return RATIO_ORDER.filter((key) => Object.prototype.hasOwnProperty.call(byResolution, key));
 }
 
+function hasPaidGenerationSettingsAccess() {
+  return isAdminUser() || hasSuccessfulPayment();
+}
+
+function defaultResolutionForCurrentUser() {
+  return hasPaidGenerationSettingsAccess() ? DEFAULT_RESOLUTION : FREE_DEFAULT_RESOLUTION;
+}
+
+function imageModelRequiresPayment(model) {
+  const normalized = String(model || "").trim().toLowerCase();
+  return !hasPaidGenerationSettingsAccess() && normalized === "gemini-3-pro-image-preview";
+}
+
+function resolutionRequiresPayment(model, resolution) {
+  if (hasPaidGenerationSettingsAccess()) {
+    return false;
+  }
+  const normalizedModel = String(model || "").trim().toLowerCase();
+  if (normalizedModel === "gemini-2.5-flash-image") {
+    return false;
+  }
+  return String(resolution || "").trim().toUpperCase() !== FREE_DEFAULT_RESOLUTION;
+}
+
+function unlockedImageModelsForCurrentUser() {
+  return availableImageModelsForCurrentUser().filter((model) => !imageModelRequiresPayment(model));
+}
+
+function unlockedResolutionsForModel(model) {
+  return availableResolutionsForModel(model).filter(
+    (resolution) => !resolutionRequiresPayment(model, resolution),
+  );
+}
+
+function fallbackImageModelForCurrentUser() {
+  const unlockedModels = unlockedImageModelsForCurrentUser();
+  if (unlockedModels.includes(DEFAULT_IMAGE_MODEL)) {
+    return DEFAULT_IMAGE_MODEL;
+  }
+  return unlockedModels[0] || DEFAULT_IMAGE_MODEL;
+}
+
+function showPaidGenerationSettingsNote(message = PAID_GENERATION_UNLOCK_NOTE) {
+  setCreateNote(message);
+}
+
+function openPaidGenerationSettingsPaywall() {
+  showPaidGenerationSettingsNote();
+  switchScreen("tokens");
+}
+
 function ensureGenerationSelectionState() {
   const selectedModel = String(state.selectedImageModel || DEFAULT_IMAGE_MODEL).trim();
   const availableModels = availableImageModelsForCurrentUser();
-  state.selectedImageModel = availableModels.includes(selectedModel) ? selectedModel : DEFAULT_IMAGE_MODEL;
+  state.selectedImageModel =
+    availableModels.includes(selectedModel) && !imageModelRequiresPayment(selectedModel)
+      ? selectedModel
+      : fallbackImageModelForCurrentUser();
 
-  const availableResolutions = availableResolutionsForModel(state.selectedImageModel);
+  const availableResolutions = unlockedResolutionsForModel(state.selectedImageModel);
   if (!availableResolutions.length) {
     state.selectedResolution = "auto";
     state.selectedRatio = "auto";
@@ -2574,8 +2659,9 @@ function ensureGenerationSelectionState() {
   }
 
   if (!availableResolutions.includes(state.selectedResolution)) {
-    if (availableResolutions.includes(DEFAULT_RESOLUTION)) {
-      state.selectedResolution = DEFAULT_RESOLUTION;
+    const defaultResolution = defaultResolutionForCurrentUser();
+    if (availableResolutions.includes(defaultResolution)) {
+      state.selectedResolution = defaultResolution;
     } else {
       state.selectedResolution = availableResolutions[0];
     }
@@ -2689,8 +2775,10 @@ function createChoiceChip({
   label,
   selected,
   disabled = false,
+  locked = false,
   onClick,
   lock = false,
+  lockLabel = "Недоступно",
 }) {
   const button = document.createElement("button");
   button.type = "button";
@@ -2698,6 +2786,9 @@ function createChoiceChip({
   button.setAttribute("role", "radio");
   button.setAttribute("aria-checked", selected ? "true" : "false");
   button.disabled = disabled;
+  if (locked) {
+    button.classList.add("is-locked");
+  }
   const labelNode = document.createElement("span");
   labelNode.className = "choice-chip-label";
   labelNode.textContent = label;
@@ -2705,7 +2796,7 @@ function createChoiceChip({
   if (lock) {
     const lockNode = document.createElement("span");
     lockNode.className = "chip-lock";
-    lockNode.textContent = "Недоступно";
+    lockNode.textContent = lockLabel;
     button.appendChild(lockNode);
   }
   if (!disabled && typeof onClick === "function") {
@@ -2717,10 +2808,18 @@ function createChoiceChip({
 function renderModelChips() {
   modelChips.innerHTML = "";
   for (const model of availableImageModelsForCurrentUser()) {
+    const locked = imageModelRequiresPayment(model);
     const chip = createChoiceChip({
       label: imageModelLabel(model),
-      selected: state.selectedImageModel === model,
+      selected: !locked && state.selectedImageModel === model,
+      locked,
+      lock: locked,
+      lockLabel: PAID_GENERATION_UNLOCK_LABEL,
       onClick: () => {
+        if (locked) {
+          openPaidGenerationSettingsPaywall();
+          return;
+        }
         state.selectedImageModel = model;
         ensureGenerationSelectionState();
         renderGenerationChips();
@@ -2736,12 +2835,19 @@ function renderResolutionChips() {
   const available = new Set(availableResolutionsForModel(state.selectedImageModel));
   for (const resolution of RESOLUTION_ORDER) {
     const enabled = available.has(resolution);
+    const locked = enabled && resolutionRequiresPayment(state.selectedImageModel, resolution);
     const chip = createChoiceChip({
       label: resolutionLabel(resolution),
-      selected: enabled && state.selectedResolution === resolution,
+      selected: enabled && !locked && state.selectedResolution === resolution,
       disabled: !enabled,
-      lock: !enabled,
+      locked,
+      lock: !enabled || locked,
+      lockLabel: locked ? PAID_GENERATION_UNLOCK_LABEL : "Недоступно",
       onClick: () => {
+        if (locked) {
+          openPaidGenerationSettingsPaywall();
+          return;
+        }
         state.selectedResolution = resolution;
         ensureGenerationSelectionState();
         renderGenerationChips();
@@ -3933,6 +4039,8 @@ function switchScreen(nextScreen) {
     });
   } else if (target === "feed") {
     window.requestAnimationFrame(() => maybeAutoLoadMoreTemplates());
+  } else if (target === "studio") {
+    setCreateButtonIdleLabel();
   } else if (target === "tokens") {
     loadPaywallGalleryImages();
   }
@@ -7161,8 +7269,17 @@ async function authorizedGetWithRetry(path, retries = 1) {
 function renderUser(me, wallet) {
   const display = String(me.display_name || me.telegram_user_id || "—");
   const tgId = String(me.telegram_user_id || "—");
+  const hadPaidGenerationAccess = hasPaidGenerationSettingsAccess();
 
   state.me = me;
+  if (
+    !hadPaidGenerationAccess
+    && hasPaidGenerationSettingsAccess()
+    && state.selectedImageModel === DEFAULT_IMAGE_MODEL
+    && state.selectedResolution === FREE_DEFAULT_RESOLUTION
+  ) {
+    state.selectedResolution = DEFAULT_RESOLUTION;
+  }
   if (me.is_admin) {
     disableProductAnalyticsForAdmin();
   }
@@ -7185,6 +7302,7 @@ function renderWalletBalance(wallet) {
   state.walletBalanceCredits = balance;
   creditsValue.textContent = formatCredits(balance);
   creditsBadge.textContent = String(balance);
+  setCreateButtonIdleLabel();
   syncPlansAfterEligibilityChange();
   renderProfileSummary();
 }
@@ -10116,6 +10234,10 @@ async function handleCreate(options = {}) {
 
   try {
     ensureAuthorizedForCreate();
+    if (walletBalanceCredits() <= 0) {
+      switchScreen("tokens");
+      return;
+    }
     if (!prompt) {
       throw new Error("Добавь промпт.");
     }

@@ -2442,7 +2442,7 @@ body.is-web-runtime.is-mobile-browser .app-main {
 }
 
 .choice-chip {
-  min-height: 38px;
+  min-height: 40px;
   padding: 0 12px;
   border-radius: 8px;
   border: 1px solid #2b3449;
@@ -2467,6 +2467,17 @@ body.is-web-runtime.is-mobile-browser .app-main {
   color: #d6dcef;
 }
 
+.choice-chip.is-locked {
+  border-color: #323b51;
+  background: rgba(15, 21, 34, 0.72);
+  color: #929db6;
+}
+
+.choice-chip.is-locked:hover:not(:disabled) {
+  border-color: rgba(238, 173, 91, 0.42);
+  color: #d7deef;
+}
+
 .choice-chip[aria-checked="true"] {
   border-color: rgba(var(--accent-rgb), 0.68);
   background: rgba(var(--accent-rgb), 0.18);
@@ -2489,6 +2500,18 @@ body.is-web-runtime.is-mobile-browser .app-main {
   margin-left: 2px;
   color: #8b95ad;
   font-size: 11px;
+  font-weight: 700;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.choice-chip.is-locked .chip-lock {
+  padding: 2px 6px;
+  border-radius: 999px;
+  border: 1px solid rgba(238, 173, 91, 0.24);
+  background: rgba(238, 173, 91, 0.1);
+  color: #f0c178;
+  font-size: 10px;
 }
 
 .choice-chip-ratio {
@@ -2585,6 +2608,13 @@ body.is-web-runtime.is-mobile-browser .app-main {
 #createButton {
   width: min(92%, 460px);
   justify-self: center;
+}
+
+#createButton.is-topup-action {
+  border-color: rgba(238, 173, 91, 0.78);
+  background: #e9a64a;
+  color: #151923;
+  box-shadow: 0 14px 32px rgba(219, 132, 44, 0.18);
 }
 
 .note {
