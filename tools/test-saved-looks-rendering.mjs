@@ -77,6 +77,8 @@ async function assertEditorLayout(page, clearance) {
   assert.ok(layout.body.height > 0, 'Editor body is collapsed');
   assert.ok(layout.body.bottom <= layout.footer.top + 1, 'Body overlaps editor actions');
   assert.ok(layout.footer.bottom <= layout.dialog.bottom + 1, 'Editor actions are clipped');
+  assert.ok(Math.abs(layout.dialog.bottom - layout.footer.bottom - 1) <= 1,
+    `Editor has empty space below its actions: ${layout.dialog.bottom - layout.footer.bottom}px`);
   assert.ok(layout.close.height >= 44, 'Close button lost its touch target');
   if (layout.viewport.width <= 600) assert.ok(layout.dialog.height <= 680, 'Mobile editor is stretched to full screen');
   return layout;
@@ -164,10 +166,20 @@ async function testDialogs(page, name, viewport, telegramInsets) {
   await page.locator('#addSavedLookButton').click();
   await page.waitForFunction(() => document.getElementById('savedLookEditor').classList.contains('is-visible'));
   await page.locator('#savedLookEditor').evaluate(dialog => Promise.all(dialog.getAnimations().map(animation => animation.finished)));
+  await page.screenshot({path: `${screenshots}/${name}-new-editor.png`});
   await assertEditorLayout(page, clearance);
   assert.equal(await page.locator('#saveSavedLookButton').isDisabled(), true);
+  const photo = await readFile(path.join(root, 'app/assets/reference/reference-prompt-roses.jpg'));
+  for (let count = 1; count <= 3; count++) {
+    await page.locator('#savedLookPhotoInput').setInputFiles({name: `photo-${count}.jpg`, mimeType: 'image/jpeg', buffer: photo});
+    assert.equal(await page.locator('#lookEditorPhotos .look-editor-photo').count(), count);
+    await assertEditorLayout(page, clearance);
+    assert.equal(await page.locator('#saveSavedLookButton').isDisabled(), false);
+  }
   await page.locator('#savedLookEditor [data-look-close="editor"]').click();
-  await page.waitForFunction(() => !document.getElementById('savedLookEditor').open);
+  await assertConfirmLayout(page, clearance);
+  await confirm.locator('#lookConfirmCancel').click();
+  await page.waitForFunction(() => !document.getElementById('savedLookEditor').open && !document.getElementById('savedLookConfirm').open);
 }
 
 async function run(browserType, name, viewport, reducedMotion = 'no-preference', telegramInsets = false) {
@@ -202,6 +214,10 @@ async function run(browserType, name, viewport, reducedMotion = 'no-preference',
     }
     if (process.argv.includes('--dialogs-baseline')) {
       const body = execFileSync('git', ['show', 'ab1d75c:app/saved-looks.css'], {cwd: root, encoding: 'utf8'});
+      await page.route('**/saved-looks.css?*', route => route.fulfill({contentType: 'text/css', body}));
+    }
+    if (process.argv.includes('--height-baseline')) {
+      const body = execFileSync('git', ['show', 'c586c57:app/saved-looks.css'], {cwd: root, encoding: 'utf8'});
       await page.route('**/saved-looks.css?*', route => route.fulfill({contentType: 'text/css', body}));
     }
     await page.goto(url, {waitUntil: 'domcontentloaded'});
