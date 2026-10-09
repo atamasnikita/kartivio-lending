@@ -8,6 +8,7 @@
   },
   "scripts": {
     "check": "node --check app/app.js",
+    "test:looks-rendering": "node tools/test-saved-looks-rendering.mjs",
     "wordstat": "node tools/wordstat.mjs"
   },
   "keywords": [],

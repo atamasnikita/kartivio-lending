@@ -22,6 +22,7 @@
   let confirmBusy = false;
   let refreshPromise = null;
   let loadEpoch = 0;
+  let sourceRenderKey = '';
   const closingTimers = new Map();
   const draftUrls = new Set();
   const localAdapter = ['localhost', '127.0.0.1'].includes(location.hostname) ? window.KartivioLooksAdapter : null;
@@ -63,7 +64,6 @@
     window.requestAnimationFrame(() => {
       if (dialog.open && !closingTimers.has(dialog)) dialog.classList.add('is-visible');
     });
-    refreshIcons();
   }
 
   function closeDialog(dialog) {
@@ -80,20 +80,70 @@
   function row(item, picker = false) {
     const active = selection?.look_id === item.id;
     return `<button class="saved-look-row${active && picker ? ' is-selected' : ''}" type="button" data-look-id="${escape(item.id)}" ${picker ? `aria-pressed="${active}"` : ''}>
-      <span class="saved-look-preview" aria-hidden="true">${item.images.slice(0, 3).map(image => `<img src="${escape(image.preview_url)}" alt="" />`).join('')}</span>
+      <span class="saved-look-preview" aria-hidden="true"></span>
       <span class="saved-look-label"><strong title="${escape(item.title)}">${escape(item.title)}</strong><small>${photoLabel(item.images.length)}${active ? ' · выбран' : ''}</small></span>
       ${icon(picker && active ? 'check' : 'chevron-right')}
     </button>`;
   }
 
+  function updatePreview(image, url) {
+    if (!image.dataset.previewUrl) image.addEventListener('error', () => {
+      const latest = image.dataset.previewUrl;
+      if (latest && image.getAttribute('src') !== latest) image.src = latest;
+    });
+    image.dataset.previewUrl = url;
+    // Signed URLs rotate on reload; keep an already loaded preview on screen.
+    if (!image.getAttribute('src') || (image.complete && !image.naturalWidth && image.getAttribute('src') !== url)) image.src = url;
+  }
+
+  function renderRows(container, picker = false) {
+    const ids = new Set(items.map(item => item.id));
+    const rows = new Map();
+    Array.from(container.children).forEach(child => {
+      if (ids.has(child.dataset.lookId)) rows.set(child.dataset.lookId, child);
+      else child.remove();
+    });
+    items.forEach((item, index) => {
+      let button = rows.get(item.id);
+      if (!button) {
+        const template = document.createElement('template');
+        template.innerHTML = row(item, picker);
+        button = template.content.firstElementChild;
+      }
+      const active = selection?.look_id === item.id;
+      button.classList.toggle('is-selected', active && picker);
+      if (picker) button.setAttribute('aria-pressed', String(active));
+      const label = button.querySelector('strong');
+      if (label.textContent !== item.title) label.textContent = item.title;
+      label.title = item.title;
+      button.querySelector('small').textContent = `${photoLabel(item.images.length)}${active ? ' · выбран' : ''}`;
+      const name = picker && active ? 'check' : 'chevron-right';
+      const currentIcon = button.querySelector(':scope > [data-lucide]');
+      if (currentIcon.getAttribute('data-lucide') !== name) currentIcon.outerHTML = icon(name);
+      const preview = button.querySelector('.saved-look-preview');
+      const photos = item.images.slice(0, 3);
+      const photoIds = new Set(photos.map(image => image.id));
+      const previous = new Map(Array.from(preview.children).map(image => [image.dataset.imageId, image]));
+      Array.from(preview.children).forEach(image => {if (!photoIds.has(image.dataset.imageId)) image.remove();});
+      photos.forEach((photo, photoIndex) => {
+        const image = previous.get(photo.id) || document.createElement('img');
+        image.alt = ''; image.dataset.imageId = photo.id;
+        updatePreview(image, photo.preview_url);
+        if (preview.children[photoIndex] !== image) preview.insertBefore(image, preview.children[photoIndex] || null);
+      });
+      if (container.children[index] !== button) container.insertBefore(button, container.children[index] || null);
+    });
+  }
+
   function render() {
     ui.profile.classList.toggle('is-hidden', !available);
-    ui.list.innerHTML = items.length ? items.map(item => row(item)).join('') : '<p class="saved-looks-empty">Сохрани фото, чтобы не загружать их каждый раз.</p>';
+    renderRows(ui.list);
+    if (!items.length) ui.list.innerHTML = '<p class="saved-looks-empty">Сохрани фото, чтобы не загружать их каждый раз.</p>';
     ui.add.disabled = items.length >= 5 || busy;
     ui.note.textContent = items.length >= 5 ? 'Сохранено 5 из 5 образов.' : items.length ? `${items.length} из 5 образов · до 3 фото в каждом` : '';
-    ui.pickerList.innerHTML = items.map(item => row(item, true)).join('');
+    renderRows(ui.pickerList, true);
     renderStudio();
-    refreshIcons();
+    if (document.querySelector('i[data-lucide]')) refreshIcons();
   }
 
   function renderStudio() {
@@ -107,11 +157,16 @@
     ui.saveSource.querySelector('span').textContent = items.length ? 'Сохранить как новый образ' : 'Сохранить фото в образ';
     el('uploadPhotoButton').classList.toggle('is-hidden', !photos.length && !sourceImageFiles().length);
     el('uploadPhotoButton').querySelector('span').textContent = photos.length ? 'Другие фото' : 'Добавить';
-    if (!photos.length) {ui.source.innerHTML = ''; return;}
+    if (!photos.length) {ui.source.innerHTML = ''; sourceRenderKey = ''; return;}
     el('sourceImageMeta').textContent = `${photos.length} из ${look.images.length} фото образа`;
-    ui.source.innerHTML = `<div class="saved-look-source-head"><span>${icon('contact-round')}<strong>${escape(look.title)}</strong></span><button class="look-icon-button" type="button" data-look-clear aria-label="Снять выбор образа" title="Снять выбор образа">${icon('x')}</button></div>
-      <div class="saved-look-source-photos">${photos.map(image => `<div class="saved-look-source-photo"><button type="button" class="look-photo-open" data-look-view="${escape(image.id)}" aria-label="Посмотреть фото"><img src="${escape(image.preview_url)}" alt="Фото образа" /></button><button type="button" class="look-icon-button look-photo-exclude" data-look-exclude="${escape(image.id)}" title="Не использовать это фото" aria-label="Не использовать это фото в генерации">${icon('x')}</button></div>`).join('')}</div>`;
-    refreshIcons();
+    const nextKey = JSON.stringify([look.id, look.title, photos.map(image => image.id)]);
+    if (sourceRenderKey !== nextKey) {
+      sourceRenderKey = nextKey;
+      ui.source.innerHTML = `<div class="saved-look-source-head"><span>${icon('contact-round')}<strong>${escape(look.title)}</strong></span><button class="look-icon-button" type="button" data-look-clear aria-label="Снять выбор образа" title="Снять выбор образа">${icon('x')}</button></div>
+        <div class="saved-look-source-photos">${photos.map(image => `<div class="saved-look-source-photo"><button type="button" class="look-photo-open" data-look-view="${escape(image.id)}" aria-label="Посмотреть фото"><img alt="Фото образа" /></button><button type="button" class="look-icon-button look-photo-exclude" data-look-exclude="${escape(image.id)}" title="Не использовать это фото" aria-label="Не использовать это фото в генерации">${icon('x')}</button></div>`).join('')}</div>`;
+      refreshIcons();
+    }
+    ui.source.querySelectorAll('.look-photo-open img').forEach((image, index) => updatePreview(image, photos[index].preview_url));
   }
 
   async function reload() {
@@ -326,6 +381,7 @@
   ui.add.addEventListener('click', () => openEditor());
   ui.list.addEventListener('click', event => {const row = event.target.closest('[data-look-id]'); if (row) openEditor(items.find(item => item.id === row.dataset.lookId));});
   ui.choose.addEventListener('click', () => {
+    if (ui.picker.open && !closingTimers.has(ui.picker)) return;
     ui.pickerNote.textContent = ''; openDialog(ui.picker);
     reload().catch(() => {ui.pickerNote.textContent = 'Не удалось обновить образы. Попробуй ещё раз.';});
   });
