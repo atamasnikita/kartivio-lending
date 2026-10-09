@@ -55,7 +55,122 @@ function installFixture() {
   };
 }
 
-async function run(browserType, name, viewport, reducedMotion = 'no-preference') {
+async function assertEditorLayout(page, clearance) {
+  const layout = await page.locator('#savedLookEditor').evaluate(dialog => {
+    const rect = element => {
+      const {top, right, bottom, left, height} = element.getBoundingClientRect();
+      return {top, right, bottom, left, height};
+    };
+    const body = dialog.querySelector('.look-editor-body');
+    return {
+      dialog: rect(dialog), head: rect(dialog.querySelector('.look-dialog-head')),
+      close: rect(dialog.querySelector('[data-look-close="editor"]')),
+      body: rect(body), footer: rect(dialog.querySelector('.look-editor-footer')),
+      bodyScrollHeight: body.scrollHeight, bodyClientHeight: body.clientHeight,
+      viewport: {width: innerWidth, height: innerHeight},
+    };
+  });
+  assert.ok(layout.dialog.top >= clearance.top - 1, 'Editor overlaps the top safe area');
+  assert.ok(layout.dialog.bottom <= layout.viewport.height - clearance.bottom + 1, 'Editor overlaps the bottom safe area');
+  assert.ok(layout.dialog.left >= 8 && layout.dialog.right <= layout.viewport.width - 8, 'Editor has no horizontal breathing room');
+  assert.ok(layout.close.top >= layout.dialog.top && layout.close.bottom <= layout.head.bottom, 'Close button is clipped');
+  assert.ok(layout.body.height > 0, 'Editor body is collapsed');
+  assert.ok(layout.body.bottom <= layout.footer.top + 1, 'Body overlaps editor actions');
+  assert.ok(layout.footer.bottom <= layout.dialog.bottom + 1, 'Editor actions are clipped');
+  assert.ok(layout.close.height >= 44, 'Close button lost its touch target');
+  if (layout.viewport.width <= 600) assert.ok(layout.dialog.height <= 680, 'Mobile editor is stretched to full screen');
+  return layout;
+}
+
+async function assertConfirmLayout(page, clearance) {
+  await page.waitForFunction(() => document.getElementById('savedLookConfirm').classList.contains('is-visible'));
+  await page.locator('#savedLookConfirm').evaluate(dialog => Promise.all(dialog.getAnimations().map(animation => animation.finished)));
+  const layout = await page.locator('#savedLookConfirm').evaluate(dialog => {
+    const {top, bottom} = dialog.getBoundingClientRect();
+    return {top, bottom, viewportHeight: innerHeight, buttons: [...dialog.querySelectorAll('.look-confirm-actions button')].map(button => {
+      const bounds = button.getBoundingClientRect();
+      const style = getComputedStyle(button);
+      const text = document.createRange();
+      text.selectNodeContents(button);
+      const textBounds = text.getBoundingClientRect();
+      return {top: bounds.top, bottom: bounds.bottom, height: bounds.height, width: bounds.width,
+        fontSize: style.fontSize, fontWeight: style.fontWeight,
+        textFits: textBounds.left >= bounds.left && textBounds.right <= bounds.right && textBounds.top >= bounds.top && textBounds.bottom <= bounds.bottom};
+    })};
+  });
+  assert.ok(layout.top >= clearance.top - 1 && layout.bottom <= layout.viewportHeight - clearance.bottom + 1, 'Confirmation overlaps a safe area');
+  const [cancel, accept] = layout.buttons;
+  assert.equal(cancel.top, accept.top, 'Confirmation button tops differ');
+  assert.equal(cancel.height, accept.height, 'Confirmation button heights differ');
+  assert.equal(cancel.height, 48, 'Confirmation buttons lost their touch target');
+  assert.ok(Math.abs(cancel.width - accept.width) <= 1, 'Confirmation button widths differ');
+  assert.equal(cancel.fontSize, accept.fontSize, 'Confirmation button font sizes differ');
+  assert.equal(cancel.fontWeight, accept.fontWeight, 'Confirmation button font weights differ');
+  assert.ok(cancel.textFits && accept.textFits, 'Confirmation button text is clipped');
+}
+
+async function testDialogs(page, name, viewport, telegramInsets) {
+  const clearance = telegramInsets ? {top: 120, bottom: 50} : {top: 16, bottom: 16};
+  await page.locator('#savedLookPicker [data-look-close="picker"]').click();
+  await page.waitForFunction(() => !document.getElementById('savedLookPicker').open);
+  await page.locator('[data-nav="profile"]').click();
+  if (telegramInsets) await page.evaluate(() => {
+    const style = document.documentElement.style;
+    style.setProperty('--tg-safe-top', '47px');
+    style.setProperty('--tg-controls-offset', '57px');
+    style.setProperty('--tg-safe-bottom', '34px');
+  });
+  await page.locator('#savedLooksList [data-look-id="look-one"]').click();
+  await page.waitForFunction(() => document.getElementById('savedLookEditor').classList.contains('is-visible'));
+  await page.locator('#savedLookEditor').evaluate(dialog => Promise.all(dialog.getAnimations().map(animation => animation.finished)));
+  await assertEditorLayout(page, clearance);
+  await page.screenshot({path: `${screenshots}/${name}-editor.png`});
+
+  const confirm = page.locator('#savedLookConfirm');
+  await page.locator('#savedLookEditor [data-draft-remove="0"]').click();
+  await assertConfirmLayout(page, clearance);
+  await page.screenshot({path: `${screenshots}/${name}-delete-photo.png`});
+  await confirm.locator('#lookConfirmCancel').click();
+  await page.waitForFunction(() => !document.getElementById('savedLookConfirm').open);
+  assert.equal(await page.locator('#lookEditorPhotos .look-editor-photo').count(), 2, 'Cancelling deletion removed a photo');
+
+  await page.locator('#deleteSavedLookButton').click();
+  await assertConfirmLayout(page, clearance);
+  await confirm.locator('#lookConfirmCancel').click();
+  await page.waitForFunction(() => !document.getElementById('savedLookConfirm').open);
+
+  if (viewport.width <= 600) {
+    await page.locator('#savedLookName').focus();
+    await page.setViewportSize({width: viewport.width, height: 480});
+    const compact = await assertEditorLayout(page, clearance);
+    assert.ok(compact.bodyScrollHeight > compact.bodyClientHeight, 'Short viewport does not scroll inside the editor');
+    await page.locator('#savedLookEditor .look-editor-body').evaluate(body => {body.scrollTop = body.scrollHeight;});
+    await assertEditorLayout(page, clearance);
+    await page.screenshot({path: `${screenshots}/${name}-short-viewport.png`});
+    await page.setViewportSize(viewport);
+  }
+
+  await page.locator('#savedLookEditor [data-draft-remove="0"]').click();
+  await assertConfirmLayout(page, clearance);
+  await confirm.locator('#lookConfirmAccept').click();
+  await page.waitForFunction(() => !document.getElementById('savedLookConfirm').open);
+  assert.equal(await page.locator('#lookEditorPhotos .look-editor-photo').count(), 1, 'Confirmed deletion did not update the draft');
+  await page.locator('#savedLookEditor [data-look-close="editor"]').click();
+  await assertConfirmLayout(page, clearance);
+  assert.equal(await confirm.locator('#lookConfirmCancel').textContent(), 'Не сохранять');
+  await confirm.locator('#lookConfirmCancel').click();
+  await page.waitForFunction(() => !document.getElementById('savedLookEditor').open && !document.getElementById('savedLookConfirm').open);
+
+  await page.locator('#addSavedLookButton').click();
+  await page.waitForFunction(() => document.getElementById('savedLookEditor').classList.contains('is-visible'));
+  await page.locator('#savedLookEditor').evaluate(dialog => Promise.all(dialog.getAnimations().map(animation => animation.finished)));
+  await assertEditorLayout(page, clearance);
+  assert.equal(await page.locator('#saveSavedLookButton').isDisabled(), true);
+  await page.locator('#savedLookEditor [data-look-close="editor"]').click();
+  await page.waitForFunction(() => !document.getElementById('savedLookEditor').open);
+}
+
+async function run(browserType, name, viewport, reducedMotion = 'no-preference', telegramInsets = false) {
   const browser = await browserType.launch();
   try {
     const page = await browser.newPage({viewport, reducedMotion});
@@ -84,6 +199,10 @@ async function run(browserType, name, viewport, reducedMotion = 'no-preference')
     if (process.argv.includes('--baseline')) {
       const body = execFileSync('git', ['show', '58adbbc:app/saved-looks.js'], {cwd: root, encoding: 'utf8'});
       await page.route('**/saved-looks.js?*', route => route.fulfill({contentType: 'application/javascript', body}));
+    }
+    if (process.argv.includes('--dialogs-baseline')) {
+      const body = execFileSync('git', ['show', 'ab1d75c:app/saved-looks.css'], {cwd: root, encoding: 'utf8'});
+      await page.route('**/saved-looks.css?*', route => route.fulfill({contentType: 'text/css', body}));
     }
     await page.goto(url, {waitUntil: 'domcontentloaded'});
     await page.waitForFunction(() => document.querySelectorAll('#lookPickerList [data-look-id]').length === 2);
@@ -153,8 +272,9 @@ async function run(browserType, name, viewport, reducedMotion = 'no-preference')
     await page.evaluate(() => window.KartivioLooks.load('local-preview'));
     assert.equal(await page.locator('#lookPickerList [data-look-id]').count(), 1);
     assert.equal(await page.evaluate(() => window.KartivioLooks.snapshot()), null, 'A deleted look remained selected');
+    await testDialogs(page, name, viewport, telegramInsets);
     assert.deepEqual(errors, []);
-    console.log(`PASS ${name}: stable previews, selection, updates, reorder, expired URL, errors, deletion`);
+    console.log(`PASS ${name}: stable previews, selection, updates, errors, compact editor, safe areas, aligned confirmation actions`);
   } finally {
     await browser.close();
   }
@@ -163,6 +283,8 @@ async function run(browserType, name, viewport, reducedMotion = 'no-preference')
 try {
   await run(chromium, 'desktop', {width: 1365, height: 900});
   await run(chromium, 'mobile', {width: 390, height: 844});
+  await run(chromium, 'small-mobile', {width: 320, height: 568});
+  await run(webkit, 'ios-telegram-insets', {width: 390, height: 844}, 'no-preference', true);
   await run(webkit, 'ios-reduced-motion', {width: 390, height: 844}, 'reduce');
 } finally {
   await new Promise(resolve => server.close(resolve));
