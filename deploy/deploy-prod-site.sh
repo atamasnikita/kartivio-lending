@@ -47,6 +47,7 @@ rsync_remote \
   --exclude "package.json" \
   --exclude "package-lock.json" \
   --exclude "tmp" \
+  --exclude "app/*-preview.html" \
   --exclude "deploy" \
   --exclude ".gitignore" \
   "$REPO_ROOT/" \

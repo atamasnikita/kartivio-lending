@@ -230,6 +230,14 @@ const STATUS_LABELS = {
 };
 
 const API_ERROR_MESSAGES = Object.freeze({
+  saved_look_not_found: "Этот образ удалён или недоступен. Выбери другой.",
+  saved_look_changed: "Образ изменился. Открой его заново и выбери фото.",
+  saved_looks_limit: "Можно сохранить до 5 образов.",
+  saved_looks_rate_limit: "Слишком много изменений. Попробуй немного позже.",
+  invalid_saved_look_photos: "В образе должно быть от 1 до 3 фото.",
+  invalid_saved_look_title: "Добавь название образа.",
+  invalid_image: "Не удалось прочитать фото. Выбери другой файл.",
+  saved_photo_unavailable: "Фото образа временно недоступно. Попробуй ещё раз.",
   unauthorized: "Нужно войти в аккаунт.",
   forbidden: "Недостаточно прав для этого действия.",
   invalid_token: "Сессия устарела. Войди снова.",
@@ -467,6 +475,7 @@ const state = {
   referencePromptBusy: false,
   referencePromptPreviousValue: "",
   referencePromptBuilt: false,
+  referencePromptActive: false,
   referencePromptExpanded: false,
   referencePromptRequestToken: 0,
   promptSource: "manual",
@@ -784,10 +793,6 @@ const profileFavoritesCount = document.getElementById("profileFavoritesCount");
 const profileActivityNote = document.getElementById("profileActivityNote");
 const profileHistoryButton = document.getElementById("profileHistoryButton");
 const profileFavoritesButton = document.getElementById("profileFavoritesButton");
-const profileReferenceCard = document.getElementById("profileReferenceCard");
-const profileReferenceBadge = document.getElementById("profileReferenceBadge");
-const profileReferenceText = document.getElementById("profileReferenceText");
-const profileReferenceAction = document.getElementById("profileReferenceAction");
 const profileTopupAction = document.getElementById("profileTopupAction");
 const profileReferralCard = document.getElementById("profileReferralCard");
 const profileReferralToggle = document.getElementById("profileReferralToggle");
@@ -902,6 +907,7 @@ const templateQuickFilters = document.getElementById("templateQuickFilters");
 const templateFilterChips = document.getElementById("templateFilterChips");
 const templateSearchInput = document.getElementById("templateSearchInput");
 const templateSearchClear = document.getElementById("templateSearchClear");
+const feedReferencePromptTool = document.getElementById("feedReferencePromptTool");
 const templatesGrid = document.getElementById("templatesGrid");
 const templateFeedPagination = document.getElementById("templateFeedPagination");
 const templateFeedMoreButton = document.getElementById("templateFeedMoreButton");
@@ -918,6 +924,7 @@ const generationSettingsSummary = document.getElementById("generationSettingsSum
 const generationSettingsDetails = document.querySelector(".settings-panel");
 const studioSceneBlock = document.getElementById("studioSceneBlock");
 const studioSceneTitle = document.getElementById("studioSceneTitle");
+const clearSceneModeButton = document.getElementById("clearSceneModeButton");
 const chooseTemplateButton = document.getElementById("chooseTemplateButton");
 const referencePromptToggleButton = document.getElementById("referencePromptToggleButton");
 const referencePromptCollapseButton = document.getElementById("referencePromptCollapseButton");
@@ -959,7 +966,6 @@ const selectedTemplateCard = document.getElementById("selectedTemplateCard");
 const selectedTemplatePreview = document.getElementById("selectedTemplatePreview");
 const selectedTemplateTitle = document.getElementById("selectedTemplateTitle");
 const selectedTemplateMeta = document.getElementById("selectedTemplateMeta");
-const clearTemplateButton = document.getElementById("clearTemplateButton");
 const activeJobMeta = document.getElementById("activeJobMeta");
 const activeResult = document.getElementById("activeResult");
 const activeResultPanel = activeResult ? activeResult.closest(".result-panel") : null;
@@ -1038,6 +1044,10 @@ let referencePromptTemplateVisibilityTimerId = 0;
 let settingsPanelHeightFrameId = 0;
 const jumpButtons = Array.from(document.querySelectorAll("[data-nav-target]"));
 const screens = Array.from(document.querySelectorAll("[data-screen]"));
+let screenEntranceAnimation = null;
+let screenExitAnimation = null;
+let screenExitLayer = null;
+let screenNavigationFromKeyboard = false;
 let yandexAuthPending = false;
 let refreshSessionPromise = null;
 let privateDataRetryTimer = null;
@@ -1621,6 +1631,9 @@ function setAuthGateVisible(visible) {
     appShell.classList.toggle("is-hidden", visible);
   }
   if (visible) {
+    screenEntranceAnimation?.cancel();
+    screenEntranceAnimation = null;
+    clearScreenExitLayer();
     clearFirstPhotosetSheetSchedule();
     closeFirstPhotosetSheet();
   } else {
@@ -3088,6 +3101,9 @@ function normalizeImageUrl(rawUrl) {
   try {
     const parsed = new URL(value);
     if (parsed.hostname === "127.0.0.1" || parsed.hostname === "localhost") {
+      if (parsed.pathname.startsWith("/v1/") || parsed.pathname.startsWith("/generated/")) {
+        return `${trimApiBase(state.apiBase)}${parsed.pathname}${parsed.search}`;
+      }
       const filename = parsed.pathname.split("/").pop() || "";
       if (!filename) {
         return value;
@@ -3994,16 +4010,115 @@ async function copyProfileReferralLink(kind = "telegram") {
   }
 }
 
+function clearScreenExitLayer() {
+  const layer = screenExitLayer;
+  screenExitLayer = null;
+  screenExitAnimation?.cancel();
+  screenExitAnimation = null;
+  if (!layer) {
+    return;
+  }
+  layer.screen.classList.remove("is-screen-leaving");
+  layer.screen.style.cssText = layer.originalStyle;
+  layer.placeholder.replaceWith(layer.screen);
+  layer.element.remove();
+}
+
+function prepareScreenExit(animate) {
+  const previous = screens.find((screen) => screen.classList.contains("screen-active"));
+  const rect = previous?.getBoundingClientRect();
+  const opacity = previous ? getComputedStyle(previous).opacity : "1";
+  screenEntranceAnimation?.cancel();
+  screenEntranceAnimation = null;
+  clearScreenExitLayer();
+  if (!animate || !previous || !rect) {
+    return;
+  }
+  const mainRect = appMain.getBoundingClientRect();
+  const top = Math.max(0, mainRect.top, appShell.querySelector(".app-header").getBoundingClientRect().bottom);
+  const left = Math.max(0, mainRect.left);
+  const width = Math.min(window.innerWidth, mainRect.right) - left;
+  const height = Math.min(window.innerHeight, mainRect.bottom) - top;
+  if (width <= 0 || height <= 0) {
+    return;
+  }
+  return { previous, rect, opacity, top, left, width, height };
+}
+
+function animateScreenExit(outgoing) {
+  if (!outgoing) {
+    return;
+  }
+  const { previous, rect, opacity, top, left, width, height } = outgoing;
+  const element = document.createElement("div");
+  element.className = "screen-outgoing-layer";
+  element.inert = true;
+  element.setAttribute("aria-hidden", "true");
+  Object.assign(element.style, {
+    top: `${top}px`, left: `${left}px`, width: `${width}px`, height: `${height}px`,
+  });
+  const placeholder = document.createComment("outgoing-screen");
+  const originalStyle = previous.style.cssText;
+  // Retain the outgoing viewport without cloning forms or delaying navigation.
+  previous.before(placeholder);
+  previous.classList.add("is-screen-leaving");
+  Object.assign(previous.style, {
+    position: "absolute", top: `${rect.top - top}px`, left: `${rect.left - left}px`,
+    width: `${rect.width}px`, height: `${rect.height}px`, margin: "0",
+  });
+  element.append(previous);
+  document.body.append(element);
+  screenExitLayer = { element, screen: previous, placeholder, originalStyle };
+  const animation = element.animate(
+    [{ opacity }, { opacity: 0 }],
+    { duration: 140, easing: "cubic-bezier(0.25, 0.46, 0.45, 0.94)", fill: "forwards" },
+  );
+  screenExitAnimation = animation;
+  animation.onfinish = () => {
+    if (screenExitAnimation === animation) {
+      clearScreenExitLayer();
+    }
+  };
+}
+
+function animateScreenEntrance(screen, animate) {
+  if (!animate) {
+    return;
+  }
+  const animation = screen.animate(
+    [
+      { opacity: 0, transform: "translateY(6px)" },
+      { opacity: 1, transform: "none" },
+    ],
+    { duration: 260, delay: 30, fill: "backwards", easing: "cubic-bezier(0.39, 0.575, 0.565, 1)" },
+  );
+  screenEntranceAnimation = animation;
+  animation.onfinish = () => {
+    if (screenEntranceAnimation === animation) {
+      screenEntranceAnimation = null;
+    }
+  };
+}
+
 function switchScreen(nextScreen) {
   const target = String(nextScreen || "").trim();
-  if (!target) {
+  const targetElement = screens.find((screen) => screen.dataset.screen === target);
+  if (!targetElement) {
     return;
   }
   if (target === "marketing" && !isAdminUser()) {
     setNote("Недостаточно прав для этого раздела.", true);
     return;
   }
+  const screenChanged = state.currentScreen !== target;
   closeTemplateModal();
+  const animate = screenChanged &&
+    !prefersReducedMotion() &&
+    !screenNavigationFromKeyboard &&
+    !document.hidden &&
+    !appShell.classList.contains("is-hidden") &&
+    typeof targetElement.animate === "function";
+  const outgoing = screenChanged ? prepareScreenExit(animate) : null;
   state.currentScreen = target;
   if (target === "feed") {
     trackProductEvent("feed_viewed", { screen: "feed" });
@@ -4012,6 +4127,7 @@ function switchScreen(nextScreen) {
     syncPlansAfterEligibilityChange();
   } else if (target === "profile") {
     renderProfileReferral();
+    if (state.me?.id) window.KartivioLooks?.load(state.me.id);
   }
   appShell.classList.toggle("is-paywall-active", target === "tokens");
   for (const screen of screens) {
@@ -4041,8 +4157,13 @@ function switchScreen(nextScreen) {
     window.requestAnimationFrame(() => maybeAutoLoadMoreTemplates());
   } else if (target === "studio") {
     setCreateButtonIdleLabel();
+    window.KartivioLooks?.renderStudio();
   } else if (target === "tokens") {
     loadPaywallGalleryImages();
+  }
+  if (screenChanged) {
+    animateScreenExit(outgoing);
+    animateScreenEntrance(targetElement, animate);
   }
   if (firstPhotosetSheetAllowedScreen()) {
     scheduleFirstPhotosetSessionSheet({ delayMs: FIRST_PHOTOSET_SHEET_RESCHEDULE_MS, source: "screen_change" });
@@ -4092,6 +4213,7 @@ function setReferenceImage(file) {
   state.referenceImageFile = file instanceof File ? file : null;
   state.referencePromptBuilt = false;
   if (state.referenceImageFile) {
+    state.referencePromptActive = true;
     state.referenceImagePreviewUrl = URL.createObjectURL(state.referenceImageFile);
   }
 }
@@ -4308,23 +4430,6 @@ function renderProfileSummary() {
         ? `${formatPhotoCount(successfulCount)} · ${favoritesCount} избранных`
         : "История и избранное";
   }
-  if (profileReferenceCard) {
-    profileReferenceCard.classList.add("is-available");
-  }
-  if (profileReferenceBadge) {
-    profileReferenceBadge.textContent = "Доступно";
-  }
-  if (profileReferenceText) {
-    profileReferenceText.textContent = "Загрузи референс — получи готовый промпт без списания кредитов.";
-  }
-  if (profileReferenceAction) {
-    const label = profileReferenceAction.querySelector("span");
-    if (label) {
-      label.textContent = "Попробовать";
-    } else {
-      profileReferenceAction.textContent = "Попробовать";
-    }
-  }
   renderProfileReferral();
 }
 
@@ -4352,11 +4457,6 @@ function openProfileFavorites() {
   });
 }
 
-function openProfileReferencePrompt() {
-  switchScreen("studio");
-  setReferencePromptExpanded(true);
-}
-
 function hasReferencePromptAccess() {
   return true;
 }
@@ -4369,8 +4469,12 @@ function defaultReferencePromptNote() {
   return REFERENCE_PROMPT_NOTE_DEFAULT;
 }
 
+function referencePromptModeActive() {
+  return Boolean(state.referencePromptActive || state.referencePromptBusy || referenceImageFile());
+}
+
 function referencePromptShouldBeExpanded() {
-  return Boolean(state.referencePromptExpanded || state.referencePromptBusy);
+  return Boolean(referencePromptModeActive() && (state.referencePromptExpanded || state.referencePromptBusy));
 }
 
 function syncReferencePromptTemplateVisibility(options = {}) {
@@ -4378,18 +4482,18 @@ function syncReferencePromptTemplateVisibility(options = {}) {
   if (!referencePromptCard) {
     return;
   }
-  const hiddenByTemplate = Boolean(state.selectedTemplate);
+  const shouldHide = Boolean(state.selectedTemplate || !referencePromptModeActive());
 
-  if (hiddenByTemplate) {
-    const alreadyHiding = referencePromptCard.classList.contains("is-template-hiding");
-    const alreadyGone = referencePromptCard.classList.contains("is-template-gone");
+  if (shouldHide) {
+    const alreadyHiding = referencePromptCard.classList.contains("is-mode-hiding");
+    const alreadyGone = referencePromptCard.classList.contains("is-mode-gone");
     if (!alreadyHiding) {
-      referencePromptCard.classList.add("is-template-hiding");
+      referencePromptCard.classList.add("is-mode-hiding");
     }
     referencePromptCard.setAttribute("aria-hidden", "true");
     referencePromptCard.inert = true;
     if (immediate) {
-      referencePromptCard.classList.add("is-template-gone");
+      referencePromptCard.classList.add("is-mode-gone");
       return;
     }
     if (alreadyGone || referencePromptTemplateVisibilityTimerId) {
@@ -4397,8 +4501,8 @@ function syncReferencePromptTemplateVisibility(options = {}) {
     }
     referencePromptTemplateVisibilityTimerId = window.setTimeout(() => {
       referencePromptTemplateVisibilityTimerId = 0;
-      if (state.selectedTemplate) {
-        referencePromptCard.classList.add("is-template-gone");
+      if (state.selectedTemplate || !referencePromptModeActive()) {
+        referencePromptCard.classList.add("is-mode-gone");
       }
     }, REFERENCE_PROMPT_TEMPLATE_VISIBILITY_MS);
     return;
@@ -4409,10 +4513,12 @@ function syncReferencePromptTemplateVisibility(options = {}) {
     referencePromptTemplateVisibilityTimerId = 0;
   }
   const wasHidden = (
-    referencePromptCard.classList.contains("is-template-hiding")
+    referencePromptCard.classList.contains("is-mode-hiding")
+    || referencePromptCard.classList.contains("is-mode-gone")
+    || referencePromptCard.classList.contains("is-template-hiding")
     || referencePromptCard.classList.contains("is-template-gone")
   );
-  referencePromptCard.classList.remove("is-template-gone");
+  referencePromptCard.classList.remove("is-mode-gone", "is-template-gone");
   referencePromptCard.removeAttribute("aria-hidden");
   referencePromptCard.inert = false;
   if (!wasHidden) {
@@ -4420,7 +4526,7 @@ function syncReferencePromptTemplateVisibility(options = {}) {
   }
 
   const reveal = () => {
-    referencePromptCard.classList.remove("is-template-hiding");
+    referencePromptCard.classList.remove("is-mode-hiding", "is-template-hiding");
     syncReferencePromptExpandedHeight({ delayed: referencePromptShouldBeExpanded() });
   };
   if (immediate) {
@@ -4431,8 +4537,82 @@ function syncReferencePromptTemplateVisibility(options = {}) {
 }
 
 function setReferencePromptExpanded(expanded) {
+  if (expanded) {
+    state.referencePromptActive = true;
+  }
   state.referencePromptExpanded = Boolean(expanded);
   syncReferencePromptControls();
+}
+
+function selectedTemplatePromptMatchesCurrent() {
+  if (!state.selectedTemplate) {
+    return false;
+  }
+  const currentPrompt = normalizePromptForComparison(promptInput.value);
+  const templatePrompt = normalizePromptForComparison(state.selectedTemplate.prompt);
+  return Boolean(templatePrompt && currentPrompt === templatePrompt);
+}
+
+function clearTemplateBeforeReferencePrompt() {
+  if (!state.selectedTemplate) {
+    return false;
+  }
+  clearSelectedTemplate({ clearPrompt: selectedTemplatePromptMatchesCurrent() });
+  return true;
+}
+
+function openReferencePromptTool(source = "feed") {
+  if (referencePromptLocked()) {
+    openReferencePromptPaywall();
+    return;
+  }
+  const removedTemplate = clearTemplateBeforeReferencePrompt();
+  state.referencePromptActive = true;
+  state.referencePromptExpanded = true;
+  switchScreen("studio");
+  syncReferencePromptControls();
+  setReferencePromptNote(
+    removedTemplate
+      ? "Шаблон убран. Теперь сцена будет собрана по фото-референсу."
+      : defaultReferencePromptNote(),
+  );
+  trackProductEvent("reference_prompt_tool_selected", { source });
+  window.requestAnimationFrame(() => {
+    referencePromptBuildButton?.focus({ preventScroll: true });
+  });
+}
+
+function deactivateReferencePromptMode() {
+  state.referencePromptBusy = false;
+  state.referencePromptActive = false;
+  state.referencePromptExpanded = false;
+  state.referencePromptRequestToken += 1;
+  const hadPrompt = normalizePromptForComparison(promptInput.value);
+  clearReferenceImage({ preserveNote: true });
+  clearReferencePromptUndoState();
+  setReferencePromptNote(defaultReferencePromptNote());
+  syncReferencePromptControls();
+  setCreateNote(
+    hadPrompt && String(state.promptSource || "") === "reference"
+      ? "Референс убран, промпт остался в поле."
+      : "Промпт по рефу убран.",
+  );
+}
+
+function clearActiveSceneMode() {
+  if (state.referencePromptBusy) {
+    setCreateNote("Дождись окончания сборки промпта.", true);
+    return;
+  }
+  if (state.selectedTemplate) {
+    clearSelectedTemplate({ clearPrompt: true });
+    promptInput.focus();
+    setCreateNote("Шаблон убран.");
+    return;
+  }
+  if (referencePromptModeActive()) {
+    deactivateReferencePromptMode();
+  }
 }
 
 function applyReferencePromptExpandedHeight() {
@@ -4470,25 +4650,46 @@ function syncReferencePromptExpandedHeight(options = {}) {
   }, 340);
 }
 
+function renderFeedUtilityState() {
+  if (!feedReferencePromptTool) {
+    return;
+  }
+  const active = Boolean(referencePromptModeActive() && !state.selectedTemplate);
+  feedReferencePromptTool.classList.toggle("is-active", active);
+  feedReferencePromptTool.setAttribute("aria-pressed", active ? "true" : "false");
+}
+
 function renderStudioSceneState() {
   const hasTemplate = Boolean(state.selectedTemplate);
+  const hasReferenceMode = Boolean(!hasTemplate && referencePromptModeActive());
   const referenceOpen = referencePromptShouldBeExpanded();
   if (studioSceneBlock) {
     studioSceneBlock.classList.toggle("has-template", hasTemplate);
+    studioSceneBlock.classList.toggle("has-reference-mode", hasReferenceMode);
     studioSceneBlock.classList.toggle("has-reference-open", referenceOpen);
   }
   if (studioSceneTitle) {
     studioSceneTitle.textContent = hasTemplate
       ? "Шаблон выбран"
-      : "Создай промпт по референсу";
+      : hasReferenceMode
+        ? "Промпт по референсу"
+        : "Выбери шаблон или инструмент";
+  }
+  if (clearSceneModeButton) {
+    clearSceneModeButton.classList.toggle("is-hidden", !hasTemplate && !hasReferenceMode);
+    clearSceneModeButton.disabled = Boolean(state.referencePromptBusy);
+    const clearLabel = hasTemplate ? "Убрать шаблон" : "Убрать инструмент";
+    clearSceneModeButton.setAttribute("aria-label", clearLabel);
+    clearSceneModeButton.title = clearLabel;
   }
   if (referencePromptToggleButton) {
     referencePromptToggleButton.classList.toggle(
       "is-active",
-      referenceOpen || Boolean(referenceImageFile()) || Boolean(state.referencePromptBuilt),
+      hasReferenceMode || referenceOpen || Boolean(referenceImageFile()) || Boolean(state.referencePromptBuilt),
     );
     referencePromptToggleButton.setAttribute("aria-expanded", referenceOpen ? "true" : "false");
   }
+  renderFeedUtilityState();
   syncReferencePromptTemplateVisibility();
 }
 
@@ -4725,6 +4926,7 @@ function openReferencePromptPaywall() {
     setReferencePromptNote("Сначала войди в аккаунт.", true);
     return;
   }
+  state.referencePromptActive = true;
   switchScreen("studio");
   setReferencePromptExpanded(true);
 }
@@ -4882,6 +5084,7 @@ function clearSelectedSourceImage() {
 function renderSelectedSourceImage() {
   const files = sourceImageFiles();
   const hasFiles = files.length > 0;
+  uploadPhotoButton.classList.toggle("is-hidden", !hasFiles && !window.KartivioLooks?.count());
 
   if (!files.length) {
     dropzoneTitle.textContent = "Добавь 1–3 фото";
@@ -4900,6 +5103,7 @@ function renderSelectedSourceImage() {
     if (clearSourceImageButton) {
       clearSourceImageButton.classList.add("is-hidden");
     }
+    window.KartivioLooks?.renderStudio();
     return;
   }
 
@@ -4955,15 +5159,24 @@ function renderSelectedSourceImage() {
   if (clearSourceImageButton) {
     clearSourceImageButton.classList.remove("is-hidden");
   }
+  window.KartivioLooks?.renderStudio();
 }
 
-function handleSourceImageChange() {
+async function handleSourceImageChange() {
   const pickedFiles = selectedFilesFromInput();
   if (sourceImageInput) {
     sourceImageInput.value = "";
   }
   if (!pickedFiles.length) {
     return;
+  }
+
+  if (window.KartivioLooks?.count()) {
+    if (pickedFiles.some(file => !file.size || file.size > MAX_SOURCE_IMAGE_BYTES || !["image/jpeg", "image/png", "image/webp"].includes(file.type))) {
+      setCreateNote("Выбери JPG, PNG или WEBP размером до 10 MB.", true);
+      return;
+    }
+    if (!(await window.KartivioLooks.uploadSelected())) return;
   }
 
   const { skipped } = appendSourceImages(pickedFiles);
@@ -4992,14 +5205,12 @@ function handleReferenceImageChange() {
   }
 
   const previousTemplate = state.selectedTemplate;
-  const currentPrompt = normalizePromptForComparison(promptInput.value);
-  const templatePrompt = previousTemplate ? normalizePromptForComparison(previousTemplate.prompt) : "";
-  const shouldClearPrompt = Boolean(templatePrompt && currentPrompt === templatePrompt);
   if (previousTemplate) {
-    clearSelectedTemplate({ clearPrompt: shouldClearPrompt });
+    clearTemplateBeforeReferencePrompt();
   }
 
   setReferenceImage(pickedFile);
+  state.referencePromptActive = true;
   state.referencePromptExpanded = true;
   renderReferenceImage();
   if (previousTemplate) {
@@ -5025,7 +5236,7 @@ function selectedTemplatePromptStatus() {
   if (!state.selectedTemplate) {
     return "";
   }
-  const hasSourceImage = sourceImageFilesForUpload().length > 0;
+  const hasSourceImage = sourceImageFilesForUpload().length > 0 || Boolean(window.KartivioLooks?.count());
   const currentPrompt = normalizePromptForComparison(promptInput.value);
   const sourcePrompt = normalizePromptForComparison(state.selectedTemplate.prompt);
   if (!currentPrompt) {
@@ -6931,6 +7142,7 @@ function isTransientNetworkError(error) {
 }
 
 function clearAuthSessionState({ persist = true } = {}) {
+  window.KartivioLooks?.reset();
   state.accessToken = "";
   state.refreshToken = "";
   state.isCookieSession = false;
@@ -7061,7 +7273,7 @@ function multipartRequestError(message, code, status = 0, rawMessage = "") {
 async function apiMultipart(
   path,
   formData,
-  { auth = false, idempotencyKey, timeoutMs, onUploadProgress } = {},
+  { auth = false, idempotencyKey, timeoutMs, onUploadProgress, method = "POST" } = {},
 ) {
   const headers = headersForApiBase(state.apiBase);
   if (auth && state.accessToken) {
@@ -7081,7 +7293,7 @@ async function apiMultipart(
       reject(error);
     };
     const xhr = new XMLHttpRequest();
-    xhr.open("POST", `${state.apiBase}${path}`, true);
+    xhr.open(method, `${state.apiBase}${path}`, true);
     xhr.withCredentials = true;
     xhr.timeout = requestTimeoutMs;
     for (const [name, value] of Object.entries(headers)) {
@@ -7272,6 +7484,7 @@ function renderUser(me, wallet) {
   const hadPaidGenerationAccess = hasPaidGenerationSettingsAccess();
 
   state.me = me;
+  if (me.id) window.KartivioLooks?.load(me.id);
   if (
     !hadPaidGenerationAccess
     && hasPaidGenerationSettingsAccess()
@@ -7649,6 +7862,7 @@ async function selectTemplate(item) {
     recommended_ratio: normalizeTemplateRecommendedRatio(resolvedItem.recommended_ratio) || null,
   });
   state.referencePromptExpanded = false;
+  state.referencePromptActive = false;
   state.referencePromptBusy = false;
   state.referencePromptRequestToken += 1;
   if (referenceImageFile()) {
@@ -10005,7 +10219,7 @@ function shouldWarnTemplateWithoutSourcePhotos(sourceImages) {
   return Boolean(
     state.selectedTemplate &&
     warningKey &&
-    sourceImages.length === 0 &&
+    sourceImages.length === 0 && !window.KartivioLooks?.count() &&
     state.templatePhotoWarningConfirmedKey !== warningKey,
   );
 }
@@ -10131,6 +10345,7 @@ async function handleBuildReferencePrompt() {
     validateReferenceImageFile(file);
     requestToken = state.referencePromptRequestToken + 1;
     state.referencePromptRequestToken = requestToken;
+    state.referencePromptActive = true;
     state.referencePromptExpanded = true;
     state.referencePromptBusy = true;
     syncReferencePromptControls();
@@ -10228,6 +10443,8 @@ async function handleCreate(options = {}) {
   const imageModel = state.selectedImageModel || DEFAULT_IMAGE_MODEL;
   const outputSize = currentOutputSizeSelection();
   const sourceImages = sourceImageFilesForUpload();
+  const savedLookSelection = window.KartivioLooks?.snapshot();
+  const sourcePhotoCount = sourceImages.length || savedLookSelection?.image_ids.length || 0;
   const totalSelectedFiles = sourceImageFiles().length;
   const cost = selectedGenerationCost();
   let requestStarted = false;
@@ -10282,8 +10499,9 @@ async function handleCreate(options = {}) {
     const eventProperties = {
       image_model: imageModel,
       output_size: outputSize,
-      has_photo: sourceImages.length > 0,
-      file_count: sourceImages.length,
+      has_photo: sourcePhotoCount > 0,
+      file_count: sourcePhotoCount,
+      photo_source: savedLookSelection ? "saved_look" : sourceImages.length ? "uploaded" : "none",
       prompt_source: state.promptSource,
       template_id: state.selectedTemplateId || "",
     };
@@ -10312,7 +10530,15 @@ async function handleCreate(options = {}) {
           );
         }
       : undefined;
-    const job = sourceImages.length > 0
+    const job = savedLookSelection
+      ? await window.KartivioLooks.generate({
+          prompt,
+          image_model: imageModel,
+          output_size: outputSize,
+          template_id: state.selectedTemplateId || null,
+          client_request_id: clientRequestId,
+        }, savedLookSelection)
+      : sourceImages.length > 0
       ? await createEditGeneration(
           prompt,
           imageModel,
@@ -10342,8 +10568,8 @@ async function handleCreate(options = {}) {
       trackProductEvent("generation_submit_failed", {
         image_model: imageModel,
         output_size: outputSize || "unknown",
-        has_photo: sourceImages.length > 0,
-        file_count: sourceImages.length,
+        has_photo: sourcePhotoCount > 0,
+        file_count: sourcePhotoCount,
         prompt_source: state.promptSource,
         template_id: state.selectedTemplateId || "",
         error_code: errorCode,
@@ -10895,6 +11121,13 @@ function toggleSettingsPanel(details) {
 }
 
 function bindEvents() {
+  document.addEventListener("keydown", () => {
+    screenNavigationFromKeyboard = true;
+  }, { capture: true });
+  document.addEventListener("pointerdown", () => {
+    screenNavigationFromKeyboard = false;
+  }, { capture: true, passive: true });
+
   if (apiBaseInput) {
     apiBaseInput.addEventListener("change", () => {
       if (!canOverrideApiBase()) {
@@ -11018,16 +11251,20 @@ function bindEvents() {
   if (templateSearchClear) {
     templateSearchClear.addEventListener("click", clearTemplateSearch);
   }
-  clearTemplateButton.addEventListener("click", () => {
-    clearSelectedTemplate({ clearPrompt: true });
-    promptInput.focus();
-  });
+  if (feedReferencePromptTool) {
+    feedReferencePromptTool.addEventListener("click", () => {
+      openReferencePromptTool("feed");
+    });
+  }
   promptInput.addEventListener("input", handlePromptInput);
   if (clearPromptButton) {
     clearPromptButton.addEventListener("click", clearPromptText);
   }
   if (chooseTemplateButton) {
     chooseTemplateButton.addEventListener("click", () => switchScreen("feed"));
+  }
+  if (clearSceneModeButton) {
+    clearSceneModeButton.addEventListener("click", clearActiveSceneMode);
   }
   if (templateUseButton) {
     templateUseButton.addEventListener("click", async (event) => {
@@ -11264,18 +11501,6 @@ function bindEvents() {
   if (profileReferralCopyWeb) {
     profileReferralCopyWeb.addEventListener("click", () => {
       copyProfileReferralLink("web").catch(() => {});
-    });
-  }
-  if (profileReferenceAction) {
-    profileReferenceAction.addEventListener("click", openProfileReferencePrompt);
-  }
-  if (profileReferenceCard) {
-    profileReferenceCard.addEventListener("click", (event) => {
-      const target = event.target instanceof Element ? event.target.closest("button") : null;
-      if (target) {
-        return;
-      }
-      openProfileReferencePrompt();
     });
   }
   if (marketingBackButton) {

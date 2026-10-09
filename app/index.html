@@ -11,7 +11,8 @@
     />
     <meta name="kartivio-yandex-metrika-id" content="109102691" />
     <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=20260910-template-photo-warning" />
+    <link rel="stylesheet" href="./styles.css?v=20261009-looks-motion" />
+    <link rel="stylesheet" href="./saved-looks.css?v=20261009-looks-motion" />
     <script src="./vendor/lucide.min.js?v=1.18.0" defer></script>
   </head>
   <body>
@@ -66,6 +67,48 @@
           <div class="section-row">
             <h2>Лента шаблонов</h2>
           </div>
+          <section class="feed-utilities" aria-label="Инструменты">
+            <div class="feed-utilities-head">
+              <span>Инструменты</span>
+            </div>
+            <div class="feed-utility-row">
+              <button id="feedReferencePromptTool" class="feed-utility-card" type="button" aria-pressed="false">
+                <span class="feed-utility-media" aria-hidden="true">
+                  <img
+                    class="feed-utility-image feed-utility-reference-image"
+                    src="./assets/reference/reference-prompt-roses.jpg"
+                    width="72"
+                    height="72"
+                    alt=""
+                    loading="lazy"
+                    decoding="async"
+                  />
+                </span>
+                <span class="feed-utility-copy">
+                  <strong>Промпт по рефу</strong>
+                  <small>Сцена по фото</small>
+                </span>
+              </button>
+              <button class="feed-utility-card is-soon" type="button" disabled aria-disabled="true">
+                <span class="feed-utility-media feed-utility-icon" aria-hidden="true">
+                  <i data-lucide="wand-sparkles"></i>
+                </span>
+                <span class="feed-utility-copy">
+                  <strong>Улучшить фото</strong>
+                  <small>Скоро</small>
+                </span>
+              </button>
+              <button class="feed-utility-card is-soon" type="button" disabled aria-disabled="true">
+                <span class="feed-utility-media feed-utility-icon" aria-hidden="true">
+                  <i data-lucide="wallpaper"></i>
+                </span>
+                <span class="feed-utility-copy">
+                  <strong>Заменить фон</strong>
+                  <small>Скоро</small>
+                </span>
+              </button>
+            </div>
+          </section>
           <label class="template-search" for="templateSearchInput">
             <i data-lucide="search"></i>
             <input id="templateSearchInput" type="search" inputmode="search" autocomplete="off" placeholder="День рождения, очки, семья, цветы..." />
@@ -100,9 +143,24 @@
             <div class="studio-scene-head">
               <div class="studio-scene-title">
                 <span>Сцена</span>
-                <strong id="studioSceneTitle">Создай промпт по референсу</strong>
+                <strong id="studioSceneTitle">Выбери шаблон или инструмент</strong>
               </div>
+              <button id="clearSceneModeButton" class="scene-clear-btn is-hidden" type="button" aria-label="Убрать выбранную сцену" title="Убрать выбранную сцену">
+                <i data-lucide="x"></i>
+              </button>
             </div>
+
+            <section id="studioSceneEmptyState" class="studio-scene-empty">
+              <span class="studio-scene-empty-icon" aria-hidden="true"><i data-lucide="sparkles"></i></span>
+              <div>
+                <strong>Сцена не выбрана</strong>
+                <span>Можно написать промпт ниже или выбрать шаблон или инструмент в ленте.</span>
+              </div>
+              <button id="chooseTemplateButton" class="soft-btn studio-scene-feed-btn" type="button">
+                <span>В ленту</span>
+                <i data-lucide="chevron-right"></i>
+              </button>
+            </section>
 
             <section id="selectedTemplateCard" class="selected-template is-hidden">
               <div id="selectedTemplatePreview" class="selected-template-preview"></div>
@@ -110,12 +168,9 @@
                 <strong id="selectedTemplateTitle">Шаблон</strong>
                 <span id="selectedTemplateMeta">Готовый промпт для старта</span>
               </div>
-              <button id="clearTemplateButton" class="template-clear-btn" type="button" aria-label="Убрать шаблон">
-                <i data-lucide="x"></i>
-              </button>
             </section>
 
-            <section id="referencePromptCard" class="reference-prompt-card is-collapsed">
+            <section id="referencePromptCard" class="reference-prompt-card is-collapsed is-mode-gone" aria-hidden="true" inert>
               <button
                 id="referencePromptSummaryButton"
                 class="reference-prompt-summary"
@@ -174,8 +229,9 @@
                     class="dropzone-clear-btn is-hidden"
                     type="button"
                     aria-label="Убрать фото-референс"
+                    title="Убрать фото-референс"
                   >
-                    <i data-lucide="x"></i>
+                    <i data-lucide="trash-2"></i>
                   </button>
                 </div>
 
@@ -226,7 +282,11 @@
                 <span id="sourceImageMeta">Без своих фото получится обычная генерация, не фотосессия с вашим лицом.</span>
               </div>
               <div class="studio-source-actions">
-                <button id="uploadPhotoButton" class="soft-btn soft-btn-icon studio-source-add" type="button">
+                <button id="chooseSavedLookButton" class="soft-btn soft-btn-icon saved-look-choose is-hidden" type="button">
+                  <i data-lucide="contact-round"></i>
+                  <span>Выбрать образ</span>
+                </button>
+                <button id="uploadPhotoButton" class="soft-btn soft-btn-icon studio-source-add is-hidden" type="button">
                   <i data-lucide="paperclip"></i>
                   <span>Добавить</span>
                 </button>
@@ -256,6 +316,10 @@
               <span id="dropzonePreviewBadge" class="dropzone-preview-badge is-hidden">Фото для редактирования</span>
             </div>
 
+            <div id="savedLookSource" class="saved-look-source is-hidden"></div>
+            <button id="saveSourceAsLookButton" class="saved-look-save-link is-hidden" type="button">
+              <i data-lucide="bookmark-plus"></i><span>Сохранить фото в образ</span>
+            </button>
             <div id="sourceTipsPanel" class="tips-panel is-hidden" role="note">
               <strong>Рекомендации по своим фото</strong>
               <ul>
@@ -400,7 +464,7 @@
             <div class="profile-balance-main">
               <div class="profile-balance-copy">
                 <span>Баланс</span>
-                <strong><span id="creditsValue">—</span> кредитов</strong>
+                <strong><span id="creditsValue">—</span></strong>
                 <small id="profilePhotoEstimate">—</small>
               </div>
               <div class="profile-balance-actions">
@@ -425,6 +489,15 @@
                 <strong id="profileFavoritesCount">0</strong>
               </button>
             </div>
+          </section>
+
+          <section id="profileSavedLooks" class="profile-saved-looks is-hidden" aria-labelledby="savedLooksHeading">
+            <div class="saved-looks-heading">
+              <h3 id="savedLooksHeading">Мои образы</h3>
+              <button id="addSavedLookButton" class="soft-btn soft-btn-icon" type="button"><i data-lucide="plus"></i><span>Добавить образ</span></button>
+            </div>
+            <div id="savedLooksList" class="saved-looks-list"></div>
+            <p id="savedLooksNote" class="saved-looks-note" role="status"></p>
           </section>
 
           <section id="profileReferralCard" class="panel-card profile-referral-card is-collapsed">
@@ -468,25 +541,6 @@
                 </button>
               </div>
               <p id="profileReferralNote" class="profile-referral-note">Ссылка появится после входа.</p>
-            </div>
-          </section>
-
-          <section id="profileReferenceCard" class="panel-card profile-reference-showcase">
-            <div class="profile-reference-copy">
-              <h3>Промпт по референсу</h3>
-              <p id="profileReferenceText">Загрузи референс — получи готовый промпт для генерации.</p>
-              <button id="profileReferenceAction" class="profile-link-action" type="button">
-                <span>Попробовать</span>
-                <i data-lucide="arrow-right"></i>
-              </button>
-            </div>
-            <div class="profile-reference-visual" aria-hidden="true">
-              <img src="./assets/reference/reference-prompt-roses.jpg" width="104" height="104" alt="" loading="lazy" decoding="async" />
-              <i data-lucide="arrow-right"></i>
-              <div class="profile-reference-prompt">
-                <i data-lucide="sparkles"></i>
-                <span>Не изменяй внешность девушки с фото. Максимально точно сохрани лицо, возраст, пропорции, оттенок кожи, волосы и естественные черты. Создай фотореалистичный fashion-портрет среди красных роз.</span>
-              </div>
             </div>
           </section>
 
@@ -966,6 +1020,39 @@
       </article>
     </div>
 
-    <script src="./app.js?v=20260929-max-startapp" defer></script>
+    <dialog id="savedLookPicker" class="look-dialog look-picker" aria-labelledby="lookPickerTitle">
+      <header class="look-dialog-head"><h2 id="lookPickerTitle">Выбрать образ</h2><button class="look-icon-button" data-look-close="picker" type="button" aria-label="Закрыть выбор образа"><i data-lucide="x"></i></button></header>
+      <div id="lookPickerList" class="saved-looks-list look-picker-list"></div>
+      <p id="lookPickerNote" class="saved-looks-note" role="status"></p>
+      <footer class="look-picker-footer"><button id="lookPickerUpload" class="soft-btn soft-btn-icon" type="button"><i data-lucide="upload"></i><span>Загрузить другие фото</span></button></footer>
+    </dialog>
+
+    <dialog id="savedLookEditor" class="look-dialog look-editor" aria-labelledby="lookEditorTitle">
+      <header class="look-dialog-head"><h2 id="lookEditorTitle">Новый образ</h2><button class="look-icon-button" data-look-close="editor" type="button" aria-label="Закрыть редактор образа"><i data-lucide="x"></i></button></header>
+      <form id="savedLookForm" class="look-editor-form">
+        <div class="look-editor-body">
+          <label class="look-name-label" for="savedLookName">Название</label>
+          <input id="savedLookName" class="look-name-input" type="text" maxlength="40" autocomplete="off" required />
+          <div class="look-photo-heading"><strong>Фото образа</strong><span id="lookPhotoCount">0 из 3</span></div>
+          <div id="lookEditorPhotos" class="look-editor-photos"></div>
+          <p class="look-photo-hint">1–3 фото одного человека. Лицо крупно, без фильтров и сильной ретуши.</p>
+          <p id="lookStorageNote" class="look-storage-note">Фото сохранятся в аккаунте. Их можно удалить в профиле.</p>
+          <p id="lookEditorError" class="look-error" role="alert"></p>
+          <button id="deleteSavedLookButton" class="look-delete-link is-hidden" type="button"><i data-lucide="trash-2"></i><span>Удалить образ</span></button>
+        </div>
+        <footer class="look-editor-footer"><button id="useSavedLookButton" class="soft-btn is-hidden" type="button">Использовать в студии</button><button id="saveSavedLookButton" class="primary-action" type="submit">Сохранить образ</button></footer>
+      </form>
+      <input id="savedLookPhotoInput" class="is-hidden" type="file" accept="image/jpeg,image/png,image/webp" multiple />
+    </dialog>
+
+    <dialog id="savedLookConfirm" class="look-dialog look-confirm" aria-labelledby="lookConfirmTitle" aria-describedby="lookConfirmText">
+      <h2 id="lookConfirmTitle"></h2><img id="lookConfirmPreview" class="look-confirm-preview is-hidden" alt="" />
+      <p id="lookConfirmText"></p><p id="lookConfirmError" class="look-error" role="alert"></p>
+      <div class="look-confirm-actions"><button id="lookConfirmCancel" class="soft-btn" type="button">Отмена</button><button id="lookConfirmAccept" class="primary-action" type="button">Удалить</button></div>
+    </dialog>
+    <dialog id="savedLookPhotoViewer" class="look-dialog look-photo-viewer" aria-label="Просмотр фото образа"><button class="look-icon-button" data-look-close="viewer" type="button" aria-label="Закрыть фото"><i data-lucide="x"></i></button><img id="savedLookFullPhoto" alt="Фото образа" /></dialog>
+
+    <script src="./saved-looks.js?v=20261009-looks-motion" defer></script>
+    <script src="./app.js?v=20261009-looks-motion" defer></script>
   </body>
 </html>
