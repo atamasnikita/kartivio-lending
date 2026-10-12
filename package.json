@@ -9,6 +9,8 @@
   "scripts": {
     "check": "node --check app/app.js",
     "test:looks-rendering": "node tools/test-saved-looks-rendering.mjs",
+    "test:ui-performance": "node tools/test-ui-performance.mjs",
+    "preview:performance": "node tools/ui-performance-fixture.mjs",
     "wordstat": "node tools/wordstat.mjs"
   },
   "keywords": [],

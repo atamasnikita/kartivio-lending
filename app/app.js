@@ -484,6 +484,7 @@ const state = {
   sourceImagePreviewUrls: [],
   templatePhotoWarningConfirmedKey: "",
   historyItems: null,
+  historyRenderedItems: null,
   historyLoadedAt: 0,
   historyLoadPromise: null,
   historyRequestToken: 0,
@@ -3206,6 +3207,23 @@ function formatMegabytes(bytes) {
   return `${(value / (1024 * 1024)).toFixed(value >= 1024 * 1024 ? 1 : 2)} MB`;
 }
 
+function normalizeTemplatePreviewVariants(raw) {
+  const variants = Array.isArray(raw) ? raw : [];
+  const widths = new Set();
+  return variants.map((variant) => ({
+    url: normalizeImageUrl(variant?.url),
+    width: Number(variant?.width),
+    height: Number(variant?.height),
+  })).filter((variant) => {
+    if (!variant.url || /[\s,]/.test(variant.url) || !Number.isInteger(variant.width) ||
+        variant.width <= 0 || variant.width > 20000 || widths.has(variant.width)) {
+      return false;
+    }
+    widths.add(variant.width);
+    return true;
+  }).sort((a, b) => a.width - b.width);
+}
+
 function renderTemplateMediaMarkup(
   rawUrl,
   alt,
@@ -3215,6 +3233,8 @@ function renderTemplateMediaMarkup(
     priority = false,
     autoplay = false,
     controls = false,
+    previewVariants = [],
+    sizes = "",
   } = {},
 ) {
   const url = normalizeImageUrl(rawUrl);
@@ -3228,7 +3248,11 @@ function renderTemplateMediaMarkup(
     return `<video class="${safeClass}" src="${safeUrl}" muted loop playsinline preload="${autoplay ? "auto" : "metadata"}"${autoplay ? " autoplay" : ""}${controls ? " controls" : ""} aria-label="${safeAlt}"></video>`;
   }
   const imagePriority = priority ? ' fetchpriority="high"' : "";
-  return `<img class="${safeClass}" src="${safeUrl}" alt="${safeAlt}" loading="${escapeHtml(loading)}" decoding="async"${imagePriority} />`;
+  const variants = normalizeTemplatePreviewVariants(previewVariants);
+  const responsive = variants.length && sizes
+    ? ` srcset="${escapeHtml(variants.map((variant) => `${variant.url} ${variant.width}w`).join(", "))}" sizes="${escapeHtml(sizes)}"`
+    : "";
+  return `<img class="${safeClass}" src="${safeUrl}"${responsive} alt="${safeAlt}" loading="${escapeHtml(loading)}" decoding="async"${imagePriority} />`;
 }
 
 function mediaElementCurrentUrl(element) {
@@ -4185,7 +4209,9 @@ function loadPaywallGalleryImages() {
 }
 
 function resetHistoryCache() {
+  state.historyRequestToken += 1;
   state.historyItems = null;
+  state.historyRenderedItems = null;
   state.historyLoadedAt = 0;
   state.historyLoadPromise = null;
   state.historyNextOffset = 0;
@@ -8081,6 +8107,7 @@ function normalizeTemplateDetail(raw) {
     full_image_url: String(item.full_image_url || "").trim(),
     preview_width: Number(item.preview_width || 0),
     preview_height: Number(item.preview_height || 0),
+    preview_image_variants: normalizeTemplatePreviewVariants(item.preview_image_variants),
     recommended_image_model: normalizeTemplateRecommendedImageModel(item.recommended_image_model),
     recommended_resolution: normalizeTemplateRecommendedResolution(item.recommended_resolution),
     recommended_ratio: normalizeTemplateRecommendedRatio(item.recommended_ratio),
@@ -8108,6 +8135,7 @@ function mergeTemplateDetail(raw) {
     full_image_url: detail.full_image_url,
     preview_width: detail.preview_width,
     preview_height: detail.preview_height,
+    preview_image_variants: detail.preview_image_variants,
     recommended_image_model: detail.recommended_image_model,
     recommended_resolution: detail.recommended_resolution,
     recommended_ratio: detail.recommended_ratio,
@@ -8184,9 +8212,17 @@ async function loadTemplateDetail(templateId) {
   if (!normalizedId) {
     throw new Error("Шаблон не найден.");
   }
+  const likeVersion = templateLikeVersions.get(normalizedId) || 0;
+  const userId = state.me?.id;
   const payload = await apiFetch(`/v1/templates/${encodeURIComponent(normalizedId)}`, {
     auth: Boolean(state.accessToken),
   });
+  const current = state.templates.find((template) => template.id === normalizedId);
+  if (current && (userId !== state.me?.id || templateLikeRequests.has(normalizedId) ||
+      likeVersion !== (templateLikeVersions.get(normalizedId) || 0))) {
+    payload.likes_count = current.likes_count;
+    payload.liked_by_me = current.liked_by_me;
+  }
   const item = mergeTemplateDetail(payload);
   if (!item || !templateHasPrompt(item)) {
     throw new Error("Промпт шаблона не найден.");
@@ -8220,6 +8256,7 @@ function renderTemplateModalStats(item) {
     return;
   }
   const liked = templateLikedByMe(item);
+  templateLikeButton.disabled = templateLikeRequests.has(item.id);
   templateLikeButton.classList.toggle("is-liked", liked);
   templateLikeButton.setAttribute("aria-pressed", liked ? "true" : "false");
   templateLikeButton.setAttribute("aria-label", liked ? "Убрать лайк у шаблона" : "Лайкнуть шаблон");
@@ -8359,6 +8396,7 @@ function openTemplateModal(item, initialPreviewUrl = "") {
   const previewUrl = String(initialPreviewUrl || "").trim() || templatePreviewUrl(modalItem) || "https://picsum.photos/seed/kartivio-template/720/960";
   const fullUrl = templateFullUrl(modalItem) || previewUrl;
   templateModalImageLoadToken += 1;
+  const imageLoadToken = templateModalImageLoadToken;
   const displayUrl =
     fullUrl !== previewUrl && templatePreloadedImageUrls.has(fullUrl) ? fullUrl : previewUrl;
   if (templateModalMediaSlot) {
@@ -8372,7 +8410,23 @@ function openTemplateModal(item, initialPreviewUrl = "") {
     });
   }
   if (fullUrl && fullUrl !== displayUrl && !isTemplateVideoUrl(fullUrl)) {
-    preloadTemplateImage(fullUrl);
+    preloadTemplateImage(fullUrl).then(async (loaded) => {
+      if (!loaded || imageLoadToken !== templateModalImageLoadToken) {
+        return;
+      }
+      const previewImage = templateModalMediaSlot?.querySelector("img");
+      if (!previewImage) {
+        return;
+      }
+      const fullImage = previewImage.cloneNode();
+      fullImage.src = fullUrl;
+      if (typeof fullImage.decode === "function") {
+        await fullImage.decode();
+      }
+      if (imageLoadToken === templateModalImageLoadToken && state.activeTemplateModalId === modalItem.id) {
+        previewImage.replaceWith(fullImage);
+      }
+    }).catch(() => {});
   }
   templateModalTitle.textContent = modalItem.title || "Шаблон";
   templateModalCategory.textContent = normalizeTemplateCategory(modalItem.category);
@@ -8915,7 +8969,9 @@ function scheduleTemplateFeedPreload(items, visibleItems) {
         Math.min(allItems.length, visibleCount + TEMPLATE_FEED_PRELOAD_IMAGE_COUNT)
       );
       for (const item of imageCandidates) {
-        preloadTemplateImage(templatePreviewUrl(item));
+        if (!item.preview_image_variants?.length) {
+          preloadTemplateImage(templatePreviewUrl(item));
+        }
       }
 
       const promptCandidates = uniqueTemplatesById([
@@ -9064,6 +9120,7 @@ function clearTemplateSearch() {
 
 function createTemplateCard(item, { itemIndex = 0, totalItems = 0, layout = "grid", eager = false, priority = false } = {}) {
   const card = document.createElement("article");
+  card.dataset.templateId = item.id;
   const imageUrl = templatePreviewUrl(item);
   const ratio = Number(item.preview_ratio || templatePreviewRatio(item) || 1);
   const isRailLayout = layout === "rail";
@@ -9081,6 +9138,12 @@ function createTemplateCard(item, { itemIndex = 0, totalItems = 0, layout = "gri
     loading: imageLoading,
     priority: Boolean(priority && shouldEagerLoadImage),
     autoplay: isTemplateVideoUrl(imageUrl) && shouldEagerLoadImage,
+    previewVariants: item.preview_image_variants?.length
+      ? [...item.preview_image_variants, { url: imageUrl, width: item.preview_width, height: item.preview_height }]
+      : [],
+    sizes: isRailLayout
+      ? "(max-width: 640px) max(150px, calc((100vw - 36px) * 0.46)), 180px"
+      : "(max-width: 390px) calc(100vw - 36px), (max-width: 760px) calc((100vw - 50px) / 2), 350px",
   });
   const presetLabel = templateRecommendedLabel(item, { compact: true });
   const presetMarkup = presetLabel
@@ -9109,43 +9172,49 @@ function createTemplateCard(item, { itemIndex = 0, totalItems = 0, layout = "gri
     </div>
   `;
   const likeButton = card.querySelector('[data-action="toggle-like"]');
+  card.querySelector("img[srcset]")?.addEventListener("error", (event) => {
+    const image = event.currentTarget;
+    image.removeAttribute("srcset");
+    image.removeAttribute("sizes");
+    image.src = imageUrl;
+  }, { once: true });
+  const currentItem = () => state.templates.find((template) => template.id === item.id) || item;
   const warmTemplateAssets = () => {
     preloadTemplateDetail(item.id);
-    preloadTemplateImage(templatePreviewUrl(item));
-    const fullUrl = templateFullUrl(item);
-    if (fullUrl && fullUrl !== templatePreviewUrl(item) && !isTemplateVideoUrl(fullUrl)) {
-      preloadTemplateImage(fullUrl);
-    }
   };
   likeButton.addEventListener("click", async (event) => {
     event.preventDefault();
     event.stopPropagation();
-    const wasLiked = templateLikedByMe(item);
-    likeButton.disabled = true;
+    const wasLiked = templateLikedByMe(currentItem());
     try {
       await toggleTemplateLike(item.id, !wasLiked);
     } catch (error) {
       setNote(userFacingErrorMessage(error, "Не удалось обновить лайк шаблона."), true);
-    } finally {
-      likeButton.disabled = false;
     }
   });
   card.addEventListener("click", () => {
     warmTemplateAssets();
     const initialPreviewUrl = templateCardCurrentMediaUrl(card, imageUrl);
-    openTemplateModal(item, initialPreviewUrl);
+    openTemplateModal(currentItem(), initialPreviewUrl);
   });
   if (!isTelegramMiniAppRuntime()) {
     card.addEventListener("pointerenter", warmTemplateAssets, { passive: true });
   }
-  card.addEventListener("pointerdown", warmTemplateAssets, { passive: true });
+  card.addEventListener("pointerdown", (event) => {
+    if (!event.target.closest("button")) {
+      warmTemplateAssets();
+    }
+  }, { passive: true });
   card.addEventListener("focus", warmTemplateAssets);
   card.addEventListener("keydown", (event) => {
+    if (event.target !== card) {
+      return;
+    }
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
       warmTemplateAssets();
       const initialPreviewUrl = templateCardCurrentMediaUrl(card, imageUrl);
-      openTemplateModal(item, initialPreviewUrl);
+      openTemplateModal(currentItem(), initialPreviewUrl);
     }
   });
   return card;
@@ -9243,7 +9312,81 @@ function renderTemplateSearchResults() {
   maybeAutoLoadMoreTemplates();
 }
 
+let templateShowcaseObserver = null;
+
+function mountTemplateShowcaseRow(sectionElement, section, sectionIndex) {
+  const row = sectionElement.querySelector(".template-section-row");
+  row.replaceChildren();
+  row.removeAttribute("aria-busy");
+  const previewItems = section.items.slice(0, TEMPLATE_SHOWCASE_SECTION_LIMIT);
+  for (const [itemIndex, originalItem] of previewItems.entries()) {
+    const item = state.templates.find((template) => template.id === originalItem.id) || originalItem;
+    row.appendChild(createTemplateCard(item, {
+      itemIndex,
+      totalItems: previewItems.length,
+      layout: "rail",
+      eager: sectionIndex === 0 && itemIndex < 4,
+      priority: sectionIndex === 0 && itemIndex < 3,
+    }));
+  }
+}
+
+function createTemplateShowcaseSection(section, sectionIndex = 0, { deferred = false } = {}) {
+  const sectionElement = document.createElement("section");
+  sectionElement.dataset.templateFilter = section.filterId;
+  sectionElement.className = `template-showcase-section${section.isFeatured ? " is-featured" : ""}`;
+  sectionElement.innerHTML = `
+    <div class="template-section-header">
+      <div class="template-section-title">
+        <h3>${escapeHtml(section.title)} <small>${escapeHtml(templateCountLabel(section.items.length))}</small></h3>
+      </div>
+      <button class="template-section-open" type="button">
+        <span>все</span>
+        <i data-lucide="arrow-right"></i>
+      </button>
+    </div>
+    <div class="template-section-row"></div>
+  `;
+  sectionElement.querySelector(".template-section-open")?.addEventListener("click", () => {
+    showTemplateCollection(section.filterId);
+  });
+  const row = sectionElement.querySelector(".template-section-row");
+  if (deferred) {
+    row.setAttribute("aria-busy", "true");
+    const placeholder = '<div class="tool-card template-rail-card" style="--template-ratio: 4 / 5" aria-hidden="true"><div class="tool-media"></div></div>';
+    row.innerHTML = placeholder.repeat(Math.min(section.items.length, TEMPLATE_SHOWCASE_SECTION_LIMIT));
+    templateShowcaseObserver.observe(sectionElement);
+  } else {
+    mountTemplateShowcaseRow(sectionElement, section, sectionIndex);
+  }
+  return sectionElement;
+}
+
+function syncFavoriteTemplateSection() {
+  if (isTemplateSearchActive() || !isShowcaseTemplateFilter(state.selectedTemplateFilter)) {
+    return;
+  }
+  const previous = templatesGrid.querySelector('[data-template-filter="favorites"]');
+  const section = templateShowcaseSections().find((item) => item.filterId === "favorites");
+  if (!section) {
+    previous?.remove();
+    return;
+  }
+  const replacement = createTemplateShowcaseSection(section, 1);
+  const oldRow = previous?.querySelector(".template-section-row");
+  if (oldRow) {
+    const scrollLeft = oldRow.scrollLeft;
+    previous.replaceWith(replacement);
+    replacement.querySelector(".template-section-row").scrollLeft = scrollLeft;
+  } else {
+    templatesGrid.firstElementChild?.after(replacement);
+  }
+  refreshIcons();
+}
+
 function renderTemplateShowcase() {
+  templateShowcaseObserver?.disconnect();
+  templateShowcaseObserver = null;
   templatesGrid.className = "template-showcase";
   templatesGrid.innerHTML = "";
   renderTemplateFeedPagination({ shownCount: 0, totalCount: 0 });
@@ -9254,39 +9397,35 @@ function renderTemplateShowcase() {
   }
 
   const sections = templateShowcaseSections();
+  if (typeof IntersectionObserver === "function") {
+    templateShowcaseObserver = new IntersectionObserver((entries) => {
+      let mounted = false;
+      for (const entry of entries) {
+        if (!entry.isIntersecting || !entry.target.isConnected) {
+          continue;
+        }
+        templateShowcaseObserver.unobserve(entry.target);
+        const sectionIndex = sections.findIndex((section) => section.filterId === entry.target.dataset.templateFilter);
+        if (sectionIndex >= 0) {
+          mountTemplateShowcaseRow(entry.target, sections[sectionIndex], sectionIndex);
+          mounted = true;
+        }
+      }
+      if (mounted) {
+        refreshIcons();
+      }
+    }, {
+      root: !isEmbeddedMiniAppRuntime() && isMobileBrowser() ? null : appMain,
+      rootMargin: "600px 0px",
+    });
+  }
   const preloadItems = [];
   for (const [sectionIndex, section] of sections.entries()) {
-    const sectionElement = document.createElement("section");
-    sectionElement.className = `template-showcase-section${section.isFeatured ? " is-featured" : ""}`;
-    const previewItems = section.items.slice(0, TEMPLATE_SHOWCASE_SECTION_LIMIT);
-    preloadItems.push(...previewItems.slice(0, 3));
-    sectionElement.innerHTML = `
-      <div class="template-section-header">
-        <div class="template-section-title">
-          <h3>${escapeHtml(section.title)} <small>${escapeHtml(templateCountLabel(section.items.length))}</small></h3>
-        </div>
-        <button class="template-section-open" type="button">
-          <span>все</span>
-          <i data-lucide="arrow-right"></i>
-        </button>
-      </div>
-      <div class="template-section-row"></div>
-    `;
-    sectionElement.querySelector(".template-section-open")?.addEventListener("click", () => {
-      showTemplateCollection(section.filterId);
-    });
-    const row = sectionElement.querySelector(".template-section-row");
-    for (const [itemIndex, item] of previewItems.entries()) {
-      const card = createTemplateCard(item, {
-        itemIndex,
-        totalItems: previewItems.length,
-        layout: "rail",
-        eager: sectionIndex === 0 && itemIndex < 4,
-        priority: sectionIndex === 0 && itemIndex < 3,
-      });
-      row.appendChild(card);
+    const deferred = Boolean(templateShowcaseObserver && sectionIndex >= 2);
+    if (!deferred) {
+      preloadItems.push(...section.items.slice(0, 3));
     }
-    templatesGrid.appendChild(sectionElement);
+    templatesGrid.appendChild(createTemplateShowcaseSection(section, sectionIndex, { deferred }));
   }
   refreshIcons();
   const uniquePreloadItems = uniqueTemplatesById(preloadItems);
@@ -9335,6 +9474,8 @@ function renderTemplateCards() {
   if (!templatesGrid) {
     return;
   }
+  templateShowcaseObserver?.disconnect();
+  templateShowcaseObserver = null;
   renderTemplateSearchControls();
   if (state.templatesLoading) {
     renderTemplateSkeleton(6);
@@ -9408,6 +9549,7 @@ function renderTemplates(payload) {
     full_image_url: String(item.full_image_url || "").trim(),
     preview_width: Number(item.preview_width || 0),
     preview_height: Number(item.preview_height || 0),
+    preview_image_variants: normalizeTemplatePreviewVariants(item.preview_image_variants),
     recommended_image_model: normalizeTemplateRecommendedImageModel(item.recommended_image_model),
     recommended_resolution: normalizeTemplateRecommendedResolution(item.recommended_resolution),
     recommended_ratio: normalizeTemplateRecommendedRatio(item.recommended_ratio),
@@ -9456,17 +9598,64 @@ async function loadTemplates() {
   renderTemplates(payload);
 }
 
+const templateLikeRequests = new Map();
+const templateLikeVersions = new Map();
+
+function syncTemplateLikeButtons(templateId, { pending = false } = {}) {
+  const item = state.templates.find((template) => template.id === templateId);
+  if (!item) {
+    return;
+  }
+  for (const card of templatesGrid.querySelectorAll("[data-template-id]")) {
+    if (card.dataset.templateId !== templateId) {
+      continue;
+    }
+    const button = card.querySelector('[data-action="toggle-like"]');
+    const liked = templateLikedByMe(item);
+    button.classList.toggle("is-liked", liked);
+    button.setAttribute("aria-pressed", String(liked));
+    button.setAttribute("aria-label", liked ? "Убрать лайк у шаблона" : "Лайкнуть шаблон");
+    button.querySelector("span").textContent = String(templateLikesCount(item));
+    button.disabled = pending;
+  }
+  if (currentTemplateModalItem()?.id === templateId && templateLikeButton) {
+    templateLikeButton.disabled = pending;
+  }
+}
+
 async function toggleTemplateLike(templateId, shouldLike) {
   ensureAuthorizedForCreate();
+  if (templateLikeRequests.has(templateId)) {
+    return templateLikeRequests.get(templateId);
+  }
+  templateLikeVersions.set(templateId, (templateLikeVersions.get(templateId) || 0) + 1);
+  const request = updateTemplateLike(templateId, shouldLike).finally(() => {
+    templateLikeRequests.delete(templateId);
+    syncTemplateLikeButtons(templateId);
+  });
+  templateLikeRequests.set(templateId, request);
+  syncTemplateLikeButtons(templateId, { pending: true });
+  return request;
+}
+
+async function updateTemplateLike(templateId, shouldLike) {
+  const userId = state.me?.id;
   const method = shouldLike ? "POST" : "DELETE";
   const payload = await authorizedFetch(`/v1/templates/${encodeURIComponent(templateId)}/like`, { method });
+  if (!hasActiveSession() || userId !== state.me?.id) {
+    return payload;
+  }
   const patch = {
     likes_count: normalizeTemplateCount(payload.likes_count),
     liked_by_me: Boolean(payload.liked_by_me),
   };
   updateTemplateInState(templateId, patch);
-  renderTemplateFilters();
-  renderTemplateCards();
+  if (!isTemplateSearchActive() && isFavoritesTemplateFilter(state.selectedTemplateFilter)) {
+    renderTemplateCards();
+  } else {
+    syncTemplateLikeButtons(templateId, { pending: true });
+    syncFavoriteTemplateSection();
+  }
   renderProfileSummary();
   const currentItem = currentTemplateModalItem();
   if (currentItem && currentItem.id === templateId) {
@@ -9765,6 +9954,7 @@ function renderHistory(payload) {
       historyList.innerHTML = '<article class="history-item history-empty"><div class="history-body">История пока пустая.</div></article>';
     }
     renderHistoryPagination({ hasMore, loadingMore, itemCount });
+    state.historyRenderedItems = state.historyItems;
     return;
   }
   for (const job of items) {
@@ -9851,6 +10041,7 @@ function renderHistory(payload) {
     }
   }
   renderHistoryPagination({ hasMore, loadingMore, itemCount });
+  state.historyRenderedItems = state.historyItems;
   refreshIcons();
 }
 
@@ -9877,7 +10068,9 @@ async function loadHistory({ forceServerCheck = false, append = false } = {}) {
   }
   const now = Date.now();
   if (!append && Array.isArray(state.historyItems)) {
-    renderHistory({ items: state.historyItems, hasMore: state.historyHasMore });
+    if (state.historyRenderedItems !== state.historyItems) {
+      renderHistory({ items: state.historyItems, hasMore: state.historyHasMore });
+    }
     if (!forceServerCheck && now - state.historyLoadedAt < HISTORY_CACHE_TTL_MS) {
       return;
     }
@@ -9961,8 +10154,8 @@ async function loadPublicData({ requestToken = 0, auth = hasActiveSession() } = 
   return true;
 }
 
-function ensurePublicDataLoaded({ notifyOnError = false, force = false } = {}) {
-  const context = currentPublicDataContext();
+function ensurePublicDataLoaded({ notifyOnError = false, force = false, auth = hasActiveSession() } = {}) {
+  const context = auth ? "auth" : "anon";
   if (!force && state.publicDataLoadPromise && state.publicDataLoadContext === context) {
     return state.publicDataLoadPromise;
   }
@@ -10833,7 +11026,7 @@ async function hydrateAuthorizedSession() {
     return false;
   }
   try {
-    ensurePublicDataLoaded().catch(() => {});
+    ensurePublicDataLoaded({ auth: true }).catch(() => {});
     await loadPrivateData({ forceServerCheck: prefersCookieAuth() });
     state.isCookieSession = Boolean(prefersCookieAuth() && !state.accessToken);
     return true;
@@ -11324,15 +11517,16 @@ function bindEvents() {
         setTemplateModalNote("Шаблон не найден.", true);
         return;
       }
-      templateLikeButton.disabled = true;
       try {
         const wasLiked = templateLikedByMe(item);
         await toggleTemplateLike(item.id, !wasLiked);
-        setTemplateModalNote(wasLiked ? "Шаблон убран из избранного." : "Шаблон добавлен в избранное.");
+        if (currentTemplateModalItem()?.id === item.id) {
+          setTemplateModalNote(wasLiked ? "Шаблон убран из избранного." : "Шаблон добавлен в избранное.");
+        }
       } catch (error) {
-        setTemplateModalNote(userFacingErrorMessage(error, "Не удалось обновить лайк шаблона."), true);
-      } finally {
-        templateLikeButton.disabled = false;
+        if (currentTemplateModalItem()?.id === item.id) {
+          setTemplateModalNote(userFacingErrorMessage(error, "Не удалось обновить лайк шаблона."), true);
+        }
       }
     });
   }
