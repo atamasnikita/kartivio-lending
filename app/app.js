@@ -434,11 +434,26 @@ const state = {
   isCookieSession: false,
   lastAuthProvider: "",
   me: null,
+  authSessionVersion: 0,
+  privateDataRequestToken: 0,
+  accountIdentitiesPromise: null,
+  identitiesLoaded: false,
+  accountAuxiliaryPromise: null,
+  firstPhotosetOfferRequestToken: 0,
+  referralRequestToken: 0,
+  walletRequestToken: 0,
+  walletAppliedToken: 0,
   selectedImageModel: DEFAULT_IMAGE_MODEL,
   selectedResolution: DEFAULT_RESOLUTION,
   selectedRatio: DEFAULT_RATIO,
   activeJobId: "",
   activePollTimer: null,
+  activePollVersion: 0,
+  activePollRequest: null,
+  activePollFailureCount: 0,
+  activePollStopped: false,
+  activePollResumePending: false,
+  activeJobStatus: "",
   selectedTemplateId: "",
   selectedTemplate: null,
   activeImageRenderToken: 0,
@@ -1051,6 +1066,7 @@ let screenExitLayer = null;
 let screenNavigationFromKeyboard = false;
 let yandexAuthPending = false;
 let refreshSessionPromise = null;
+let refreshSessionAbortController = null;
 let privateDataRetryTimer = null;
 let templateModalCloseTimer = null;
 let templateModalImageLoadToken = 0;
@@ -1575,6 +1591,12 @@ function prefersCookieAuth() {
 
 function hasActiveSession() {
   return Boolean(state.accessToken || state.isCookieSession);
+}
+
+function accountRequestGuard() {
+  const sessionVersion = state.authSessionVersion;
+  const userId = state.me?.id;
+  return () => hasActiveSession() && sessionVersion === state.authSessionVersion && userId === state.me?.id;
 }
 
 function hasSessionBootstrapHint() {
@@ -3503,12 +3525,16 @@ function firstPhotosetSheetEnabled() {
   );
 }
 
-async function refreshFirstPhotosetOfferState() {
+async function refreshFirstPhotosetOfferState({ isCurrent = accountRequestGuard() } = {}) {
+  const requestToken = ++state.firstPhotosetOfferRequestToken;
   if (!hasActiveSession()) {
     setFirstPhotosetOfferState(null);
     return null;
   }
   const payload = await authorizedGetWithRetry("/v1/first-photoset-offer/state", 1);
+  if (!isCurrent() || requestToken !== state.firstPhotosetOfferRequestToken) {
+    return null;
+  }
   setFirstPhotosetOfferState(payload);
   return state.firstPhotosetOfferState;
 }
@@ -3517,6 +3543,8 @@ async function recordFirstPhotosetOfferStateEvent(eventName) {
   if (!hasActiveSession()) {
     return null;
   }
+  const isCurrent = accountRequestGuard();
+  const requestToken = ++state.firstPhotosetOfferRequestToken;
   const payload = await authorizedFetch("/v1/first-photoset-offer/events", {
     method: "POST",
     body: {
@@ -3525,7 +3553,9 @@ async function recordFirstPhotosetOfferStateEvent(eventName) {
       screen: state.currentScreen || "",
     },
   });
-  setFirstPhotosetOfferState(payload);
+  if (isCurrent() && requestToken === state.firstPhotosetOfferRequestToken) {
+    setFirstPhotosetOfferState(payload);
+  }
   return state.firstPhotosetOfferState;
 }
 
@@ -3969,7 +3999,8 @@ function renderProfileReferral() {
   }
 }
 
-async function loadReferralSummary() {
+async function loadReferralSummary({ isCurrent = accountRequestGuard() } = {}) {
+  const requestToken = ++state.referralRequestToken;
   if (!hasActiveSession()) {
     state.referral = null;
     renderProfileReferral();
@@ -3977,10 +4008,16 @@ async function loadReferralSummary() {
   }
   try {
     const payload = await authorizedGetWithRetry("/v1/referrals/me", 1);
+    if (!isCurrent() || requestToken !== state.referralRequestToken) {
+      return null;
+    }
     state.referral = payload || null;
     renderProfileReferral();
     return payload;
   } catch (error) {
+    if (!isCurrent() || requestToken !== state.referralRequestToken) {
+      return null;
+    }
     state.referral = null;
     renderProfileReferral();
     console.warn("Referral summary load failed", error);
@@ -5602,16 +5639,7 @@ async function logoutSession() {
   }
   clearTelegramLinkPolling();
   clearTelegramWebLoginPolling();
-  state.accessToken = "";
-  state.refreshToken = "";
-  state.isCookieSession = false;
-  state.lastAuthProvider = "";
-  state.me = null;
-  state.referral = null;
-  setFirstPhotosetOfferState(null);
-  state.firstPhotosetSheetSeenThisSession = false;
-  clearFirstPhotosetSheetSchedule();
-  closeFirstPhotosetSheet();
+  clearAuthSessionState({ persist: false });
   state.profileReferralExpanded = false;
   state.trackedReferralCardView = false;
   state.telegramLinkToken = "";
@@ -5703,7 +5731,7 @@ function renderIdentityActions() {
   }
   if (linkTelegramButton) {
     linkTelegramButton.hidden = linkedTelegram || maxRuntime;
-    linkTelegramButton.disabled = !hasSession || maxRuntime;
+    linkTelegramButton.disabled = !hasSession || !state.identitiesLoaded || maxRuntime;
     linkTelegramButton.textContent = "Привязать";
   }
 
@@ -7168,12 +7196,35 @@ function isTransientNetworkError(error) {
 }
 
 function clearAuthSessionState({ persist = true } = {}) {
+  state.authSessionVersion += 1;
+  state.privateDataRequestToken += 1;
+  state.firstPhotosetOfferRequestToken += 1;
+  state.referralRequestToken += 1;
+  state.walletRequestToken = 0;
+  state.walletAppliedToken = 0;
+  state.accountIdentitiesPromise = null;
+  state.identitiesLoaded = false;
+  state.accountAuxiliaryPromise = null;
+  refreshSessionPromise = null;
+  refreshSessionAbortController?.abort();
+  refreshSessionAbortController = null;
+  window.clearTimeout(privateDataRetryTimer);
+  privateDataRetryTimer = null;
+  stopActiveJobPolling({ clearJob: true });
+  resetHistoryCache();
   window.KartivioLooks?.reset();
   state.accessToken = "";
   state.refreshToken = "";
   state.isCookieSession = false;
   state.lastAuthProvider = "";
   state.telegramWebLoginToken = "";
+  state.me = null;
+  state.referral = null;
+  state.linkedProviders = new Set();
+  state.walletBalanceCredits = 0;
+  createButton.disabled = false;
+  setCreateButtonIdleLabel();
+  renderActiveResultIdle();
   setFirstPhotosetOfferState(null);
   state.firstPhotosetSheetSeenThisSession = false;
   clearFirstPhotosetSheetSchedule();
@@ -7192,6 +7243,13 @@ function preserveSessionAfterTransientAuthError() {
 
 async function fetchWithTimeout(url, options = {}, timeoutMs = API_FETCH_TIMEOUT_MS) {
   const controller = new AbortController();
+  const externalSignal = options.signal;
+  const abort = () => controller.abort();
+  if (externalSignal?.aborted) {
+    abort();
+  } else {
+    externalSignal?.addEventListener("abort", abort, { once: true });
+  }
   const timeoutId = window.setTimeout(() => {
     controller.abort();
   }, timeoutMs);
@@ -7202,17 +7260,18 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = API_FETCH_TIMEOUT
     });
   } catch (error) {
     if (error && error.name === "AbortError") {
-      const timeoutError = new Error("Request timed out.");
-      timeoutError.code = "request_timeout";
+      const timeoutError = new Error(externalSignal?.aborted ? "Request cancelled." : "Request timed out.");
+      timeoutError.code = externalSignal?.aborted ? "request_aborted" : "request_timeout";
       throw timeoutError;
     }
     throw error;
   } finally {
     window.clearTimeout(timeoutId);
+    externalSignal?.removeEventListener("abort", abort);
   }
 }
 
-async function apiFetch(path, { method = "GET", body, auth = false, idempotencyKey } = {}) {
+async function apiFetch(path, { method = "GET", body, auth = false, idempotencyKey, signal } = {}) {
   const headers = headersForApiBase(state.apiBase);
   if (body !== undefined) {
     headers["Content-Type"] = "application/json";
@@ -7233,6 +7292,7 @@ async function apiFetch(path, { method = "GET", body, auth = false, idempotencyK
         credentials: "include",
         headers,
         body: body !== undefined ? JSON.stringify(body) : undefined,
+        signal,
       },
       API_FETCH_TIMEOUT_MS
     );
@@ -7416,19 +7476,29 @@ async function refreshSession() {
   if (refreshSessionPromise) {
     return refreshSessionPromise;
   }
-  refreshSessionPromise = refreshSessionInternal().finally(() => {
-    refreshSessionPromise = null;
+  const pending = refreshSessionInternal().finally(() => {
+    if (refreshSessionPromise === pending) {
+      refreshSessionPromise = null;
+    }
   });
+  refreshSessionPromise = pending;
   return refreshSessionPromise;
 }
 
 async function refreshSessionInternal() {
+  const sessionVersion = state.authSessionVersion;
+  const controller = new AbortController();
+  refreshSessionAbortController = controller;
   try {
     const body = state.refreshToken ? { refresh_token: state.refreshToken } : undefined;
     const payload = await apiFetch("/v1/auth/refresh", {
       method: "POST",
       body,
+      signal: controller.signal,
     });
+    if (sessionVersion !== state.authSessionVersion) {
+      return { ok: false, transient: false, error: null };
+    }
     if (prefersCookieAuth() && !state.refreshToken) {
       state.accessToken = "";
       state.refreshToken = "";
@@ -7441,23 +7511,37 @@ async function refreshSessionInternal() {
     saveState();
     return { ok: true, transient: false, error: null };
   } catch (error) {
+    if (sessionVersion !== state.authSessionVersion) {
+      return { ok: false, transient: false, error: null };
+    }
     if (isTransientNetworkError(error)) {
       preserveSessionAfterTransientAuthError();
       return { ok: false, transient: true, error };
     }
     clearAuthSessionState();
     return { ok: false, transient: false, error };
+  } finally {
+    if (refreshSessionAbortController === controller) {
+      refreshSessionAbortController = null;
+    }
   }
 }
 
 async function authorizedFetch(path, options = {}) {
+  const sessionVersion = state.authSessionVersion;
   try {
     return await apiFetch(path, { ...options, auth: true });
   } catch (error) {
-    if (!isSessionRejectedError(error)) {
+    if (sessionVersion !== state.authSessionVersion || !isSessionRejectedError(error)) {
       throw error;
     }
     const refreshResult = await refreshSession();
+    if (sessionVersion !== state.authSessionVersion) {
+      if (!hasActiveSession()) {
+        setAuthGateVisible(true);
+      }
+      throw error;
+    }
     if (!refreshResult.ok) {
       if (refreshResult.transient && refreshResult.error) {
         throw refreshResult.error;
@@ -7470,13 +7554,20 @@ async function authorizedFetch(path, options = {}) {
 }
 
 async function authorizedMultipart(path, formData, options = {}) {
+  const sessionVersion = state.authSessionVersion;
   try {
     return await apiMultipart(path, formData, { ...options, auth: true });
   } catch (error) {
-    if (!isSessionRejectedError(error)) {
+    if (sessionVersion !== state.authSessionVersion || !isSessionRejectedError(error)) {
       throw error;
     }
     const refreshResult = await refreshSession();
+    if (sessionVersion !== state.authSessionVersion) {
+      if (!hasActiveSession()) {
+        setAuthGateVisible(true);
+      }
+      throw error;
+    }
     if (!refreshResult.ok) {
       if (refreshResult.transient && refreshResult.error) {
         throw refreshResult.error;
@@ -7489,16 +7580,20 @@ async function authorizedMultipart(path, formData, options = {}) {
 }
 
 async function authorizedGetWithRetry(path, retries = 1) {
+  const sessionVersion = state.authSessionVersion;
   let lastError = null;
   for (let attempt = 0; attempt <= retries; attempt += 1) {
     try {
       return await authorizedFetch(path);
     } catch (error) {
       lastError = error;
-      if (attempt >= retries || (isSessionRejectedError(error) && !isTransientNetworkError(error))) {
+      if (sessionVersion !== state.authSessionVersion || attempt >= retries || (isSessionRejectedError(error) && !isTransientNetworkError(error))) {
         throw error;
       }
       await new Promise((resolve) => setTimeout(resolve, 250));
+      if (sessionVersion !== state.authSessionVersion) {
+        throw error;
+      }
     }
   }
   throw lastError || new Error("request_failed");
@@ -10192,8 +10287,11 @@ function ensurePublicDataLoaded({ notifyOnError = false, force = false, auth = h
   return requestPromise;
 }
 
-async function loadIdentities() {
+async function loadIdentities({ isCurrent = accountRequestGuard() } = {}) {
   const payload = await authorizedGetWithRetry("/v1/account/identities", 1);
+  if (!isCurrent()) {
+    return null;
+  }
   const providers = Array.isArray(payload.providers) ? payload.providers : [];
   state.linkedProviders = new Set(
     providers
@@ -10215,10 +10313,15 @@ async function loadIdentities() {
   if (!state.linkedProviders.has("telegram") && payload.telegram_user_id) {
     state.linkedProviders.add("telegram");
   }
+  state.identitiesLoaded = true;
   renderIdentityActions();
+  return payload;
 }
 
 async function loadPrivateData({ forceServerCheck = false } = {}) {
+  const requestToken = ++state.privateDataRequestToken;
+  const sessionVersion = state.authSessionVersion;
+  const requestIsCurrent = () => requestToken === state.privateDataRequestToken && sessionVersion === state.authSessionVersion;
   if (!hasActiveSession() && !forceServerCheck) {
     clearTelegramLinkPolling();
     state.telegramLinkToken = "";
@@ -10244,48 +10347,68 @@ async function loadPrivateData({ forceServerCheck = false } = {}) {
     refreshGenerationCostNote();
     renderProfileSummary();
     renderProfileReferral();
-    return;
+    return false;
   }
   const mePromise = authorizedGetWithRetry("/v1/me", 1);
+  const walletRequestToken = ++state.walletRequestToken;
   const walletPromise = authorizedGetWithRetry("/v1/wallet?limit=1", 1);
-  let identitiesError = null;
-  let referralError = null;
-  let firstPhotosetOfferError = null;
-  const identitiesPromise = loadIdentities().catch((error) => {
-    identitiesError = error;
-    return null;
-  });
-  const referralPromise = authorizedGetWithRetry("/v1/referrals/me", 1).catch((error) => {
-    referralError = error;
-    return null;
-  });
-  const firstPhotosetOfferPromise = refreshFirstPhotosetOfferState().catch((error) => {
-    firstPhotosetOfferError = error;
-    return null;
-  });
-  const [me, wallet, referral] = await Promise.all([
-    mePromise,
-    walletPromise,
-    referralPromise,
-    firstPhotosetOfferPromise,
-  ]);
-  await identitiesPromise;
-  if (identitiesError) {
-    if (isSessionRejectedError(identitiesError)) {
-      throw identitiesError;
+  // Profile details must not delay the verified identity and balance.
+  let me, wallet;
+  try {
+    [me, wallet] = await Promise.all([mePromise, walletPromise]);
+  } catch (error) {
+    if (!requestIsCurrent()) {
+      return false;
     }
-    console.warn("Account identities load failed", identitiesError);
+    throw error;
   }
-  if (referralError) {
-    console.warn("Referral summary load failed", referralError);
+  if (!requestIsCurrent()) {
+    return false;
   }
-  if (firstPhotosetOfferError) {
-    console.warn("First photoset offer state load failed", firstPhotosetOfferError);
+  if (state.me?.id !== me.id) {
+    if (state.me?.id) {
+      stopActiveJobPolling({ clearJob: true });
+      resetHistoryCache();
+      renderActiveResultIdle();
+    }
+    state.referral = null;
+    state.linkedProviders = new Set();
+    state.identitiesLoaded = false;
+    setFirstPhotosetOfferState(null);
   }
-  state.referral = referral || null;
   state.isCookieSession = Boolean(prefersCookieAuth() && !state.accessToken);
+  if (walletRequestToken < state.walletAppliedToken) {
+    wallet = { balance_credits: state.walletBalanceCredits };
+  } else {
+    state.walletAppliedToken = walletRequestToken;
+  }
   renderUser(me, wallet);
-  scheduleFirstPhotosetSessionSheet({ source: "session_resume" });
+  renderProfileReferral();
+  const accountIsCurrent = accountRequestGuard();
+  const isCurrent = () => requestIsCurrent() && accountIsCurrent();
+  state.accountIdentitiesPromise = loadIdentities({ isCurrent }).catch((error) => {
+    if (isCurrent() && isSessionRejectedError(error)) {
+      clearAuthSessionState();
+      setAuthGateVisible(true);
+    } else if (isCurrent()) {
+      console.warn("Account identities load failed", error);
+    }
+    return null;
+  });
+  state.accountAuxiliaryPromise = Promise.allSettled([
+    state.accountIdentitiesPromise,
+    loadReferralSummary({ isCurrent }),
+    refreshFirstPhotosetOfferState({ isCurrent }).then(() => {
+      if (isCurrent()) {
+        scheduleFirstPhotosetSessionSheet({ source: "session_resume" });
+      }
+    }).catch((error) => {
+      if (isCurrent()) {
+        console.warn("First photoset offer state load failed", error);
+      }
+    }),
+  ]);
+  return true;
 }
 
 function schedulePrivateDataRetry({ delayMs = 2500 } = {}) {
@@ -10323,7 +10446,9 @@ function schedulePrivateDataRetry({ delayMs = 2500 } = {}) {
 
 async function loadPrivateDataAfterAuthSuccess() {
   try {
-    await loadPrivateData({ forceServerCheck: prefersCookieAuth() });
+    if (!await loadPrivateData({ forceServerCheck: prefersCookieAuth() })) {
+      return false;
+    }
     const appliedReferral = await applyStoredReferralCode();
     if (appliedReferral) {
       await loadReferralSummary();
@@ -10347,7 +10472,13 @@ async function refreshWalletBalance() {
   if (!hasActiveSession()) {
     return null;
   }
+  const isCurrent = accountRequestGuard();
+  const requestToken = ++state.walletRequestToken;
   const wallet = await authorizedGetWithRetry("/v1/wallet?limit=1", 1);
+  if (!isCurrent() || requestToken < state.walletAppliedToken) {
+    return null;
+  }
+  state.walletAppliedToken = requestToken;
   renderWalletBalance(wallet);
   return wallet;
 }
@@ -10356,6 +10487,7 @@ async function finalizeAuthSession(payload, provider) {
   const accessToken = String(payload && payload.access_token ? payload.access_token : "").trim();
   const refreshToken = String(payload && payload.refresh_token ? payload.refresh_token : "").trim();
 
+  clearAuthSessionState({ persist: false });
   state.telegramWebLoginToken = "";
   clearTelegramWebLoginPolling();
   state.lastAuthProvider = provider;
@@ -10597,40 +10729,130 @@ function restoreReferencePromptPreviousText() {
   setReferencePromptNote("Предыдущий текст возвращен.");
 }
 
-async function pollActiveJob(jobId) {
+function clearActivePollTimer() {
   if (state.activePollTimer) {
     window.clearTimeout(state.activePollTimer);
     state.activePollTimer = null;
   }
+}
 
-  try {
-    const job = await authorizedGetWithRetry(`/v1/generations/${jobId}`, 1);
-    renderActiveJob(job);
-    if (["queued", "processing"].includes(job.status)) {
-      state.activePollTimer = window.setTimeout(() => pollActiveJob(jobId), 2500);
-      return;
-    }
-    await refreshWalletBalance().catch(() => null);
-    if (String(job.status || "").toLowerCase() === "done" && job.result_image_url) {
-      await refreshFirstPhotosetOfferState().catch((error) => {
-        console.warn("First photoset offer state refresh failed", error);
-      });
-      scheduleFirstPhotosetSessionSheet({
-        delayMs: FIRST_PHOTOSET_SHEET_DELAY_MS,
-        source: "after_second_success",
-      });
-    }
-    if (state.currentScreen === "history") {
-      await loadHistory({ forceServerCheck: true });
-    } else {
-      markHistoryCacheStale();
-    }
-  } catch (error) {
-    setCreateNote(userFacingErrorMessage(error, "Не удалось обновить статус задачи."), true);
+function stopActiveJobPolling({ clearJob = false } = {}) {
+  clearActivePollTimer();
+  state.activePollVersion += 1;
+  state.activePollRequest = null;
+  state.activePollFailureCount = 0;
+  state.activePollResumePending = false;
+  state.activePollStopped = false;
+  if (clearJob) {
+    state.activeJobId = "";
+    state.activeJobStatus = "";
+    state.activeImageRenderToken += 1;
   }
 }
 
+function resumeActiveJobPolling() {
+  if (document.hidden || navigator.onLine === false || !hasActiveSession() || !state.activeJobId || state.activePollStopped) {
+    return;
+  }
+  clearActivePollTimer();
+  if (state.activePollRequest) {
+    state.activePollResumePending = true;
+    return;
+  }
+  pollActiveJob(state.activeJobId);
+}
+
+function pollActiveJob(jobId) {
+  if (!jobId || state.activeJobId !== jobId || !hasActiveSession() || document.hidden || navigator.onLine === false || state.activePollStopped) {
+    return Promise.resolve(null);
+  }
+  if (state.activePollRequest) {
+    return state.activePollRequest;
+  }
+  clearActivePollTimer();
+  const pollVersion = state.activePollVersion;
+  const accountIsCurrent = accountRequestGuard();
+  const isCurrent = () => pollVersion === state.activePollVersion && state.activeJobId === jobId && accountIsCurrent();
+  let nextDelay = null;
+  const pending = (async () => {
+    try {
+      const job = await authorizedGetWithRetry(`/v1/generations/${encodeURIComponent(jobId)}`, 1);
+      if (!isCurrent() || job.id !== jobId) {
+        return null;
+      }
+      const status = String(job.status || "").toLowerCase();
+      const wasRecovering = state.activePollFailureCount > 0;
+      state.activePollFailureCount = 0;
+      if (status !== state.activeJobStatus || !["queued", "processing"].includes(status)) {
+        renderActiveJob(job);
+      }
+      state.activeJobStatus = status;
+      if (wasRecovering) {
+        setCreateNote("Связь восстановлена. Статус генерации обновлён.");
+      }
+      if (["queued", "processing"].includes(status)) {
+        nextDelay = 2500;
+        return job;
+      }
+      state.activePollStopped = true;
+      await refreshWalletBalance().catch(() => null);
+      if (!isCurrent()) {
+        return job;
+      }
+      if (status === "done" && job.result_image_url) {
+        await refreshFirstPhotosetOfferState().catch((error) => {
+          console.warn("First photoset offer state refresh failed", error);
+        });
+        if (!isCurrent()) {
+          return job;
+        }
+        scheduleFirstPhotosetSessionSheet({
+          delayMs: FIRST_PHOTOSET_SHEET_DELAY_MS,
+          source: "after_second_success",
+        });
+      }
+      if (state.currentScreen === "history") {
+        await loadHistory({ forceServerCheck: true });
+      } else {
+        markHistoryCacheStale();
+      }
+      return job;
+    } catch (error) {
+      if (!isCurrent()) {
+        return null;
+      }
+      if (isTransientNetworkError(error)) {
+        // Retry status GETs only, never the credit-spending submission.
+        state.activePollFailureCount += 1;
+        nextDelay = Math.min(15000, 2500 * (2 ** Math.min(state.activePollFailureCount - 1, 3)));
+        setCreateNote("Не удалось обновить статус. Повторяем проверку, новая генерация не запускается.", true);
+      } else {
+        state.activePollStopped = true;
+        setCreateNote(userFacingErrorMessage(error, "Не удалось обновить статус задачи."), true);
+      }
+      return null;
+    }
+  })().finally(() => {
+    if (state.activePollRequest === pending) {
+      state.activePollRequest = null;
+    }
+    if (!isCurrent() || state.activePollStopped) {
+      return;
+    }
+    if (state.activePollResumePending) {
+      state.activePollResumePending = false;
+      nextDelay = 0;
+    }
+    if (nextDelay !== null && !document.hidden && navigator.onLine !== false) {
+      state.activePollTimer = window.setTimeout(() => pollActiveJob(jobId), nextDelay);
+    }
+  });
+  state.activePollRequest = pending;
+  return pending;
+}
+
 async function handleCreate(options = {}) {
+  const accountIsCurrent = accountRequestGuard();
   const bypassTemplatePhotoWarning = Boolean(options && options.bypassTemplatePhotoWarning);
   const prompt = promptInput.value.trim();
   const imageModel = state.selectedImageModel || DEFAULT_IMAGE_MODEL;
@@ -10707,6 +10929,9 @@ async function handleCreate(options = {}) {
     let lastUploadPercent = -1;
     const onUploadProgress = sourceImages.length > 0
       ? ({ percent }) => {
+          if (!accountIsCurrent()) {
+            return;
+          }
           const normalizedPercent = Math.max(0, Math.min(100, Number(percent || 0)));
           if (normalizedPercent === lastUploadPercent) {
             return;
@@ -10742,7 +10967,12 @@ async function handleCreate(options = {}) {
         )
       : await createTextGeneration(prompt, imageModel, outputSize, clientRequestId);
 
+    if (!accountIsCurrent()) {
+      return;
+    }
+    stopActiveJobPolling({ clearJob: true });
     state.activeJobId = job.id;
+    state.activeJobStatus = String(job.status || "").toLowerCase();
     trackProductEvent("generation_submitted", {
       ...eventProperties,
       job_id: job.id,
@@ -10754,6 +10984,9 @@ async function handleCreate(options = {}) {
     markHistoryCacheStale();
     await pollActiveJob(job.id);
   } catch (error) {
+    if (requestStarted && !accountIsCurrent()) {
+      return;
+    }
     const errorCode = productEventErrorCode(error);
     const hasInsufficientCredits = errorCode === "insufficient_credits";
     setCreateNote(userFacingErrorMessage(error, "Не удалось запустить генерацию."), true);
@@ -10790,8 +11023,10 @@ async function handleCreate(options = {}) {
       scrollActiveResultIntoView();
     }
   } finally {
-    createButton.disabled = false;
-    setCreateButtonIdleLabel();
+    if (accountIsCurrent()) {
+      createButton.disabled = false;
+      setCreateButtonIdleLabel();
+    }
   }
 }
 
@@ -11027,9 +11262,8 @@ async function hydrateAuthorizedSession() {
   }
   try {
     ensurePublicDataLoaded({ auth: true }).catch(() => {});
-    await loadPrivateData({ forceServerCheck: prefersCookieAuth() });
-    state.isCookieSession = Boolean(prefersCookieAuth() && !state.accessToken);
-    return true;
+    const loaded = await loadPrivateData({ forceServerCheck: prefersCookieAuth() });
+    return Boolean(loaded && hasActiveSession());
   } catch (error) {
     if (isSessionRejectedError(error) && !isTransientNetworkError(error)) {
       clearAuthSessionState();
@@ -12093,13 +12327,18 @@ function bindEvents() {
   window.addEventListener("pageshow", () => {
     unlockTemplateModalScroll();
     resumePendingTelegramWebLogin();
+    resumeActiveJobPolling();
   });
+  window.addEventListener("online", resumeActiveJobPolling);
+  window.addEventListener("offline", clearActivePollTimer);
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState !== "visible") {
+      clearActivePollTimer();
       return;
     }
     unlockTemplateModalScroll();
     resumePendingTelegramWebLogin();
+    resumeActiveJobPolling();
   });
   document.addEventListener("click", (event) => {
     if (!sourceTipsPanel || !sourceTipsButton) {
@@ -12279,8 +12518,12 @@ async function bootstrap() {
   }
 
   if (authorized) {
-    if (isMaxMiniAppRuntime() && !state.linkedProviders.has("max")) {
-      await ensureMaxLinkedForAuthorizedSession();
+    if (isMaxMiniAppRuntime() && state.lastAuthProvider !== "max") {
+      await state.accountIdentitiesPromise;
+      if (hasActiveSession() && !state.linkedProviders.has("max")) {
+        await ensureMaxLinkedForAuthorizedSession();
+      }
+      authorized = hasActiveSession();
     }
     syncAcquisitionTouch({ auth: true }).catch(() => {});
     syncMarketingHandoff({ auth: true }).catch(() => {});
